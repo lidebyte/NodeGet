@@ -6,7 +6,9 @@ use tokio::time::Instant;
 
 pub mod data_structure;
 pub mod impls;
-
+mod network_connections;
+mod process;
+mod virtualization_detect;
 // System
 
 static GLOBAL_SYSTEM: OnceCell<Mutex<System>> = OnceCell::const_new();

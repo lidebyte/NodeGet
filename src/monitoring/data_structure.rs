@@ -8,7 +8,7 @@ pub struct MonitoringData {
     pub load: LoadData,
     pub system: SystemData,
     pub disk: Vec<PerDiskData>,
-    pub network: Vec<PerNetworkInterfaceData>,
+    pub network: NetworkData,
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +63,7 @@ pub struct SystemData {
     pub distribution_id: String,
     pub system_host_name: String,
     pub arch: String,
+    pub virtualization: String,
 
     // 变
     pub boot_time: u64,
@@ -83,6 +84,13 @@ pub struct PerDiskData {
     pub is_read_only: bool,
     pub read_speed: u64,
     pub write_speed: u64,
+}
+
+#[derive(Debug)]
+pub struct NetworkData {
+    pub interfaces: Vec<PerNetworkInterfaceData>,
+    pub udp_connections: u64,
+    pub tcp_connections: u64,
 }
 
 #[derive(Debug, Clone)]

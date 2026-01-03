@@ -1,19 +1,23 @@
 use crate::monitoring::data_structure::{
-    CPUData, LoadData, MonitoringData, PerCpuCoreData, PerDiskData, PerNetworkInterfaceData,
-    RamData, SystemData,
+    CPUData, LoadData, MonitoringData, NetworkData, PerCpuCoreData, PerDiskData,
+    PerNetworkInterfaceData, RamData, SystemData,
 };
+use crate::monitoring::network_connections::calc_connections;
+use crate::monitoring::process::count_processes;
+use crate::monitoring::virtualization_detect::detect_virtualization;
 use crate::monitoring::{refresh_global_disk, refresh_global_network, refresh_global_system};
 use parking_lot::{Mutex, MutexGuard};
 use sysinfo::System;
 use tokio::sync::OnceCell;
-
 // Monitoring (ALL)
 
 impl MonitoringData {
     pub async fn refresh_and_get() -> Self {
-        let system_data: MutexGuard<DataFromSystem> = DataFromSystem::refresh_and_get().await;
-        let disk_data = DataFromDisk::refresh_and_get().await;
-        let network_data = DataFromNetwork::refresh_and_get().await;
+        let (system_data,) = tokio::join!(DataFromSystem::refresh_and_get(),);
+        let handle_disk = tokio::spawn(DataFromDisk::refresh_and_get());
+        let handle_network = tokio::spawn(DataFromNetwork::refresh_and_get());
+        let disk_data = handle_disk.await.unwrap();
+        let network_data = handle_network.await.unwrap();
 
         MonitoringData {
             cpu: system_data.0.clone(),
@@ -44,7 +48,7 @@ impl DataFromSystem {
             .map(|cpu| PerCpuCoreData {
                 name: cpu.name().to_string(),
                 vendor_id: cpu.vendor_id().to_string(),
-                brand: cpu.brand().to_string(),
+                brand: cpu.brand().to_string().trim().to_string(),
                 cpu_usage: f64::from(cpu.cpu_usage()),
                 frequency_mhz: cpu.frequency(),
             })
@@ -83,9 +87,10 @@ impl DataFromSystem {
                 distribution_id: System::distribution_id(),
                 system_host_name: System::host_name().unwrap_or_default(),
                 arch: System::cpu_arch(),
+                virtualization: detect_virtualization().await,
                 boot_time: System::boot_time(),
                 uptime: System::uptime(),
-                process_count: system.processes().len() as u64,
+                process_count: u64::from(count_processes()),
             },
         )
     }
@@ -115,7 +120,7 @@ impl DataFromSystem {
 
         self.3.boot_time = System::boot_time();
         self.3.uptime = System::uptime();
-        self.3.process_count = system.processes().len() as u64;
+        self.3.process_count = u64::from(count_processes());
     }
 
     pub async fn refresh_and_get() -> MutexGuard<'static, DataFromSystem> {
@@ -170,7 +175,7 @@ impl DataFromDisk {
 // Network
 
 #[derive(Debug)]
-pub struct DataFromNetwork(pub Vec<PerNetworkInterfaceData>);
+pub struct DataFromNetwork(pub NetworkData);
 
 impl DataFromNetwork {
     pub async fn refresh_and_get() -> Self {
@@ -189,6 +194,12 @@ impl DataFromNetwork {
             })
             .collect();
 
-        DataFromNetwork(network_vec)
+        let (udp_connections, tcp_connections) = calc_connections();
+
+        DataFromNetwork(NetworkData {
+            interfaces: network_vec,
+            udp_connections,
+            tcp_connections,
+        })
     }
 }
