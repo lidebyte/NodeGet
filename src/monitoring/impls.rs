@@ -1,5 +1,8 @@
-
-use sysinfo::NetworkData;
+use crate::monitoring::data_structure::{
+    DynamicCPUData, DynamicLoadData, DynamicMonitoringData, DynamicNetworkData,
+    DynamicPerCpuCoreData, DynamicPerDiskData, DynamicPerNetworkInterfaceData, DynamicRamData,
+    DynamicSystemData, StaticCPUData, StaticMonitoringData, StaticPerCpuCoreData, StaticSystemData,
+};
 use crate::monitoring::network_connections::calc_connections;
 use crate::monitoring::process::count_processes;
 use crate::monitoring::virtualization_detect::detect_virtualization;
@@ -7,7 +10,6 @@ use crate::monitoring::{refresh_global_disk, refresh_global_network, refresh_glo
 use parking_lot::{Mutex, MutexGuard};
 use sysinfo::{DiskKind, System};
 use tokio::sync::OnceCell;
-use crate::monitoring::data_structure::{DynamicCPUData, DynamicRamData, DynamicLoadData, StaticCPUData, StaticPerCpuCoreData, StaticSystemData, DynamicSystemData, DynamicPerCpuCoreData, DynamicPerDiskData, DynamicNetworkData, DynamicPerNetworkInterfaceData, StaticMonitoringData, DynamicMonitoringData};
 // Monitoring (ALL)
 
 impl StaticMonitoringData {
@@ -44,7 +46,8 @@ impl DynamicMonitoringData {
 #[derive(Debug)]
 pub struct StaticDataFromSystem(pub StaticCPUData, pub StaticSystemData);
 
-static GLOBAL_STATIC_DATA_FROM_SYSTEM: OnceCell<Mutex<StaticDataFromSystem>> = OnceCell::const_new();
+static GLOBAL_STATIC_DATA_FROM_SYSTEM: OnceCell<Mutex<StaticDataFromSystem>> =
+    OnceCell::const_new();
 
 impl StaticDataFromSystem {
     pub async fn new() -> StaticDataFromSystem {
@@ -52,12 +55,17 @@ impl StaticDataFromSystem {
         let system_mutex = crate::monitoring::get_global_system().await;
         let system = system_mutex.lock();
 
-        let per_core = system.cpus().iter().enumerate().map(|(i, cpu)| StaticPerCpuCoreData {
-            id: (i+1) as u32,
-            name: cpu.name().to_string(),
-            vendor_id: cpu.vendor_id().to_string(),
-            brand: cpu.brand().to_string().trim().to_string(),
-        }).collect::<Vec<_>>();
+        let per_core = system
+            .cpus()
+            .iter()
+            .enumerate()
+            .map(|(i, cpu)| StaticPerCpuCoreData {
+                id: (i + 1) as u32,
+                name: cpu.name().to_string(),
+                vendor_id: cpu.vendor_id().to_string(),
+                brand: cpu.brand().to_string().trim().to_string(),
+            })
+            .collect::<Vec<_>>();
 
         let logical_cores = per_core.len() as u64;
         StaticDataFromSystem(
@@ -85,15 +93,20 @@ impl StaticDataFromSystem {
             .get_or_init(|| async { Mutex::new(StaticDataFromSystem::new().await) })
             .await;
 
-        let data = data_mutex.lock();
-        data
+        
+        data_mutex.lock()
     }
 }
 
-
 #[derive(Debug)]
-pub struct DynamicDataFromSystem(pub DynamicCPUData, pub DynamicRamData, pub DynamicLoadData, pub DynamicSystemData);
-static GLOBAL_DYNAMIC_DATA_FROM_SYSTEM: OnceCell<Mutex<DynamicDataFromSystem>> = OnceCell::const_new();
+pub struct DynamicDataFromSystem(
+    pub DynamicCPUData,
+    pub DynamicRamData,
+    pub DynamicLoadData,
+    pub DynamicSystemData,
+);
+static GLOBAL_DYNAMIC_DATA_FROM_SYSTEM: OnceCell<Mutex<DynamicDataFromSystem>> =
+    OnceCell::const_new();
 
 impl DynamicDataFromSystem {
     async fn new() -> Self {
@@ -199,9 +212,11 @@ impl DataFromDisk {
 
                 DynamicPerDiskData {
                     kind: match disk.kind() {
-                        DiskKind::HDD => {crate::monitoring::data_structure::DiskKind::HDD}
-                        DiskKind::SSD => {crate::monitoring::data_structure::DiskKind::SSD}
-                        DiskKind::Unknown(_) => {crate::monitoring::data_structure::DiskKind::Unknown}
+                        DiskKind::HDD => crate::monitoring::data_structure::DiskKind::Hdd,
+                        DiskKind::SSD => crate::monitoring::data_structure::DiskKind::Ssd,
+                        DiskKind::Unknown(_) => {
+                            crate::monitoring::data_structure::DiskKind::Unknown
+                        }
                     },
                     name: disk.name().to_string_lossy().into_owned(),
                     file_system: disk.file_system().to_string_lossy().into_owned(),

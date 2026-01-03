@@ -10,11 +10,11 @@
     dead_code
 )]
 
-use tokio::time::Instant;
 use crate::monitoring::data_structure::{DynamicMonitoringData, StaticMonitoringData};
+use tokio::time::Instant;
 
-mod monitoring;
 mod database;
+mod monitoring;
 
 #[tokio::main]
 async fn main() {

@@ -84,8 +84,8 @@ pub struct DynamicSystemData {
 
 #[derive(Clone, Debug)]
 pub enum DiskKind {
-    HDD,
-    SSD,
+    Hdd,
+    Ssd,
     Unknown,
 }
 
