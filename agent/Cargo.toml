@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2024"
 
 [dependencies]
-nodeget-lib = { path = "../nodeget-lib" }
+nodeget-lib = { path = "../nodeget-lib", features = ["for-agent"] }
 
 tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
 parking_lot = "0.12.5"
