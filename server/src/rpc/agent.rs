@@ -61,7 +61,7 @@ impl RpcServer for AgentRpcImpl {
 
         match process_logic.await {
             Ok(new_id) => serde_json::json!({ "id": new_id }),
-            Err((code, msg)) => generate_error_message(code, msg),
+            Err((code, msg)) => generate_error_message(code, &msg),
         }
     }
 
@@ -96,7 +96,7 @@ impl RpcServer for AgentRpcImpl {
 
         match process_logic.await {
             Ok(new_id) => serde_json::json!({ "id": new_id }),
-            Err((code, msg)) => generate_error_message(code, msg),
+            Err((code, msg)) => generate_error_message(code, &msg),
         }
     }
 }

@@ -1,9 +1,4 @@
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct NodeGetVersion {
     pub binary_type: String,   // "Server" / "Agent"
     pub cargo_version: String, // CARGO_PKG_VERSION

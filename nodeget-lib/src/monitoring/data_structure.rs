@@ -1,11 +1,6 @@
 // 若数据量字段中未注明单位，则以字节 (Bytes) 为单位
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StaticMonitoringData {
     pub uuid: String,
     pub time: u64,
@@ -15,12 +10,7 @@ pub struct StaticMonitoringData {
     pub gpu: Vec<StaticGpuData>,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicMonitoringData {
     pub uuid: String,
     pub time: u64,
@@ -34,35 +24,20 @@ pub struct DynamicMonitoringData {
     pub gpu: Vec<DynamicGpuData>,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StaticCPUData {
     pub physical_cores: u64,
     pub logical_cores: u64,
     pub per_core: Vec<StaticPerCpuCoreData>,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicCPUData {
     pub per_core: Vec<DynamicPerCpuCoreData>,
     pub total_cpu_usage: f64,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StaticPerCpuCoreData {
     pub id: u32,
     pub name: String,
@@ -70,24 +45,14 @@ pub struct StaticPerCpuCoreData {
     pub brand: String,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicPerCpuCoreData {
     pub id: u32,
     pub cpu_usage: f64,
     pub frequency_mhz: u64,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicRamData {
     pub total_memory: u64,
     pub available_memory: u64,
@@ -96,24 +61,14 @@ pub struct DynamicRamData {
     pub used_swap: u64,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicLoadData {
     pub one: f64,
     pub five: f64,
     pub fifteen: f64,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StaticSystemData {
     pub system_name: String,
     pub system_kernel: String,
@@ -126,36 +81,21 @@ pub struct StaticSystemData {
     pub virtualization: String,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicSystemData {
     pub boot_time: u64,
     pub uptime: u64,
     pub process_count: u64,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum DiskKind {
     Hdd,
     Ssd,
     Unknown,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicPerDiskData {
     pub kind: DiskKind,
     pub name: String,
@@ -169,24 +109,14 @@ pub struct DynamicPerDiskData {
     pub write_speed: u64,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicNetworkData {
     pub interfaces: Vec<DynamicPerNetworkInterfaceData>,
     pub udp_connections: u64,
     pub tcp_connections: u64,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicPerNetworkInterfaceData {
     pub interface_name: String,
     pub total_received: u64,    // 从上次网卡重启开始计算
@@ -195,12 +125,7 @@ pub struct DynamicPerNetworkInterfaceData {
     pub transmit_speed: u64,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StaticGpuData {
     pub id: u32,
     pub name: String,
@@ -208,12 +133,7 @@ pub struct StaticGpuData {
     pub architecture: String,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "for-server", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(
-    feature = "for-agent",
-    derive(miniserde::Deserialize, miniserde::Serialize)
-)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicGpuData {
     pub id: u32,
     pub used_memory: u64,

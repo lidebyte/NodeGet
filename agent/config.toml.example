@@ -1,0 +1,17 @@
+log_level = "debug"
+monitoring_report_interval_ms = 1000
+
+agent_uuid = "agent_uuid"
+connect_timeout_ms = 1000
+
+[[server]]
+name = "test_server1"
+uuid = "test_server1_uuid"
+token = "test_server1_token"
+ws_url = "ws://127.0.0.1:3000/"
+
+[[server]]
+name = "test_server2"
+uuid = "test_server2_uuid"
+token = "test_server2_token"
+ws_url = "ws://127.0.0.1:3000/"
