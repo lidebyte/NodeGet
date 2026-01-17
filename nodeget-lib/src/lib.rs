@@ -10,5 +10,6 @@
     dead_code
 )]
 
+pub mod config;
 pub mod monitoring;
 pub mod utils;

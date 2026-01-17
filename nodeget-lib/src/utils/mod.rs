@@ -2,7 +2,7 @@ pub mod error_message;
 pub mod version;
 
 // 毫秒时间戳，超过 u64 范围时返回 0
-#[must_use] 
+#[must_use]
 pub fn get_local_timestamp_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -14,7 +14,7 @@ pub fn get_local_timestamp_ms() -> u64 {
 }
 
 // Windows / MacOS / Linux 下的唯一 UUID 生成器，在同一系统下不变
-#[must_use] 
+#[must_use]
 pub fn get_stable_device_uuid() -> String {
     use uuid::Uuid;
     let machine_id = machine_uid::get().unwrap_or_else(|e| {

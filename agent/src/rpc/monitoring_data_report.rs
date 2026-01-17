@@ -3,11 +3,42 @@ use crate::monitoring::impls::Monitor;
 use crate::rpc::multi_server::send_to;
 use crate::rpc::wrap_json_into_rpc_with_id_1;
 use log::error;
-use nodeget_lib::monitoring::data_structure::DynamicMonitoringData;
+use nodeget_lib::monitoring::data_structure::{DynamicMonitoringData, StaticMonitoringData};
 use std::time::Duration;
 use tokio_tungstenite::tungstenite::{Message, Utf8Bytes};
 
-pub async fn handle_monitoring_data_report() {
+pub async fn handle_static_monitoring_data_report() {
+    let agent_config = AGENT_CONFIG.get().expect("Agent config not initialized");
+
+    loop {
+        let static_monitoring_data = StaticMonitoringData::refresh_and_get().await;
+        let static_monitoring_data_value = serde_json::to_value(static_monitoring_data).unwrap();
+
+        for server in agent_config.server.clone().unwrap_or(vec![]) {
+            let static_monitoring_data_value = static_monitoring_data_value.clone();
+            tokio::spawn(async move {
+                if let Err(e) = send_to(
+                    &server.name,
+                    Message::Text(Utf8Bytes::from(wrap_json_into_rpc_with_id_1(
+                        "agent_report_static",
+                        vec![
+                            serde_json::to_value(server.token).unwrap(),
+                            static_monitoring_data_value,
+                        ],
+                    ))),
+                )
+                .await
+                {
+                    error!("{e}");
+                }
+            });
+        }
+
+        tokio::time::sleep(Duration::from_mins(5)).await;
+    }
+}
+
+pub async fn handle_dynamic_monitoring_data_report() {
     let agent_config = AGENT_CONFIG.get().expect("Agent config not initialized");
 
     loop {

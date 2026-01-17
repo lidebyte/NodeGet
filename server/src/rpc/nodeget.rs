@@ -1,5 +1,6 @@
 use jsonrpsee::core::async_trait;
 use jsonrpsee::proc_macros::rpc;
+use log::info;
 use nodeget_lib::utils::version::NodeGetVersion;
 
 #[rpc(server, namespace = "nodeget-server")]
@@ -16,10 +17,12 @@ pub struct NodegetServerRpcImpl;
 #[async_trait]
 impl RpcServer for NodegetServerRpcImpl {
     async fn hello(&self) -> String {
+        info!("Hello Request");
         "NodeGet Server Is Running!".to_string()
     }
 
     async fn version(&self) -> serde_json::Value {
+        info!("Version Request");
         serde_json::to_value(NodeGetVersion::get()).unwrap()
     }
 }

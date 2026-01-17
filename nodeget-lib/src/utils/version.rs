@@ -19,7 +19,7 @@ pub struct NodeGetVersion {
 }
 
 impl NodeGetVersion {
-    #[must_use] 
+    #[must_use]
     pub fn get() -> Self {
         Self {
             binary_type: {

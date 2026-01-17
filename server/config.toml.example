@@ -1,0 +1,8 @@
+log_level = "trace"
+ws_listener = "0.0.0.0:3000"
+server_uuid = "server_uuid"
+
+database = {
+    database_url = "postgres://user:pass@host:5432/nodeget",
+    sqlx_log_level = "debug"
+}

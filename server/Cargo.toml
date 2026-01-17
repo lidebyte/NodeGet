@@ -13,9 +13,11 @@ tokio = { version = "1.48.0", default-features = false, features = ["macros", "r
 nodeget-lib = { path = "../nodeget-lib", features = ["for-server"] }
 migration = { path = "migration" }
 
-parking_lot = "0.12.5"
-uuid = { version = "1.19.0", default-features = false, features = ["v4", "serde", "std", "fast-rng", "v5"] }
 sea-orm = { version = "2.0.0-rc.28", features = ["runtime-tokio-rustls", "sqlx-sqlite", "sqlx-postgres"] }
 serde = "1.0.228"
 serde_json = "1.0.149"
 jsonrpsee = { version = "0.26.0", default-features = false, features = ["server", "macros"] }
+
+# Logging
+log = { version = "0.4.29", default-features = false, features = ["std", "serde"] }
+simple_logger = { version = "5.1.0", default-features = false, features = ["threads", "time", "timestamps", "colored", "colors"] }
