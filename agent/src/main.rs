@@ -1,4 +1,3 @@
-#![feature(duration_millis_float)]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
     clippy::cast_sign_loss,
@@ -15,6 +14,7 @@ use crate::rpc::monitoring_data_report::{
 };
 use log::{Level, info};
 use nodeget_lib::config::agent::AgentConfig;
+use nodeget_lib::utils::compare_uuid;
 use std::str::FromStr;
 use std::sync::OnceLock;
 
@@ -33,6 +33,8 @@ async fn main() {
         .unwrap();
 
     simple_logger::init_with_level(Level::from_str(&config.log_level).unwrap()).unwrap();
+
+    compare_uuid(config.agent_uuid);
 
     info!("Starting nodeget-agent with config: {config:?}");
 

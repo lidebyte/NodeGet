@@ -5,7 +5,7 @@ use tokio::fs;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ServerConfig {
     pub log_level: String,
-    pub server_uuid: String,
+    pub server_uuid: uuid::Uuid,
     pub ws_listener: String,
     pub database: DatabaseConfig,
 }

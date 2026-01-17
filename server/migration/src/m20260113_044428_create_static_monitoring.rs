@@ -1,5 +1,5 @@
+use crate::sea_orm::DbBackend;
 use sea_orm_migration::prelude::*;
-use crate::sea_orm::{DbBackend};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -51,16 +51,19 @@ impl MigrationTrait for Migration {
         if manager.get_database_backend() == DbBackend::Postgres {
             let db = manager.get_connection();
             db.execute_unprepared(
-                "ALTER TABLE static_monitoring ALTER COLUMN cpu_data SET COMPRESSION lz4;"
-            ).await?;
+                "ALTER TABLE static_monitoring ALTER COLUMN cpu_data SET COMPRESSION lz4;",
+            )
+            .await?;
 
             db.execute_unprepared(
-                "ALTER TABLE static_monitoring ALTER COLUMN system_data SET COMPRESSION lz4;"
-            ).await?;
+                "ALTER TABLE static_monitoring ALTER COLUMN system_data SET COMPRESSION lz4;",
+            )
+            .await?;
 
             db.execute_unprepared(
-                "ALTER TABLE static_monitoring ALTER COLUMN gpu_data SET COMPRESSION lz4;"
-            ).await?;
+                "ALTER TABLE static_monitoring ALTER COLUMN gpu_data SET COMPRESSION lz4;",
+            )
+            .await?;
         }
         Ok(())
     }

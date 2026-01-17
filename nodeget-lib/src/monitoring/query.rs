@@ -23,7 +23,7 @@ pub enum DynamicDataQueryField {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryCondition {
-    Uuid(String),
+    Uuid(uuid::Uuid),
     TimestampFromTo(i64, i64), // start, end
     TimestampFrom(i64),        // start,
     TimestampTo(i64),          // end

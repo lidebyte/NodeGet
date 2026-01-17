@@ -1,4 +1,3 @@
-#![feature(duration_millis_float)]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
     clippy::cast_sign_loss,
@@ -16,6 +15,7 @@ use crate::rpc::nodeget::RpcServer as NodegetRpcServer;
 use jsonrpsee::server::ServerBuilder;
 use log::{Level, info};
 use nodeget_lib::config::server::ServerConfig;
+use nodeget_lib::utils::compare_uuid;
 use sea_orm::DatabaseConnection;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -38,6 +38,8 @@ async fn main() {
         .unwrap();
 
     simple_logger::init_with_level(Level::from_str(&config.log_level).unwrap()).unwrap();
+
+    compare_uuid(config.server_uuid);
 
     info!("Starting nodeget-server with config: {config:?}");
 

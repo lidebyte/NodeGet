@@ -7,7 +7,7 @@ pub struct AgentConfig {
     pub log_level: String,
     pub monitoring_report_interval_ms: Option<u64>,
 
-    pub agent_uuid: String,
+    pub agent_uuid: uuid::Uuid,
     pub connect_timeout_ms: Option<u64>, // ms
     pub server: Option<Vec<Server>>,
 }

@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use crate::entity::{dynamic_monitoring, static_monitoring};
 use crate::rpc::agent::AgentRpcImpl;
 use log::{debug, error};
@@ -6,6 +5,7 @@ use nodeget_lib::monitoring::data_structure::{DynamicMonitoringData, StaticMonit
 use nodeget_lib::utils::error_message::generate_error_message;
 use sea_orm::{ActiveValue, EntityTrait, Set};
 use serde_json::{Value, from_value, json};
+use std::str::FromStr;
 
 pub async fn report_static(_token: String, data: Value) -> Value {
     let process_logic = async {
