@@ -105,12 +105,12 @@ async fn refresh_global_network() -> Duration {
 
 // GPU
 
-static GLOBAL_GPU: OnceCell<Mutex<Nvml>> = OnceCell::const_new();
+static GLOBAL_GPU: OnceCell<Mutex<Option<Nvml>>> = OnceCell::const_new();
 
-async fn get_global_gpu() -> &'static Mutex<Nvml> {
+async fn get_global_gpu() -> &'static Mutex<Option<Nvml>> {
     GLOBAL_GPU
         .get_or_init(|| async {
-            let nvml = Nvml::init().expect("Failed to initialize GPU Nvml");
+            let nvml = Nvml::init().ok();
             Mutex::new(nvml)
         })
         .await

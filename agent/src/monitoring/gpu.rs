@@ -12,7 +12,12 @@ static GLOBAL_STATIC_DATA_FROM_GPU: OnceCell<Mutex<StaticDataFromGpu>> = OnceCel
 impl StaticDataFromGpu {
     pub async fn new() -> StaticDataFromGpu {
         let nvml_mutex = get_global_gpu().await;
-        let nvml = nvml_mutex.lock();
+        let nvml_guard = nvml_mutex.lock();
+
+        let nvml = match &*nvml_guard {
+            Some(nvml) => nvml,
+            None => return StaticDataFromGpu(vec![]),
+        };
 
         let gpu_count = nvml.device_count().unwrap_or(0);
 
@@ -48,7 +53,12 @@ static GLOBAL_DYNAMIC_DATA_FROM_GPU: OnceCell<Mutex<DynamicDataFromGpu>> = OnceC
 impl DynamicDataFromGpu {
     async fn new() -> DynamicDataFromGpu {
         let nvml_mutex = get_global_gpu().await;
-        let nvml = nvml_mutex.lock();
+        let nvml_guard = nvml_mutex.lock();
+
+        let nvml = match &*nvml_guard {
+            Some(nvml) => nvml,
+            None => return DynamicDataFromGpu(vec![]),
+        };
 
         let gpu_count = nvml.device_count().unwrap_or(0);
 
@@ -82,7 +92,12 @@ impl DynamicDataFromGpu {
 
     async fn update(&mut self) {
         let nvml_mutex = get_global_gpu().await;
-        let nvml = nvml_mutex.lock();
+        let nvml_guard = nvml_mutex.lock();
+
+        let nvml = match &*nvml_guard {
+            Some(nvml) => nvml,
+            None => return,
+        };
 
         for gpu_data in &mut self.0 {
             let index = gpu_data.id.saturating_sub(1);
