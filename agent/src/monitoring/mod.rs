@@ -1,8 +1,7 @@
 use nvml_wrapper::Nvml;
-use parking_lot::Mutex;
 use std::time::Duration;
 use sysinfo::{CpuRefreshKind, DiskRefreshKind, Disks, MemoryRefreshKind, Networks, System};
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, OnceCell};
 use tokio::time::Instant;
 
 mod gpu;
@@ -26,7 +25,7 @@ async fn get_global_system() -> &'static Mutex<System> {
 
 async fn refresh_global_system() {
     let system_mutex = get_global_system().await;
-    let mut system = system_mutex.lock();
+    let mut system = system_mutex.lock().await;
     system.refresh_cpu_specifics(CpuRefreshKind::nothing().with_cpu_usage().with_frequency());
     system.refresh_memory_specifics(MemoryRefreshKind::nothing().with_ram().with_swap());
 }
@@ -53,7 +52,7 @@ async fn refresh_global_disk() -> Duration {
         .await;
 
     let disk_mutex = get_global_disk().await;
-    let mut disk = disk_mutex.lock();
+    let mut disk = disk_mutex.lock().await;
     disk.refresh_specifics(
         true,
         DiskRefreshKind::nothing()
@@ -62,7 +61,7 @@ async fn refresh_global_disk() -> Duration {
             .without_kind(),
     );
 
-    let mut last_time = time_tracker.lock();
+    let mut last_time = time_tracker.lock().await;
     let now = Instant::now();
     let interval = now.duration_since(*last_time);
 
@@ -92,10 +91,10 @@ async fn refresh_global_network() -> Duration {
         .await;
 
     let network_mutex = get_global_network().await;
-    let mut network = network_mutex.lock();
+    let mut network = network_mutex.lock().await;
     network.refresh(true);
 
-    let mut last_time = time_tracker.lock();
+    let mut last_time = time_tracker.lock().await;
     let now = Instant::now();
     let interval = now.duration_since(*last_time);
 

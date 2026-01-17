@@ -11,9 +11,6 @@ nodeget-lib = { path = "../nodeget-lib", features = ["for-agent"] }
 tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "fs"] }
 futures = "0.3.31"
 
-# Synchronization primitives
-parking_lot = "0.12.5"
-
 # Logging
 log = { version = "0.4.29", default-features = false, features = ["std", "serde"] }
 simple_logger = { version = "5.1.0", default-features = false, features = ["threads", "time", "timestamps", "colored", "colors"] }

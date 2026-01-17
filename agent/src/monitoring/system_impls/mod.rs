@@ -5,10 +5,9 @@ use nodeget_lib::monitoring::data_structure::{
     DynamicCPUData, DynamicLoadData, DynamicPerCpuCoreData, DynamicRamData, DynamicSystemData,
     StaticCPUData, StaticPerCpuCoreData, StaticSystemData,
 };
-use parking_lot::{Mutex, MutexGuard};
 use process::count_processes;
 use sysinfo::System;
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, MutexGuard, OnceCell};
 use virtualization_detect::detect_virtualization;
 
 pub mod process;
@@ -24,7 +23,7 @@ impl StaticDataFromSystem {
     pub async fn new() -> StaticDataFromSystem {
         refresh_global_system().await;
         let system_mutex = crate::monitoring::get_global_system().await;
-        let system = system_mutex.lock();
+        let system = system_mutex.lock().await;
 
         let per_core = system
             .cpus()
@@ -64,7 +63,7 @@ impl StaticDataFromSystem {
             .get_or_init(|| async { Mutex::new(StaticDataFromSystem::new().await) })
             .await;
 
-        data_mutex.lock()
+        data_mutex.lock().await
     }
 }
 
@@ -82,7 +81,7 @@ impl DynamicDataFromSystem {
     async fn new() -> Self {
         refresh_global_system().await;
         let system_mutex = crate::monitoring::get_global_system().await;
-        let system = system_mutex.lock();
+        let system = system_mutex.lock().await;
 
         let per_core = system
             .cpus()
@@ -127,7 +126,7 @@ impl DynamicDataFromSystem {
         // 仅处理变更数据
         refresh_global_system().await;
         let system_mutex = crate::monitoring::get_global_system().await;
-        let system = system_mutex.lock();
+        let system = system_mutex.lock().await;
 
         for (data, cpu) in self.0.per_core.iter_mut().zip(system.cpus()) {
             data.cpu_usage = f64::from(cpu.cpu_usage());
@@ -157,7 +156,7 @@ impl DynamicDataFromSystem {
             .get_or_init(|| async { Mutex::new(DynamicDataFromSystem::new().await) })
             .await;
 
-        let mut data = data_mutex.lock();
+        let mut data = data_mutex.lock().await;
         data.update().await;
 
         data

@@ -1,7 +1,6 @@
-use parking_lot::Mutex;
 use rand::random;
 use surge_ping::{Client, Config, ICMP, PingIdentifier, PingSequence, SurgeError};
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, OnceCell};
 
 static ICMP_PAYLOAD: [u8; 8] = [0; 8];
 static PING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
@@ -17,7 +16,7 @@ pub async fn ping_v4_target(target: std::net::IpAddr) -> Result<std::time::Durat
         })
         .await;
 
-    let client = client_v4_mutex.lock();
+    let client = client_v4_mutex.lock().await;
 
     let mut pinger = client.pinger(target, PingIdentifier(random())).await;
 
@@ -40,7 +39,7 @@ pub async fn ping_v6_target(target: std::net::IpAddr) -> Result<std::time::Durat
         })
         .await;
 
-    let client = client_v6_mutex.lock();
+    let client = client_v6_mutex.lock().await;
 
     let mut pinger = client.pinger(target, PingIdentifier(random())).await;
 

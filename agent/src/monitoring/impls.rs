@@ -34,24 +34,38 @@ impl Monitor for StaticMonitoringData {
 
 impl Monitor for DynamicMonitoringData {
     async fn refresh_and_get() -> Self {
-        let system_data = tokio::join!(DynamicDataFromSystem::refresh_and_get()).0;
+        let (cpu, ram, load, system) = {
+            let guard_tuple = tokio::join!(DynamicDataFromSystem::refresh_and_get()).0;
+            (
+                guard_tuple.0.clone(),
+                guard_tuple.1.clone(),
+                guard_tuple.2.clone(),
+                guard_tuple.3.clone(),
+            )
+        };
+
         let handle_disk = tokio::spawn(DataFromDisk::refresh_and_get());
         let handle_network = tokio::spawn(DataFromNetwork::refresh_and_get());
+
+        let gpu_data = {
+            let gpu_guard = DynamicDataFromGpu::refresh_and_get().await;
+            gpu_guard.0.clone()
+        };
+
         let disk_data = handle_disk.await.unwrap();
         let network_data = handle_network.await.unwrap();
-        let gpu = DynamicDataFromGpu::refresh_and_get().await;
 
         DynamicMonitoringData {
             uuid: AGENT_CONFIG.get().unwrap().agent_uuid.clone(),
             time: get_local_timestamp_ms(),
 
-            cpu: system_data.0.clone(),
-            ram: system_data.1.clone(),
-            load: system_data.2.clone(),
-            system: system_data.3.clone(),
+            cpu,
+            ram,
+            load,
+            system,
             disk: disk_data.0,
             network: network_data.0,
-            gpu: gpu.0.clone(),
+            gpu: gpu_data,
         }
     }
 }
@@ -65,7 +79,7 @@ impl DataFromDisk {
     pub async fn refresh_and_get() -> Self {
         let interval_secs = refresh_global_disk().await.as_secs_f64();
         let disk_mutex = crate::monitoring::get_global_disk().await;
-        let disks = disk_mutex.lock();
+        let disks = disk_mutex.lock().await;
 
         let per_disk_vec = disks
             .iter()
@@ -105,7 +119,7 @@ impl DataFromNetwork {
     pub async fn refresh_and_get() -> Self {
         let interval_secs = refresh_global_network().await.as_secs_f64();
         let networks_mutex = crate::monitoring::get_global_network().await;
-        let networks = networks_mutex.lock();
+        let networks = networks_mutex.lock().await;
 
         let network_vec = networks
             .iter()

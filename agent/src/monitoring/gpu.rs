@@ -1,8 +1,7 @@
 use crate::monitoring::get_global_gpu;
 use nodeget_lib::monitoring::data_structure::{DynamicGpuData, StaticGpuData};
 use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor};
-use parking_lot::{Mutex, MutexGuard};
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, MutexGuard, OnceCell};
 
 #[derive(Debug)]
 pub struct StaticDataFromGpu(pub Vec<StaticGpuData>);
@@ -12,7 +11,7 @@ static GLOBAL_STATIC_DATA_FROM_GPU: OnceCell<Mutex<StaticDataFromGpu>> = OnceCel
 impl StaticDataFromGpu {
     pub async fn new() -> StaticDataFromGpu {
         let nvml_mutex = get_global_gpu().await;
-        let nvml_guard = nvml_mutex.lock();
+        let nvml_guard = nvml_mutex.lock().await;
 
         let nvml = match &*nvml_guard {
             Some(nvml) => nvml,
@@ -41,7 +40,7 @@ impl StaticDataFromGpu {
             .get_or_init(|| async { Mutex::new(StaticDataFromGpu::new().await) })
             .await;
 
-        data_mutex.lock()
+        data_mutex.lock().await
     }
 }
 
@@ -53,7 +52,7 @@ static GLOBAL_DYNAMIC_DATA_FROM_GPU: OnceCell<Mutex<DynamicDataFromGpu>> = OnceC
 impl DynamicDataFromGpu {
     async fn new() -> DynamicDataFromGpu {
         let nvml_mutex = get_global_gpu().await;
-        let nvml_guard = nvml_mutex.lock();
+        let nvml_guard = nvml_mutex.lock().await;
 
         let nvml = match &*nvml_guard {
             Some(nvml) => nvml,
@@ -92,7 +91,7 @@ impl DynamicDataFromGpu {
 
     async fn update(&mut self) {
         let nvml_mutex = get_global_gpu().await;
-        let nvml_guard = nvml_mutex.lock();
+        let nvml_guard = nvml_mutex.lock().await;
 
         let nvml = match &*nvml_guard {
             Some(nvml) => nvml,
@@ -138,7 +137,7 @@ impl DynamicDataFromGpu {
             .get_or_init(|| async { Mutex::new(DynamicDataFromGpu::new().await) })
             .await;
 
-        let mut data = data_mutex.lock();
+        let mut data = data_mutex.lock().await;
         data.update().await;
 
         data

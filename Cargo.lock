@@ -2235,7 +2235,6 @@ dependencies = [
  "netstat2",
  "nodeget-lib",
  "nvml-wrapper",
- "parking_lot",
  "rand 0.10.0-rc.6",
  "raw-cpuid 11.6.0",
  "rustls",
