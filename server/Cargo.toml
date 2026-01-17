@@ -12,6 +12,7 @@ categories = ["asynchronous", "command-line-utilities", "network-programming", "
 tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
 nodeget-lib = { path = "../nodeget-lib", features = ["for-server"] }
 migration = { path = "migration" }
+uuid = { version = "1.19.0", default-features = false, features = ["v4"]}
 
 sea-orm = { version = "2.0.0-rc.28", features = ["runtime-tokio-rustls", "sqlx-sqlite", "sqlx-postgres"] }
 serde = "1.0.228"

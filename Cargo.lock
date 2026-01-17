@@ -2253,6 +2253,7 @@ dependencies = [
 name = "nodeget-lib"
 version = "0.0.1"
 dependencies = [
+ "log",
  "machine-uid",
  "serde",
  "serde_json",
@@ -2275,6 +2276,7 @@ dependencies = [
  "serde_json",
  "simple_logger",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

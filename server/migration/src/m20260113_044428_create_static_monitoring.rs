@@ -1,3 +1,4 @@
+use crate::sea_orm::DbBackend;
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
@@ -20,7 +21,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(StaticMonitoringInDatabase::Uuid)
-                            .string()
+                            .uuid()
                             .not_null(),
                     )
                     .col(
@@ -45,7 +46,26 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await
+            .await?;
+
+        if manager.get_database_backend() == DbBackend::Postgres {
+            let db = manager.get_connection();
+            db.execute_unprepared(
+                "ALTER TABLE static_monitoring ALTER COLUMN cpu_data SET COMPRESSION lz4;",
+            )
+            .await?;
+
+            db.execute_unprepared(
+                "ALTER TABLE static_monitoring ALTER COLUMN system_data SET COMPRESSION lz4;",
+            )
+            .await?;
+
+            db.execute_unprepared(
+                "ALTER TABLE static_monitoring ALTER COLUMN gpu_data SET COMPRESSION lz4;",
+            )
+            .await?;
+        }
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {

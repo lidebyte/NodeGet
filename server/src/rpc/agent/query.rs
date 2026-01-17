@@ -69,7 +69,7 @@ pub async fn query_static(_token: String, data: Value) -> Value {
             .map(|model| {
                 let mut map = Map::new();
 
-                map.insert("uuid".to_string(), Value::String(model.uuid));
+                map.insert("uuid".to_string(), Value::String(String::from(model.uuid)));
                 map.insert(
                     "timestamp".to_string(),
                     Value::Number(model.timestamp.into()),
@@ -167,7 +167,7 @@ pub async fn query_dynamic(_token: String, data: Value) -> Value {
             .map(|model| {
                 let mut map = Map::new();
 
-                map.insert("uuid".to_string(), Value::String(model.uuid));
+                map.insert("uuid".to_string(), Value::String(String::from(model.uuid)));
                 map.insert(
                     "timestamp".to_string(),
                     Value::Number(model.timestamp.into()),

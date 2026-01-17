@@ -22,7 +22,7 @@ impl Monitor for StaticMonitoringData {
         let (system_data, gpu_data) =
             tokio::join!(StaticDataFromSystem::get(), StaticDataFromGpu::get());
         StaticMonitoringData {
-            uuid: AGENT_CONFIG.get().unwrap().agent_uuid.clone(),
+            uuid: AGENT_CONFIG.get().unwrap().agent_uuid.clone().to_string(),
             time: get_local_timestamp_ms(),
 
             cpu: system_data.0.clone(),
@@ -56,7 +56,7 @@ impl Monitor for DynamicMonitoringData {
         let network_data = handle_network.await.unwrap();
 
         DynamicMonitoringData {
-            uuid: AGENT_CONFIG.get().unwrap().agent_uuid.clone(),
+            uuid: AGENT_CONFIG.get().unwrap().agent_uuid.clone().to_string(),
             time: get_local_timestamp_ms(),
 
             cpu,

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-    pub uuid: String,
+    pub uuid: Uuid,
     pub timestamp: i64,
     #[sea_orm(column_type = "JsonBinary")]
     pub cpu_data: Json,

@@ -1,4 +1,3 @@
-#![feature(duration_millis_float)]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
     clippy::cast_sign_loss,

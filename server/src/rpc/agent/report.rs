@@ -5,6 +5,7 @@ use nodeget_lib::monitoring::data_structure::{DynamicMonitoringData, StaticMonit
 use nodeget_lib::utils::error_message::generate_error_message;
 use sea_orm::{ActiveValue, EntityTrait, Set};
 use serde_json::{Value, from_value, json};
+use std::str::FromStr;
 
 pub async fn report_static(_token: String, data: Value) -> Value {
     let process_logic = async {
@@ -17,7 +18,7 @@ pub async fn report_static(_token: String, data: Value) -> Value {
 
         let in_data = static_monitoring::ActiveModel {
             id: ActiveValue::default(),
-            uuid: Set(parsed.uuid.clone()),
+            uuid: Set(uuid::Uuid::from_str(&parsed.uuid).map_err(|e| (101, e.to_string()))?),
             timestamp: Set(parsed.time.cast_signed()),
 
             cpu_data: AgentRpcImpl::try_set_json(parsed.cpu).map_err(|e| (101, e))?,
@@ -57,7 +58,7 @@ pub async fn report_dynamic(_token: String, data: Value) -> Value {
 
         let in_data = dynamic_monitoring::ActiveModel {
             id: ActiveValue::default(),
-            uuid: Set(parsed.uuid.clone()),
+            uuid: Set(uuid::Uuid::from_str(&parsed.uuid).map_err(|e| (101, e.to_string()))?),
             timestamp: Set(parsed.time.cast_signed()),
 
             cpu_data: AgentRpcImpl::try_set_json(parsed.cpu).map_err(|e| (101, e))?,
