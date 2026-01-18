@@ -10,39 +10,38 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(StaticMonitoringInDatabase::Table)
+                    .table(TaskInDatabase::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(StaticMonitoringInDatabase::Id)
+                        ColumnDef::new(TaskInDatabase::Id)
                             .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
+                    .col(ColumnDef::new(TaskInDatabase::Uuid).uuid().not_null())
+                    .col(ColumnDef::new(TaskInDatabase::Token).string().not_null())
                     .col(
-                        ColumnDef::new(StaticMonitoringInDatabase::Uuid)
-                            .uuid()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(StaticMonitoringInDatabase::Timestamp)
+                        ColumnDef::new(TaskInDatabase::Timestamp)
                             .big_integer()
-                            .not_null(),
+                            .null(),
                     )
                     .col(
-                        ColumnDef::new(StaticMonitoringInDatabase::CpuData)
+                        ColumnDef::new(TaskInDatabase::Success)
+                            .boolean()
+                            .null()
+                            .default(false),
+                    )
+                    .col(ColumnDef::new(TaskInDatabase::ErrorMessage).string().null())
+                    .col(
+                        ColumnDef::new(TaskInDatabase::TaskEventType)
                             .json_binary()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(StaticMonitoringInDatabase::SystemData)
+                        ColumnDef::new(TaskInDatabase::TaskEventResult)
                             .json_binary()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(StaticMonitoringInDatabase::GpuData)
-                            .json_binary()
-                            .not_null(),
+                            .null(),
                     )
                     .to_owned(),
             )
@@ -52,10 +51,9 @@ impl MigrationTrait for Migration {
             DbBackend::Postgres => {
                 let db = manager.get_connection();
                 db.execute_unprepared(
-                    "ALTER TABLE static_monitoring
-                        ALTER COLUMN cpu_data SET COMPRESSION lz4,
-                        ALTER COLUMN system_data SET COMPRESSION lz4,
-                        ALTER COLUMN gpu_data SET COMPRESSION lz4;",
+                    "ALTER TABLE task
+                        ALTER COLUMN task_event_result SET COMPRESSION lz4,
+                        ALTER COLUMN task_event_type SET COMPRESSION lz4;",
                 )
                 .await?;
             }
@@ -64,29 +62,28 @@ impl MigrationTrait for Migration {
                 todo!()
             }
         }
+
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(
-                Table::drop()
-                    .table(StaticMonitoringInDatabase::Table)
-                    .to_owned(),
-            )
+            .drop_table(Table::drop().table(TaskInDatabase::Table).to_owned())
             .await
     }
 }
 
 #[derive(DeriveIden)]
-enum StaticMonitoringInDatabase {
-    #[sea_orm(iden = "static_monitoring")]
+enum TaskInDatabase {
+    #[sea_orm(iden = "task")]
     Table,
     Id,
     Uuid,
+    Token,
     Timestamp,
+    Success,
 
-    CpuData,
-    SystemData,
-    GpuData,
+    ErrorMessage,
+    TaskEventType,
+    TaskEventResult,
 }

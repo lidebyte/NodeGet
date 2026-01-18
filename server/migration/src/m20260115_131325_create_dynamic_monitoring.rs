@@ -68,42 +68,25 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        if manager.get_database_backend() == DbBackend::Postgres {
-            let db = manager.get_connection();
-            db.execute_unprepared(
-                "ALTER TABLE dynamic_monitoring ALTER COLUMN cpu_data SET COMPRESSION lz4;",
-            )
-            .await?;
-
-            db.execute_unprepared(
-                "ALTER TABLE dynamic_monitoring ALTER COLUMN ram_data SET COMPRESSION lz4;",
-            )
-            .await?;
-
-            db.execute_unprepared(
-                "ALTER TABLE dynamic_monitoring ALTER COLUMN load_data SET COMPRESSION lz4;",
-            )
-            .await?;
-
-            db.execute_unprepared(
-                "ALTER TABLE dynamic_monitoring ALTER COLUMN system_data SET COMPRESSION lz4;",
-            )
-            .await?;
-
-            db.execute_unprepared(
-                "ALTER TABLE dynamic_monitoring ALTER COLUMN disk_data SET COMPRESSION lz4;",
-            )
-            .await?;
-
-            db.execute_unprepared(
-                "ALTER TABLE dynamic_monitoring ALTER COLUMN network_data SET COMPRESSION lz4;",
-            )
-            .await?;
-
-            db.execute_unprepared(
-                "ALTER TABLE dynamic_monitoring ALTER COLUMN gpu_data SET COMPRESSION lz4;",
-            )
-            .await?;
+        match manager.get_database_backend() {
+            DbBackend::Postgres => {
+                let db = manager.get_connection();
+                db.execute_unprepared(
+                    "ALTER TABLE dynamic_monitoring
+                        ALTER COLUMN cpu_data SET COMPRESSION lz4,
+                        ALTER COLUMN ram_data SET COMPRESSION lz4,
+                        ALTER COLUMN load_data SET COMPRESSION lz4,
+                        ALTER COLUMN system_data SET COMPRESSION lz4,
+                        ALTER COLUMN disk_data SET COMPRESSION lz4,
+                        ALTER COLUMN network_data SET COMPRESSION lz4,
+                        ALTER COLUMN gpu_data SET COMPRESSION lz4;",
+                )
+                .await?;
+            }
+            DbBackend::Sqlite => {} // todo!()
+            _ => {
+                todo!()
+            }
         }
         Ok(())
     }

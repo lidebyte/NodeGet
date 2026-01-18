@@ -1,6 +1,7 @@
 pub mod monitoring_data_report;
 pub mod multi_server;
 
+use nodeget_lib::task::TaskEvent;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -20,4 +21,16 @@ pub fn wrap_json_into_rpc_with_id_1(method: &str, params: Vec<serde_json::Value>
     };
 
     serde_json::to_string(&rpc).unwrap()
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct JsonRpcTask {
+    pub jsonrpc: String,
+    pub method: String,
+    pub params: JsonRpcTaskResult,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct JsonRpcTaskResult {
+    pub result: TaskEvent,
 }

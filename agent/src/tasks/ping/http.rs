@@ -1,47 +1,24 @@
-use awc::Client;
-use awc::error::SendRequestError;
-use rustls::{ClientConfig, RootCertStore};
-use std::sync::Arc;
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, OnceCell};
 
-static GLOBAL_TLS_CONFIG: OnceCell<Arc<ClientConfig>> = OnceCell::const_new();
+static GLOBAL_AGENT: OnceCell<Mutex<ureq::Agent>> = OnceCell::const_new();
 static PING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-pub async fn httping_target(target: &str) -> Result<std::time::Duration, SendRequestError> {
-    let tls_config = GLOBAL_TLS_CONFIG
-        .get_or_init(|| async {
-            let mut root_store = RootCertStore::empty();
-            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.to_owned());
-
-            let mut config = ClientConfig::builder()
-                .with_root_certificates(root_store)
-                .with_no_client_auth();
-
-            let protos = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-            config.alpn_protocols = protos;
-
-            Arc::new(config)
+pub async fn httping_target(target: url::Url) -> Result<std::time::Duration, String> {
+    let agent = GLOBAL_AGENT
+        .get_or_init(async || {
+            let config = ureq::Agent::config_builder()
+                .timeout_global(Some(PING_TIMEOUT))
+                .build();
+            let agent = ureq::Agent::new_with_config(config);
+            Mutex::new(agent)
         })
         .await;
 
-    let local = tokio::task::LocalSet::new();
+    let agent_guard = agent.lock().await;
 
-    local
-        .run_until(async move {
-            let client = Client::builder()
-                .connector(awc::Connector::new().rustls_0_23(tls_config.clone()))
-                .timeout(PING_TIMEOUT)
-                .no_default_headers()
-                .finish();
-
-            let request = client.get(target).append_header(("User-Agent", "awc/3.0"));
-
-            let start = std::time::Instant::now();
-
-            match request.send().await {
-                Ok(_) => Ok(start.elapsed()),
-                Err(e) => Err(e),
-            }
-        })
-        .await
+    let start = std::time::Instant::now();
+    match agent_guard.get(target.to_string()).call() {
+        Ok(_) => Ok(start.elapsed()),
+        Err(e) => Err(format!("Failed to http ping target: {e}")),
+    }
 }

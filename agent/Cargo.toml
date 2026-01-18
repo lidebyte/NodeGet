@@ -8,24 +8,21 @@ edition = "2024"
 nodeget-lib = { path = "../nodeget-lib", features = ["for-agent"] }
 
 # Asynchronous runtime
-tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "fs"] }
+tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "fs", "signal"] }
 futures = "0.3.31"
 
 # Logging
 log = { version = "0.4.29", default-features = false, features = ["std", "serde"] }
 simple_logger = { version = "5.1.0", default-features = false, features = ["threads", "time", "timestamps", "colored", "colors"] }
 
-# TLS Support
-rustls = { version = "0.23.36", default-features = false, features = ["log", "ring"] }
-webpki-roots = "1.0.5"
-
 # Http Client
-awc = { version = "3.8.1", default-features = false, features = ["compress-gzip", "rustls-0_23-webpki-roots", "hickory-dns"] }
+ureq = { version = "3.1", default-features = false, features = ["gzip", "rustls"] }
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["rustls-tls-webpki-roots", "connect"] }
 
 # parser
 serde = { version = "1.0.228", default-features = false, features = ["std", "default"] }
-serde_json = { version = "1.0.149", default-features = false, features = ["std"]}
+serde_json = { version = "1.0.149", default-features = false, features = ["std"] }
+url = { version = "2.5.8", default-features = false, features = ["std", "serde"] }
 
 # ICMP Ping
 surge-ping = "0.8.4"

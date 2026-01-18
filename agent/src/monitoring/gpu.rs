@@ -13,9 +13,8 @@ impl StaticDataFromGpu {
         let nvml_mutex = get_global_gpu().await;
         let nvml_guard = nvml_mutex.lock().await;
 
-        let nvml = match &*nvml_guard {
-            Some(nvml) => nvml,
-            None => return StaticDataFromGpu(vec![]),
+        let Some(nvml) = &*nvml_guard else {
+            return StaticDataFromGpu(vec![]);
         };
 
         let gpu_count = nvml.device_count().unwrap_or(0);
@@ -54,9 +53,8 @@ impl DynamicDataFromGpu {
         let nvml_mutex = get_global_gpu().await;
         let nvml_guard = nvml_mutex.lock().await;
 
-        let nvml = match &*nvml_guard {
-            Some(nvml) => nvml,
-            None => return DynamicDataFromGpu(vec![]),
+        let Some(nvml) = &*nvml_guard else {
+            return DynamicDataFromGpu(vec![]);
         };
 
         let gpu_count = nvml.device_count().unwrap_or(0);
@@ -93,10 +91,7 @@ impl DynamicDataFromGpu {
         let nvml_mutex = get_global_gpu().await;
         let nvml_guard = nvml_mutex.lock().await;
 
-        let nvml = match &*nvml_guard {
-            Some(nvml) => nvml,
-            None => return,
-        };
+        let Some(nvml) = &*nvml_guard else { return };
 
         for gpu_data in &mut self.0 {
             let index = gpu_data.id.saturating_sub(1);

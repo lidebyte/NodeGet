@@ -1,20 +1,31 @@
+use log::error;
 use std::hint::black_box;
-use std::io;
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, lookup_host};
 use tokio::time::timeout;
 
 // TCP 系统重传时间为 1 Sec 以上，请勿动本参数
 static PING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
 
-pub async fn tcping_target(target: std::net::SocketAddr) -> io::Result<std::time::Duration> {
+pub async fn tcping_target(target: String) -> Result<std::time::Duration, String> {
+    let target_host = match lookup_host(target).await {
+        Ok(mut addrs) => addrs.next().map(|e| e),
+        Err(e) => {
+            error!("Resolving host error: {e}");
+            None
+        }
+    };
+
+    let target = match target_host {
+        None => return Err("Invalid target".to_string()),
+        Some(ip) => ip,
+    };
+
     let start = std::time::Instant::now();
     match timeout(PING_TIMEOUT, TcpStream::connect(target)).await {
         Ok(Ok(stream)) => {
             black_box(stream);
             Ok(start.elapsed())
         }
-        _ => {
-            Err(io::Error::last_os_error()) // DO NOT BELIEVE THIS
-        }
+        _ => Err("Http Ping Error".to_string()),
     }
 }

@@ -1,12 +1,10 @@
 mod query;
 mod report;
 
-use crate::DB;
+use crate::rpc::RpcHelper;
 use jsonrpsee::core::async_trait;
 use jsonrpsee::proc_macros::rpc;
-use sea_orm::{ActiveValue, DatabaseConnection, Set};
-use serde::Serialize;
-use serde_json::{Value, to_value};
+use serde_json::Value;
 
 #[rpc(server, namespace = "agent")]
 pub trait Rpc {
@@ -24,18 +22,7 @@ pub trait Rpc {
 }
 pub struct AgentRpcImpl;
 
-impl AgentRpcImpl {
-    fn try_set_json<T: Serialize>(val: T) -> Result<ActiveValue<Value>, String> {
-        to_value(val)
-            .map(Set)
-            .map_err(|e| format!("Serialization error: {e}"))
-    }
-
-    fn get_db() -> Result<&'static DatabaseConnection, (i64, String)> {
-        DB.get()
-            .ok_or_else(|| (102, "DB not initialized".to_string()))
-    }
-}
+impl RpcHelper for AgentRpcImpl {}
 
 #[async_trait]
 impl RpcServer for AgentRpcImpl {
