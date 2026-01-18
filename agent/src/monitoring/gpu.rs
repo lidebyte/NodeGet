@@ -13,7 +13,9 @@ impl StaticDataFromGpu {
         let nvml_mutex = get_global_gpu().await;
         let nvml_guard = nvml_mutex.lock().await;
 
-        let Some(nvml) = &*nvml_guard else { return StaticDataFromGpu(vec![]) };
+        let Some(nvml) = &*nvml_guard else {
+            return StaticDataFromGpu(vec![]);
+        };
 
         let gpu_count = nvml.device_count().unwrap_or(0);
 
@@ -51,7 +53,9 @@ impl DynamicDataFromGpu {
         let nvml_mutex = get_global_gpu().await;
         let nvml_guard = nvml_mutex.lock().await;
 
-        let Some(nvml) = &*nvml_guard else { return DynamicDataFromGpu(vec![]) };
+        let Some(nvml) = &*nvml_guard else {
+            return DynamicDataFromGpu(vec![]);
+        };
 
         let gpu_count = nvml.device_count().unwrap_or(0);
 

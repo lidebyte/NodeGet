@@ -25,7 +25,7 @@ tokio-tungstenite = { version = "0.28.0", default-features = false, features = [
 
 # parser
 serde = { version = "1.0.228", default-features = false, features = ["std", "default"] }
-serde_json = { version = "1.0.149", default-features = false, features = ["std"]}
+serde_json = { version = "1.0.149", default-features = false, features = ["std"] }
 
 # ICMP Ping
 surge-ping = "0.8.4"

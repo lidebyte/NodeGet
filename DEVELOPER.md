@@ -33,14 +33,16 @@
 
 - `monitoring`: 监控相关
     - `network_connections` / `system_impls` / `gpu` / `impls`: 实现各种数据监控查询
-    - 提供顶层 API: `StaticMonitoringData::refresh_and_get()` / `DynamicMonitoringData::refresh_and_get()`，可直接刷新并获取由 `nodeget-lib` 规定的监控数据结构 `StaticMonitoringData` / `DynamicMonitoringData`
+    - 提供顶层 API: `StaticMonitoringData::refresh_and_get()` / `DynamicMonitoringData::refresh_and_get()`，可直接刷新并获取由
+      `nodeget-lib` 规定的监控数据结构 `StaticMonitoringData` / `DynamicMonitoringData`
 - `task`: Server 下发任务
     - `ping`: 实现 ICMP / TCP / HTTP Ping (未使用)
     - `web_shell`: 实现 Web Shell Pty (未实现)
     - ...
 - `rpc`: 与 Server 进行 Websocket Jsonrpc 通信
     - `mod`: 定义 Jsonrpc 结构体与简单封装
-    - `multi_server`: 维护的多服务器连接池，实现自动重连等，可通过 `send_to()` / `subscribe_to()` 快捷与 任意已连接的 Server 进行通信
+    - `multi_server`: 维护的多服务器连接池，实现自动重连等，可通过 `send_to()` / `subscribe_to()` 快捷与 任意已连接的
+      Server 进行通信
     - `monitoring_data_report`: 实现 Static / Dynamic 监控数据定时上报的线程
 
 ## nodeget-server

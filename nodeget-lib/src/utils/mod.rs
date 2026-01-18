@@ -40,12 +40,10 @@ pub fn get_stable_device_uuid() -> uuid::Uuid {
         machine_id.push_str("-server");
     }
 
-    
-
     Uuid::new_v5(&Uuid::NAMESPACE_OID, machine_id.as_bytes())
 }
 
-#[must_use] 
+#[must_use]
 pub fn compare_uuid(set_uuid: uuid::Uuid) -> bool {
     let stable_uuid = get_stable_device_uuid();
     if set_uuid == stable_uuid {
