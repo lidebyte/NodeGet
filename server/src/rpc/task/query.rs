@@ -1,12 +1,15 @@
 use crate::entity::task;
-use crate::rpc::task::TaskRpcImpl;
 use crate::rpc::RpcHelper;
+use crate::rpc::task::TaskRpcImpl;
 use log::error;
 use nodeget_lib::task::query::{TaskDataQuery, TaskQueryCondition};
 use nodeget_lib::utils::error_message::generate_error_message;
-use sea_orm::sea_query::{Alias, BinOper, Expr}; // 引入 BinOper
-use sea_orm::{ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect};
-use serde_json::{from_value, Map, Value};
+use sea_orm::sea_query::{Alias, BinOper, Expr};
+use sea_orm::{
+    ColumnTrait, DbBackend, EntityTrait, ExprTrait, Order, QueryFilter,
+    QueryOrder, QuerySelect,
+};
+use serde_json::{Map, Value, from_value};
 
 pub async fn query(_token: String, data: Value) -> Value {
     let process_logic = async {
@@ -48,23 +51,20 @@ pub async fn query(_token: String, data: Value) -> Value {
                     query = query.filter(task::Column::Success.is_null());
                 }
                 TaskQueryCondition::Type(type_key) => {
-                    match db.get_database_backend() {
-                        DbBackend::Postgres => {
-                            // Postgres 优化：使用 JSONB 操作符
-                            query = query.filter(
-                                Expr::col(task::Column::TaskEventType)
-                                    .binary(BinOper::Custom("?"), type_key),
-                            );
-                        }
-                        _ => {
-                            // SQLite / 其他，转文本并匹配
-                            let pattern = format!("%\"{}\":%", type_key);
-                            query = query.filter(
-                                Expr::col(task::Column::TaskEventType)
-                                    .cast_as(Alias::new("text"))
-                                    .like(pattern),
-                            );
-                        }
+                    if db.get_database_backend() == DbBackend::Postgres {
+                        // Postgres 优化：使用 JSONB 操作符
+                        query = query.filter(
+                            Expr::col(task::Column::TaskEventType)
+                                .binary(BinOper::Custom("?"), type_key),
+                        );
+                    } else {
+                        // SQLite / 其他，转文本并匹配
+                        let pattern = format!("%\"{type_key}\":%");
+                        query = query.filter(
+                            Expr::col(task::Column::TaskEventType)
+                                .cast_as(Alias::new("text"))
+                                .like(pattern),
+                        );
                     }
                 }
                 TaskQueryCondition::Last => {

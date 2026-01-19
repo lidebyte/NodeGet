@@ -8,9 +8,9 @@ pub enum TaskQueryCondition {
     TimestampFrom(i64),        // start,
     TimestampTo(i64),          // end
 
-    IsSuccess, // 仅查找 success 字段为 true
-    IsFailure, // 仅查找 success 字段为 false
-    IsRunning, // 仅查找 success 字段为空
+    IsSuccess,    // 仅查找 success 字段为 true
+    IsFailure,    // 仅查找 success 字段为 false
+    IsRunning,    // 仅查找 success 字段为空
     Type(String), // task_event_type 中有字段为 `String` 的行
 
     Last,

@@ -1,20 +1,16 @@
 mod create_upload_task;
 mod query;
 
-use crate::entity::task;
 use crate::rpc::RpcHelper;
 use jsonrpsee::PendingSubscriptionSink;
 use jsonrpsee::SubscriptionMessage;
 use jsonrpsee::core::{JsonRawValue, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
-use log::{debug, error, info};
+use log::{error, info};
 use migration::async_trait::async_trait;
 use nodeget_lib::task::TaskEventType;
 use nodeget_lib::task::{TaskEvent, TaskEventResponse};
-use nodeget_lib::utils::error_message::generate_error_message;
-use nodeget_lib::utils::generate_random_string;
-use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, Set};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
@@ -48,7 +44,12 @@ impl RpcHelper for TaskRpcImpl {}
 
 #[async_trait]
 impl RpcServer for TaskRpcImpl {
-    async fn create_task(&self, token: String, target_uuid: Uuid, task_type: TaskEventType) -> Value {
+    async fn create_task(
+        &self,
+        token: String,
+        target_uuid: Uuid,
+        task_type: TaskEventType,
+    ) -> Value {
         create_upload_task::create_task(&self.manager, token, target_uuid, task_type).await
     }
 
@@ -56,7 +57,7 @@ impl RpcServer for TaskRpcImpl {
         create_upload_task::upload_task_result(token, task_response).await
     }
 
-    async fn query(&self, token: String, data: Value) -> Value  {
+    async fn query(&self, token: String, data: Value) -> Value {
         query::query(token, data).await
     }
 
@@ -107,10 +108,11 @@ impl RpcServer for TaskRpcImpl {
     }
 }
 
+type Peers = Arc<RwLock<HashMap<Uuid, (Uuid, mpsc::Sender<TaskEvent>)>>>;
 // Task 连接池
 #[derive(Clone)]
 pub struct TaskManager {
-    peers: Arc<RwLock<HashMap<Uuid, (Uuid, mpsc::Sender<TaskEvent>)>>>,
+    peers: Peers,
 }
 
 impl TaskManager {
@@ -129,9 +131,10 @@ impl TaskManager {
         let mut peers = self.peers.write().await;
 
         if let Some((current_reg_id, _)) = peers.get(uuid)
-            && current_reg_id == reg_id {
-                peers.remove(uuid);
-            }
+            && current_reg_id == reg_id
+        {
+            peers.remove(uuid);
+        }
     }
 
     pub async fn send_event(&self, uuid: Uuid, event: TaskEvent) -> Result<(), (u32, String)> {

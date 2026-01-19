@@ -57,53 +57,53 @@ pub async fn handle_task() {
                     let task_result: Result<TaskEventResult, String> =
                         match json_rpc.params.result.task_event_type {
                             TaskEventType::Ping(target) => {
-                                if !server.allow_icmp_ping.unwrap_or(false) {
-                                    Err("102: Permission Denied".to_string())
-                                } else {
+                                if server.allow_icmp_ping.unwrap_or(false) {
                                     match ping::icmp::ping_target(target).await {
                                         Ok(duration) => {
                                             Ok(TaskEventResult::Ping(duration.as_millis_f64()))
                                         }
                                         Err(e) => Err(e.clone()),
                                     }
+                                } else {
+                                    Err("102: Permission Denied".to_string())
                                 }
                             }
                             TaskEventType::TcpPing(target) => {
-                                if !server.allow_tcp_ping.unwrap_or(false) {
-                                    Err("102: Permission Denied".to_string())
-                                } else {
+                                if server.allow_tcp_ping.unwrap_or(false) {
                                     match ping::tcp::tcping_target(target).await {
                                         Ok(duration) => {
                                             Ok(TaskEventResult::Ping(duration.as_millis_f64()))
                                         }
                                         Err(e) => Err(e.clone()),
                                     }
+                                } else {
+                                    Err("102: Permission Denied".to_string())
                                 }
                             }
                             TaskEventType::HttpPing(target) => {
-                                if !server.allow_http_ping.unwrap_or(false) {
-                                    Err("102: Permission Denied".to_string())
-                                } else {
+                                if server.allow_http_ping.unwrap_or(false) {
                                     match ping::http::httping_target(target).await {
                                         Ok(duration) => {
                                             Ok(TaskEventResult::Ping(duration.as_millis_f64()))
                                         }
                                         Err(e) => Err(e.clone()),
                                     }
+                                } else {
+                                    Err("102: Permission Denied".to_string())
                                 }
                             }
                             TaskEventType::WebShell(_) => {
-                                if !server.allow_web_shell.unwrap_or(false) {
-                                    Err("102: Permission Denied".to_string())
-                                } else {
+                                if server.allow_web_shell.unwrap_or(false) {
                                     todo!()
+                                } else {
+                                    Err("102: Permission Denied".to_string())
                                 }
                             }
                             TaskEventType::Execute(_) => {
-                                if !server.allow_execute.unwrap_or(false) {
-                                    Err("102: Permission Denied".to_string())
-                                } else {
+                                if server.allow_execute.unwrap_or(false) {
                                     todo!()
+                                } else {
+                                    Err("102: Permission Denied".to_string())
                                 }
                             }
                         };

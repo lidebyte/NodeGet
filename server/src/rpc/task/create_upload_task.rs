@@ -1,15 +1,15 @@
-use log::{debug, error};
-use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, Set};
-use serde_json::{json, Value};
-use uuid::Uuid;
-use nodeget_lib::task::{TaskEvent, TaskEventResponse, TaskEventType};
-use nodeget_lib::utils::error_message::generate_error_message;
-use nodeget_lib::utils::generate_random_string;
 use crate::entity::task;
 use crate::rpc::RpcHelper;
 use crate::rpc::task::{TaskManager, TaskRpcImpl};
-use sea_orm::QueryFilter;
+use log::{debug, error};
+use nodeget_lib::task::{TaskEvent, TaskEventResponse, TaskEventType};
+use nodeget_lib::utils::error_message::generate_error_message;
+use nodeget_lib::utils::generate_random_string;
 use sea_orm::ColumnTrait;
+use sea_orm::QueryFilter;
+use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, Set};
+use serde_json::{Value, json};
+use uuid::Uuid;
 
 pub async fn create_task(
     manager: &TaskManager,
@@ -43,7 +43,7 @@ pub async fn create_task(
         debug!("Inserted task with id [{task_id}]");
 
         let task = TaskEvent {
-            task_id: task_id as u64,
+            task_id: task_id.cast_unsigned(),
             task_token: token,
             task_event_type: task_type,
         };
@@ -75,7 +75,7 @@ pub async fn upload_task_result(_token: String, task_response: TaskEventResponse
     let process_logic = async {
         let db = TaskRpcImpl::get_db().map_err(|e| (e.0 as u32, e.1))?;
 
-        let task_model = task::Entity::find_by_id(task_response.task_id as i64)
+        let task_model = task::Entity::find_by_id(task_response.task_id.cast_signed())
             .filter(task::Column::Uuid.eq(task_response.agent_uuid))
             .filter(task::Column::Token.eq(task_response.task_token))
             .one(db)
@@ -93,7 +93,7 @@ pub async fn upload_task_result(_token: String, task_response: TaskEventResponse
 
         let mut active_model: task::ActiveModel = task_model.into();
 
-        active_model.timestamp = Set(Some(task_response.timestamp as i64));
+        active_model.timestamp = Set(Some(task_response.timestamp.cast_signed()));
         active_model.success = Set(Some(task_response.success));
 
         active_model.error_message = Set(task_response.error_message.map(|v| {
@@ -121,9 +121,9 @@ pub async fn upload_task_result(_token: String, task_response: TaskEventResponse
         })?;
 
         debug!(
-                "Task [{}] result uploaded successfully",
-                task_response.task_id
-            );
+            "Task [{}] result uploaded successfully",
+            task_response.task_id
+        );
 
         Ok(true)
     };
