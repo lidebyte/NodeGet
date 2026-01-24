@@ -23,6 +23,12 @@ use std::str::FromStr;
 use std::sync::OnceLock;
 use tokio::sync::OnceCell;
 
+#[cfg(all(not(target_os = "windows"), feature = "tikv-jemallocator"))]
+use tikv_jemallocator::Jemalloc;
+#[cfg(all(not(target_os = "windows"), feature = "tikv-jemallocator"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 mod db_connection;
 mod entity;
 mod rpc;
