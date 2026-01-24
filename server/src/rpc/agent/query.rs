@@ -1,5 +1,3 @@
-// 该文件实现 供给调用者查询 API
-
 use jsonrpsee::core::RpcResult;
 use crate::entity::{dynamic_monitoring, static_monitoring};
 use crate::rpc::RpcHelper;
@@ -10,8 +8,7 @@ use nodeget_lib::monitoring::query::{
     DynamicDataQuery, DynamicDataQueryField, QueryCondition, StaticDataQuery,
     StaticDataQueryField,
 };
-use nodeget_lib::utils::error_message::{error_to_raw};
-use nodeget_lib::utils::to_raw_json;
+use nodeget_lib::utils::error_message::error_to_raw;
 use sea_orm::{ColumnTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect};
 use serde_json::{Map, Value};
 use serde_json::value::RawValue;
@@ -21,7 +18,6 @@ pub async fn query_static(_token: String, static_data_query: StaticDataQuery) ->
     let process_logic = async {
         let db = AgentRpcImpl::get_db()?;
 
-        // Select Only
         let mut query = static_monitoring::Entity::find().select_only();
 
         query = query
@@ -36,7 +32,6 @@ pub async fn query_static(_token: String, static_data_query: StaticDataQuery) ->
             }
         }
 
-        // Build Query
         let mut is_last = false;
         let mut limit_count: Option<u64> = None;
 
@@ -83,30 +78,37 @@ pub async fn query_static(_token: String, static_data_query: StaticDataQuery) ->
             query = query.order_by(static_monitoring::Column::Timestamp, Order::Asc);
         }
 
-        // 使用 Stream
         let mut stream = query.into_json().stream(db).await.map_err(|e| {
             error!("Database query error: {e}");
             (103, format!("Database query error: {e}"))
         })?;
 
-        // 预分配内存
-        let mut result_list: Vec<Value> = if let Some(l) = limit_count {
-            Vec::with_capacity(l as usize)
-        } else {
-            Vec::new()
-        };
+        let capacity = limit_count.unwrap_or(100) as usize * 200;
+        let mut output_buffer: Vec<u8> = Vec::with_capacity(capacity);
 
-        // 流式迭代
+        output_buffer.push(b'[');
+
+        let mut first = true;
+
         while let Some(item_res) = stream.next().await {
             match item_res {
                 Ok(mut v) => {
-                    // 原地修改 Key
                     if let Some(obj) = v.as_object_mut() {
                         rename_key(obj, "cpu_data", "cpu");
                         rename_key(obj, "system_data", "system");
                         rename_key(obj, "gpu_data", "gpu");
                     }
-                    result_list.push(v);
+
+                    if !first {
+                        output_buffer.push(b',');
+                    } else {
+                        first = false;
+                    }
+
+                    if let Err(e) = serde_json::to_writer(&mut output_buffer, &v) {
+                        error!("Serialization failed: {e}");
+                        return Err((101, format!("Serialization failed: {e}")));
+                    }
                 },
                 Err(e) => {
                     error!("Stream read error: {e}");
@@ -115,7 +117,19 @@ pub async fn query_static(_token: String, static_data_query: StaticDataQuery) ->
             }
         }
 
-        Ok(to_raw_json(result_list))
+        output_buffer.push(b']');
+
+        let json_string = String::from_utf8(output_buffer).map_err(|e| {
+            error!("UTF8 conversion error: {e}");
+            (101, "UTF8 conversion error (internal)".to_string())
+        })?;
+
+        let raw_value = RawValue::from_string(json_string).map_err(|e| {
+            error!("RawValue creation error: {e}");
+            (101, "RawValue creation error".to_string())
+        })?;
+
+        Ok(raw_value)
     };
 
     Ok(process_logic
@@ -196,16 +210,15 @@ pub async fn query_dynamic(_token: String, dynamic_data_query: DynamicDataQuery)
             (103, format!("Database query error: {e}"))
         })?;
 
-        let mut result_list: Vec<Value> = if let Some(l) = limit_count {
-            Vec::with_capacity(l as usize)
-        } else {
-            Vec::new()
-        };
+        let capacity = limit_count.unwrap_or(5000) as usize * 200;
+        let mut output_buffer: Vec<u8> = Vec::with_capacity(capacity);
+
+        output_buffer.push(b'[');
+        let mut first = true;
 
         while let Some(item_res) = stream.next().await {
             match item_res {
                 Ok(mut v) => {
-                    // 原地修改 Key
                     if let Some(obj) = v.as_object_mut() {
                         rename_key(obj, "cpu_data", "cpu");
                         rename_key(obj, "ram_data", "ram");
@@ -215,7 +228,17 @@ pub async fn query_dynamic(_token: String, dynamic_data_query: DynamicDataQuery)
                         rename_key(obj, "network_data", "network");
                         rename_key(obj, "gpu_data", "gpu");
                     }
-                    result_list.push(v);
+
+                    if !first {
+                        output_buffer.push(b',');
+                    } else {
+                        first = false;
+                    }
+
+                    if let Err(e) = serde_json::to_writer(&mut output_buffer, &v) {
+                        error!("Serialization failed: {e}");
+                        return Err((101, format!("Serialization failed: {e}")));
+                    }
                 },
                 Err(e) => {
                     error!("Stream read error: {e}");
@@ -224,7 +247,20 @@ pub async fn query_dynamic(_token: String, dynamic_data_query: DynamicDataQuery)
             }
         }
 
-        Ok(to_raw_json(result_list))
+        output_buffer.push(b']');
+
+        let json_string = String::from_utf8(output_buffer).map_err(|e| {
+            error!("UTF8 conversion error: {e}");
+            (101, "UTF8 conversion error".to_string())
+        })?;
+
+        let raw_value = RawValue::from_string(json_string).map_err(|e| {
+            error!("RawValue creation error: {e}");
+            (101, "RawValue creation error".to_string())
+        })?;
+
+        Ok(raw_value)
+        // --- 核心优化结束 ---
     };
 
     Ok(process_logic
