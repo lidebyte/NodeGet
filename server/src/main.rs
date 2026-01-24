@@ -49,6 +49,12 @@ async fn main() {
     init_db_connection().await;
 
     let server = ServerBuilder::default()
+        .set_config(
+            jsonrpsee::server::ServerConfig::builder()
+                .max_response_body_size(1 * 1024 * 1024 * 1024) // 1GB
+                .max_request_body_size(1 * 1024 * 1024 * 1024) // 1GB
+                .build()
+        )
         .build(config.ws_listener.parse::<SocketAddr>().unwrap())
         .await
         .unwrap();
