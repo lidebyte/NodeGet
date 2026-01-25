@@ -12,7 +12,7 @@ categories = ["asynchronous", "command-line-utilities", "network-programming", "
 tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
 nodeget-lib = { path = "../nodeget-lib", features = ["for-server"] }
 migration = { path = "migration" }
-tikv-jemallocator = { version = "0.6.1", optional = true }
+
 uuid = { version = "1.19.0", default-features = false, features = ["v4"] }
 futures = "0.3.31"
 sea-orm = { version = "2.0.0-rc.28", features = ["runtime-tokio-rustls", "sqlx-sqlite", "sqlx-postgres"] }
@@ -23,3 +23,10 @@ jsonrpsee = { version = "0.26.0", default-features = false, features = ["server"
 # Logging
 log = { version = "0.4.29", default-features = false, features = ["std", "serde"] }
 simple_logger = { version = "5.1.0", default-features = false, features = ["threads", "time", "timestamps", "colored", "colors"] }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+tikv-jemallocator = { version = "0.6.1", optional = true }
+tikv-jemalloc-ctl = { version = "0.6.1", features = ["stats"], optional = true }
+
+[features]
+jemalloc = ["tikv-jemallocator", "tikv-jemalloc-ctl"]

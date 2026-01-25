@@ -1,18 +1,17 @@
-use jsonrpsee::core::RpcResult;
 use crate::entity::task;
 use crate::rpc::RpcHelper;
 use crate::rpc::task::TaskRpcImpl;
 use futures::StreamExt;
+use jsonrpsee::core::RpcResult;
 use log::error;
 use nodeget_lib::task::query::{TaskDataQuery, TaskQueryCondition};
 use nodeget_lib::utils::error_message::error_to_raw;
+use nodeget_lib::utils::{rename_key, try_parse_json_field};
 use sea_orm::sea_query::{Alias, BinOper, Expr};
 use sea_orm::{
     ColumnTrait, DbBackend, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect,
 };
 use serde_json::value::RawValue;
-use serde_json::{Map, Value};
-use nodeget_lib::utils::rename_key;
 
 pub async fn query(_token: String, task_data_query: TaskDataQuery) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
@@ -91,16 +90,22 @@ pub async fn query(_token: String, task_data_query: TaskDataQuery) -> RpcResult<
             }
         }
 
-        if let Some(l) = limit_count {
-            query = query.order_by(task::Column::Id, Order::Desc).limit(l);
-        } else {
-            query = query.order_by(task::Column::Id, Order::Asc);
-        }
-
         if is_last {
-            query = query.order_by(task::Column::Id, Order::Desc).limit(1);
+            // Last
+            query = query
+                .order_by(task::Column::Timestamp, Order::Desc) // 主要按时间
+                .order_by(task::Column::Id, Order::Desc) // 时间相同时按 ID
+                .limit(1);
+        } else if let Some(l) = limit_count {
+            query = query
+                .order_by(task::Column::Timestamp, Order::Desc)
+                .order_by(task::Column::Id, Order::Desc)
+                .limit(l);
         } else {
-            query = query.order_by(task::Column::Id, Order::Asc);
+            // 时间正序
+            query = query
+                .order_by(task::Column::Timestamp, Order::Asc)
+                .order_by(task::Column::Id, Order::Asc);
         }
 
         let mut stream = query.into_json().stream(db).await.map_err(|e| {
@@ -120,19 +125,23 @@ pub async fn query(_token: String, task_data_query: TaskDataQuery) -> RpcResult<
                     // 数据库是 id, struct 是 task_id
                     if let Some(obj) = v.as_object_mut() {
                         rename_key(obj, "id", "task_id");
+
+                        // --- 修复 SQLite JSON 字符串问题 ---
+                        try_parse_json_field(obj, "task_event_type");
+                        try_parse_json_field(obj, "task_event_result");
                     }
 
-                    if !first {
-                        output_buffer.push(b',');
-                    } else {
+                    if first {
                         first = false;
+                    } else {
+                        output_buffer.push(b',');
                     }
 
                     if let Err(e) = serde_json::to_writer(&mut output_buffer, &v) {
                         error!("Serialization failed: {e}");
                         return Err((101, format!("Serialization failed: {e}")));
                     }
-                },
+                }
                 Err(e) => {
                     error!("Stream read error: {e}");
                     return Err((103, format!("Stream read error: {e}")));
@@ -160,5 +169,3 @@ pub async fn query(_token: String, task_data_query: TaskDataQuery) -> RpcResult<
         .await
         .unwrap_or_else(|(code, msg)| error_to_raw(code, &msg)))
 }
-
-

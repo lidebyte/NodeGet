@@ -3,9 +3,10 @@ use rand::distr::Alphanumeric;
 use rand::{Rng, rng};
 use serde::Serialize;
 use serde_json::{Map, Value};
-use serde_json::value::RawValue;
 
+#[cfg(feature = "for-server")]
 pub mod error_message;
+
 pub mod version;
 
 // 毫秒时间戳，超过 u64 范围时返回 0
@@ -61,7 +62,11 @@ pub fn compare_uuid(set_uuid: uuid::Uuid) -> bool {
     }
 }
 
+#[cfg(feature = "for-server")]
+use serde_json::value::RawValue;
+
 // 直接序列化为 RawValue，避免 Value 树
+#[cfg(feature = "for-server")]
 pub fn to_raw_json<T: Serialize>(val: T) -> Box<RawValue> {
     serde_json::value::to_raw_value(&val).unwrap_or_else(|e| {
         error!("Serialization error: {e}");
@@ -74,8 +79,31 @@ pub fn to_raw_json<T: Serialize>(val: T) -> Box<RawValue> {
     })
 }
 
+#[cfg(feature = "for-server")]
+pub fn try_parse_json_field(map: &mut Map<String, Value>, key: &str) {
+    if let Some(Value::String(s)) = map.get(key)
+        && let Ok(parsed) = serde_json::from_str::<Value>(s)
+    {
+        map.insert(key.to_string(), parsed);
+    }
+}
+
+#[cfg(feature = "for-server")]
 pub fn rename_key(map: &mut Map<String, Value>, old_key: &str, new_key: &str) {
     if let Some(v) = map.remove(old_key) {
         map.insert(new_key.to_string(), v);
+    }
+}
+
+#[cfg(feature = "for-server")]
+pub fn rename_and_fix_json(map: &mut Map<String, Value>, old_key: &str, new_key: &str) {
+    // 同时完成：取出旧值 -> (如果是 String 则解析) -> 插入新 Key
+    if let Some(mut value) = map.remove(old_key) {
+        if let Value::String(s) = &value
+            && let Ok(parsed) = serde_json::from_str::<Value>(s)
+        {
+            value = parsed;
+        }
+        map.insert(new_key.to_string(), value);
     }
 }

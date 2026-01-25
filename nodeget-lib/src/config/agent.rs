@@ -15,6 +15,8 @@ pub struct AgentConfig {
 
     pub exec_shell: Option<String>, // Windows cmd / Others bash or sh
     pub exec_max_character: Option<usize>,
+
+    pub ip_provider: Option<IpProvider>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -33,6 +35,14 @@ pub struct Server {
     pub allow_web_shell: Option<bool>,
     pub allow_edit_config: Option<bool>, // Dangerous
     pub allow_execute: Option<bool>,     // Dangerous
+
+    pub allow_ip: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum IpProvider {
+    IpInfo,
+    Cloudflare,
 }
 
 impl AgentConfig {

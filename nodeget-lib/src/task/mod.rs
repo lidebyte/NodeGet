@@ -1,6 +1,8 @@
+#[cfg(feature = "for-server")]
 pub mod query;
 
 use serde::{Deserialize, Serialize};
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -11,6 +13,8 @@ pub enum TaskEventType {
 
     WebShell(url::Url), // Websocket URL
     Execute(String),    // 命令执行
+
+    Ip,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -29,6 +33,8 @@ pub enum TaskEventResult {
 
     WebShell(bool),  // Is Connected
     Execute(String), // 命令输出
+
+    Ip(Option<Ipv4Addr>, Option<Ipv6Addr>), // V4 V6 IP
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
