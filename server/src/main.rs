@@ -23,9 +23,9 @@ use std::str::FromStr;
 use std::sync::OnceLock;
 use tokio::sync::OnceCell;
 
-#[cfg(all(not(target_os = "windows"), feature = "tikv-jemallocator"))]
+#[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
 use tikv_jemallocator::Jemalloc;
-#[cfg(all(not(target_os = "windows"), feature = "tikv-jemallocator"))]
+#[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
@@ -45,6 +45,30 @@ async fn main() {
         .unwrap();
 
     simple_logger::init_with_level(Level::from_str(&config.log_level).unwrap()).unwrap();
+
+    #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
+    tokio::spawn(|| async {
+        loop {
+            use tikv_jemalloc_ctl::{epoch, stats};
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            if epoch::advance().is_err() {
+                return;
+            }
+
+            let allocated = stats::allocated::read().unwrap();
+            let active = stats::active::read().unwrap();
+            let resident = stats::resident::read().unwrap();
+            let mapped = stats::mapped::read().unwrap();
+
+            info!(
+                "MEM STATS (Jemalloc Only): App Logic: {:.2} MB | Allocator Active: {:.2} MB | RSS (Resident): {:.2} MB | Mapped: {:.2} MB",
+                allocated as f64 / 1024.0 / 1024.0,
+                active as f64 / 1024.0 / 1024.0,
+                resident as f64 / 1024.0 / 1024.0,
+                mapped as f64 / 1024.0 / 1024.0
+            );
+        }
+    });
 
     let _ = compare_uuid(config.server_uuid);
 

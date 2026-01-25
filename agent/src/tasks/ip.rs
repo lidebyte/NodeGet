@@ -1,12 +1,11 @@
 use log::trace;
-use serde::Deserialize;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::time::Duration;
 use serde_json::Value;
 use tokio::task::JoinHandle;
 use ureq::config::IpFamily;
-use nodeget_lib::config::agent::{AgentConfig, IpProvider};
+use nodeget_lib::config::agent::IpProvider;
 use crate::AGENT_CONFIG;
 
 #[derive(Debug)]
@@ -16,7 +15,7 @@ pub struct IPInfo {
 }
 
 pub async fn ip() -> IPInfo {
-    let provider = AGENT_CONFIG.get().map(|config| config.ip_provider.clone() ).unwrap_or(Some(IpProvider::Cloudflare)).unwrap_or(IpProvider::Cloudflare);
+    let provider = AGENT_CONFIG.get().map_or(Some(IpProvider::Cloudflare), |config| config.ip_provider.clone() ).unwrap_or(IpProvider::Cloudflare);
 
     match provider {
         IpProvider::Cloudflare => ip_cloudflare().await,
@@ -74,7 +73,7 @@ pub async fn ip_ipinfo() -> IPInfo {
         ipv6: ipv6.await.unwrap_or(None),
     };
 
-    trace!("IP (ipinfo) retrieved: {:?}", ip_info);
+    trace!("IP (ipinfo) retrieved: {ip_info:?}");
     ip_info
 }
 
@@ -98,6 +97,6 @@ pub async fn ip_cloudflare() -> IPInfo {
         ipv6: ipv6.await.unwrap_or(None),
     };
 
-    trace!("IP (cloudflare) retrieved: {:?}", ip_info);
+    trace!("IP (cloudflare) retrieved: {ip_info:?}");
     ip_info
 }

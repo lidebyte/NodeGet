@@ -139,6 +139,7 @@ impl DynamicDataFromSystem {
         self.1.used_swap = system.used_swap();
         self.1.total_memory = system.total_memory();
         self.1.total_swap = system.total_swap();
+        drop(system);
 
         let load = System::load_average();
         self.2.one = load.one;

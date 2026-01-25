@@ -1,18 +1,17 @@
-use jsonrpsee::core::RpcResult;
 use crate::entity::task;
 use crate::rpc::RpcHelper;
 use crate::rpc::task::TaskRpcImpl;
 use futures::StreamExt;
+use jsonrpsee::core::RpcResult;
 use log::error;
 use nodeget_lib::task::query::{TaskDataQuery, TaskQueryCondition};
 use nodeget_lib::utils::error_message::error_to_raw;
+use nodeget_lib::utils::{rename_key, try_parse_json_field};
 use sea_orm::sea_query::{Alias, BinOper, Expr};
 use sea_orm::{
     ColumnTrait, DbBackend, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect,
 };
 use serde_json::value::RawValue;
-use serde_json::{Map, Value};
-use nodeget_lib::utils::{rename_key, try_parse_json_field};
 
 pub async fn query(_token: String, task_data_query: TaskDataQuery) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
@@ -95,7 +94,7 @@ pub async fn query(_token: String, task_data_query: TaskDataQuery) -> RpcResult<
             // Last
             query = query
                 .order_by(task::Column::Timestamp, Order::Desc) // 主要按时间
-                .order_by(task::Column::Id, Order::Desc)        // 时间相同时按 ID
+                .order_by(task::Column::Id, Order::Desc) // 时间相同时按 ID
                 .limit(1);
         } else if let Some(l) = limit_count {
             query = query
@@ -132,17 +131,17 @@ pub async fn query(_token: String, task_data_query: TaskDataQuery) -> RpcResult<
                         try_parse_json_field(obj, "task_event_result");
                     }
 
-                    if !first {
-                        output_buffer.push(b',');
-                    } else {
+                    if first {
                         first = false;
+                    } else {
+                        output_buffer.push(b',');
                     }
 
                     if let Err(e) = serde_json::to_writer(&mut output_buffer, &v) {
                         error!("Serialization failed: {e}");
                         return Err((101, format!("Serialization failed: {e}")));
                     }
-                },
+                }
                 Err(e) => {
                     error!("Stream read error: {e}");
                     return Err((103, format!("Stream read error: {e}")));
@@ -170,5 +169,3 @@ pub async fn query(_token: String, task_data_query: TaskDataQuery) -> RpcResult<
         .await
         .unwrap_or_else(|(code, msg)| error_to_raw(code, &msg)))
 }
-
-

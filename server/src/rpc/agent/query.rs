@@ -1,16 +1,18 @@
-use jsonrpsee::core::RpcResult;
 use crate::entity::{dynamic_monitoring, static_monitoring};
 use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
 use futures::StreamExt;
+use jsonrpsee::core::RpcResult;
 use log::error;
 use nodeget_lib::monitoring::query::{
-    DynamicDataQuery, DynamicDataQueryField, QueryCondition, StaticDataQuery,
-    StaticDataQueryField,
+    DynamicDataQuery, DynamicDataQueryField, QueryCondition, StaticDataQuery, StaticDataQueryField,
 };
 use nodeget_lib::utils::error_message::error_to_raw;
 use nodeget_lib::utils::rename_and_fix_json;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect, SelectModel, Selector};
+use sea_orm::{
+    ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder,
+    QuerySelect, SelectModel, Selector,
+};
 use serde_json::Value;
 use serde_json::value::RawValue;
 
@@ -26,11 +28,14 @@ pub async fn query_static(
             .column(static_monitoring::Column::Uuid)
             .column(static_monitoring::Column::Timestamp);
 
-        let query = static_data_query.fields.iter().fold(query, |q, field| match field {
-            StaticDataQueryField::Cpu => q.column(static_monitoring::Column::CpuData),
-            StaticDataQueryField::System => q.column(static_monitoring::Column::SystemData),
-            StaticDataQueryField::Gpu => q.column(static_monitoring::Column::GpuData),
-        });
+        let query = static_data_query
+            .fields
+            .iter()
+            .fold(query, |q, field| match field {
+                StaticDataQueryField::Cpu => q.column(static_monitoring::Column::CpuData),
+                StaticDataQueryField::System => q.column(static_monitoring::Column::SystemData),
+                StaticDataQueryField::Gpu => q.column(static_monitoring::Column::GpuData),
+            });
 
         let mut limit_count = None;
         let mut is_last = false;
@@ -86,7 +91,7 @@ pub async fn query_static(
             &field_mappings,
             limit_count.unwrap_or(100),
         )
-            .await
+        .await
     };
 
     Ok(process_logic
@@ -107,41 +112,47 @@ pub async fn query_dynamic(
             .column(dynamic_monitoring::Column::Uuid)
             .column(dynamic_monitoring::Column::Timestamp);
 
-        let query = dynamic_data_query.fields.iter().fold(query, |q, field| match field {
-            DynamicDataQueryField::Cpu => q.column(dynamic_monitoring::Column::CpuData),
-            DynamicDataQueryField::Ram => q.column(dynamic_monitoring::Column::RamData),
-            DynamicDataQueryField::Load => q.column(dynamic_monitoring::Column::LoadData),
-            DynamicDataQueryField::System => q.column(dynamic_monitoring::Column::SystemData),
-            DynamicDataQueryField::Disk => q.column(dynamic_monitoring::Column::DiskData),
-            DynamicDataQueryField::Network => q.column(dynamic_monitoring::Column::NetworkData),
-            DynamicDataQueryField::Gpu => q.column(dynamic_monitoring::Column::GpuData),
-        });
+        let query = dynamic_data_query
+            .fields
+            .iter()
+            .fold(query, |q, field| match field {
+                DynamicDataQueryField::Cpu => q.column(dynamic_monitoring::Column::CpuData),
+                DynamicDataQueryField::Ram => q.column(dynamic_monitoring::Column::RamData),
+                DynamicDataQueryField::Load => q.column(dynamic_monitoring::Column::LoadData),
+                DynamicDataQueryField::System => q.column(dynamic_monitoring::Column::SystemData),
+                DynamicDataQueryField::Disk => q.column(dynamic_monitoring::Column::DiskData),
+                DynamicDataQueryField::Network => q.column(dynamic_monitoring::Column::NetworkData),
+                DynamicDataQueryField::Gpu => q.column(dynamic_monitoring::Column::GpuData),
+            });
 
         let mut limit_count = None;
         let mut is_last = false;
 
-        let query = dynamic_data_query.condition.into_iter().fold(query, |q, cond| match cond {
-            QueryCondition::Uuid(uuid) => q.filter(dynamic_monitoring::Column::Uuid.eq(uuid)),
-            QueryCondition::TimestampFromTo(start, end) => q.filter(
-                dynamic_monitoring::Column::Timestamp
-                    .gte(start)
-                    .and(dynamic_monitoring::Column::Timestamp.lte(end)),
-            ),
-            QueryCondition::TimestampFrom(start) => {
-                q.filter(dynamic_monitoring::Column::Timestamp.gte(start))
-            }
-            QueryCondition::TimestampTo(end) => {
-                q.filter(dynamic_monitoring::Column::Timestamp.lte(end))
-            }
-            QueryCondition::Limit(n) => {
-                limit_count = Some(n);
-                q
-            }
-            QueryCondition::Last => {
-                is_last = true;
-                q
-            }
-        });
+        let query = dynamic_data_query
+            .condition
+            .into_iter()
+            .fold(query, |q, cond| match cond {
+                QueryCondition::Uuid(uuid) => q.filter(dynamic_monitoring::Column::Uuid.eq(uuid)),
+                QueryCondition::TimestampFromTo(start, end) => q.filter(
+                    dynamic_monitoring::Column::Timestamp
+                        .gte(start)
+                        .and(dynamic_monitoring::Column::Timestamp.lte(end)),
+                ),
+                QueryCondition::TimestampFrom(start) => {
+                    q.filter(dynamic_monitoring::Column::Timestamp.gte(start))
+                }
+                QueryCondition::TimestampTo(end) => {
+                    q.filter(dynamic_monitoring::Column::Timestamp.lte(end))
+                }
+                QueryCondition::Limit(n) => {
+                    limit_count = Some(n);
+                    q
+                }
+                QueryCondition::Last => {
+                    is_last = true;
+                    q
+                }
+            });
 
         let query = if is_last {
             query
@@ -172,7 +183,7 @@ pub async fn query_dynamic(
             &field_mappings,
             limit_count.unwrap_or(5000),
         )
-            .await
+        .await
     };
 
     Ok(process_logic
@@ -207,10 +218,10 @@ async fn execute_query(
                     }
                 }
 
-                if !first {
-                    output_buffer.push(b',');
-                } else {
+                if first {
                     first = false;
+                } else {
+                    output_buffer.push(b',');
                 }
 
                 if let Err(e) = serde_json::to_writer(&mut output_buffer, &v) {

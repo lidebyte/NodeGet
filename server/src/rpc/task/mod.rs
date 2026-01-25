@@ -35,7 +35,11 @@ pub trait Rpc {
     async fn upload_task_result(&self, token: String, task_response: TaskEventResponse) -> Value;
 
     #[method(name = "query")]
-    async fn query(&self, token: String, task_data_query: TaskDataQuery) -> RpcResult<Box<RawValue>>;
+    async fn query(
+        &self,
+        token: String,
+        task_data_query: TaskDataQuery,
+    ) -> RpcResult<Box<RawValue>>;
 }
 
 pub struct TaskRpcImpl {
@@ -59,7 +63,11 @@ impl RpcServer for TaskRpcImpl {
         create_upload_task::upload_task_result(token, task_response).await
     }
 
-    async fn query(&self, token: String, task_data_query: TaskDataQuery) -> RpcResult<Box<RawValue>> {
+    async fn query(
+        &self,
+        token: String,
+        task_data_query: TaskDataQuery,
+    ) -> RpcResult<Box<RawValue>> {
         query::query(token, task_data_query).await
     }
 

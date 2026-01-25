@@ -82,11 +82,10 @@ pub fn to_raw_json<T: Serialize>(val: T) -> Box<RawValue> {
 
 #[cfg(feature = "for-server")]
 pub fn try_parse_json_field(map: &mut Map<String, Value>, key: &str) {
-    if let Some(Value::String(s)) = map.get(key) {
-        if let Ok(parsed) = serde_json::from_str::<Value>(s) {
+    if let Some(Value::String(s)) = map.get(key)
+        && let Ok(parsed) = serde_json::from_str::<Value>(s) {
             map.insert(key.to_string(), parsed);
         }
-    }
 }
 
 #[cfg(feature = "for-server")]
@@ -100,11 +99,10 @@ pub fn rename_key(map: &mut Map<String, Value>, old_key: &str, new_key: &str) {
 pub fn rename_and_fix_json(map: &mut Map<String, Value>, old_key: &str, new_key: &str) {
     // 同时完成：取出旧值 -> (如果是 String 则解析) -> 插入新 Key
     if let Some(mut value) = map.remove(old_key) {
-        if let Value::String(s) = &value {
-            if let Ok(parsed) = serde_json::from_str::<Value>(s) {
+        if let Value::String(s) = &value
+            && let Ok(parsed) = serde_json::from_str::<Value>(s) {
                 value = parsed;
             }
-        }
         map.insert(new_key.to_string(), value);
     }
 }

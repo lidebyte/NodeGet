@@ -5,7 +5,7 @@ mod query;
 mod report;
 
 use crate::rpc::RpcHelper;
-use jsonrpsee::core::{async_trait, RpcResult};
+use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
 use nodeget_lib::monitoring::data_structure::{DynamicMonitoringData, StaticMonitoringData};
 use nodeget_lib::monitoring::query::{DynamicDataQuery, StaticDataQuery};
