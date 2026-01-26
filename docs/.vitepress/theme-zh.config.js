@@ -1,45 +1,74 @@
 export const themeZhConfig = {
     logo: '/logo.png',
-    nav: [
-        { text: '主页', link: '/' },
-        { text: '快速上手', link: '/guide/quick-start' },
-        { text: 'API参考', link: '/api/reference' },
+    nav: [{
+        text: '主页',
+        link: '/'
+    },
+    {
+        text: '快速上手',
+        link: '/guide/quick-start'
+    },
+    {
+        text: 'API',
+        link: '/api/index.md'
+    },
     ],
 
     sidebar: {
-        '/guide/':[
+        '/api/': [{
+            text: 'API 文档',
+            items: [
             {
-                text: '安装',
-                items: [
-                    { text: '快速上手', link: '/guide/quick-start' },
-                ]
+                text: '概览',
+                link: '/api/index.md'
             },
             {
-                text: '配置',
-                items: [
-                    { text: 'nginx配置', link: '/guide/configuration/nginx' },
-                    { text: 'server配置', link: '/guide/configuration/server' },
-                    { text: 'agent配置', link: '/guide/configuration/agent' },
-                    { text: 'cloudflare配置', link: '/guide/configuration/cloudflare' },
-                ]
-            }
-        ],
-        '/api/':[
-            {
-                text: '设计理念',
-                items: [
-                    { text: '架构概述', link: '/api/framework' },
-                ]
+                text: '项目框架',
+                link: '/api/framework.md'
             },
+
+            // Monitoring
             {
-                text: 'API文档',
-                items: [
-                    { text: 'API接口', link: '/api/reference' },
-                ]
+                text: 'Monitoring',
+                collapsed: false,
+                items: [{
+                    text: '介绍',
+                    link: '/api/monitoring/index.md'
+                },
+                {
+                    text: 'Agent API',
+                    link: '/api/monitoring/agent.md'
+                },
+                {
+                    text: '查询 Monitoring API',
+                    link: '/api/monitoring/query.md'
+                }]
             },
-        ]
+            // Task
+            {
+                text: 'Task',
+                collapsed: false,
+                items: [{
+                    text: '介绍',
+                    link: '/api/task/index.md'
+                },
+                {
+                    text: 'Agent API',
+                    link: '/api/task/agent.md'
+                },
+                {
+                    text: '创建 Task',
+                    link: '/api/task/create.md'
+                },
+                {
+                    text: '查询 Task API',
+                    link: '/api/task/query.md'
+                }]
+            }]
+        }]
     },
-    socialLinks: [
-        { icon: 'github', link: 'https://github.com/NodeSeekDev/NodeGet' }
-    ]
+    socialLinks: [{
+        icon: 'github',
+        link: 'https://github.com/NodeSeekDev/NodeGet'
+    }]
 }

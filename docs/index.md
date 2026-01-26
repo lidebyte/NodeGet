@@ -12,7 +12,7 @@ hero:
       link: /guide/quick-start
     - theme: alt
       text: API文档
-      link: /api/reference
+      link: /api
   image:
     src: /logo.png
     alt: NodeGet

@@ -42,3 +42,11 @@ outline: deep
 
 - 内部测试或小型 (Agent 数目 <= 5) 可使用 Sqlite，性能问题不明显
 - 大量 Agents 务必使用 PostgreSQL，表内压缩、JsonBinary 等特性比 Sqlite 更省空间，更高效
+
+
+## 注意特点
+
+- 任何功能，均不依赖其他功能
+    例如：`上报监控信息` 与 `Task 任务获取` 可以在不同地方实现，或只实现其中一个，不影响使用
+- UUID 唯一: 虽然可以用户指定每一个 Server / Agent 的 UUID，但会根据环境自动生成，各系统下只要不刻意改变，UUID 也不会改变
+    整个系统内只有 UUID 作为唯一辨别 ID，不存在 `name` / `id` 等易混淆字段

@@ -1,17 +1,15 @@
----
-outline: deep
----
+# Monitoring 任务总览
 
-该文档会简述 JsonRpc 的基本使用，若完全不了解请看本文档的 `上报方法`，此后只会提供方法名与上报结构体
+Monitoring 是本项目的重要功能之一，也可以称为 `监控` / `Report` 等
 
-# 上报机制
+## 上报结构体
 
 在本项目中，有两种监控数据类型
 
 - `StaticMonitoring`: 静态数据，一般不会改变
 - `DynamicMonitoring`: 动态数据，根据系统实时变化
 
-## StaticMonitoring
+### StaticMonitoring
 
 Static Monitoring 结构如下:
 
@@ -61,7 +59,7 @@ Static Monitoring 结构如下:
 }
 ```
 
-## DynamicMonitoring
+### DynamicMonitoring
 
 Dynamic Monitoring 结构如下:
 
@@ -167,8 +165,7 @@ Dynamic Monitoring 结构如下:
 }
 ```
 
-
-## 注意事项
+### 注意事项
 
 在这两个结构体中，所有字段都是必要的，若没有请留空 (而不是不定义 / null)
 
@@ -178,56 +175,81 @@ Dynamic Monitoring 结构如下:
 
 由于各系统获取到的信息不尽相同，请尽力保证与官方 `nodeget-agent` 实现相同
 
-## 上报方法
+## 查询获取结构体
 
-在 `nodeget-server` 中，上报方法为 `report_static` 与 `report_dynamic`，这两个方法位于 `agent` 下，使用需要添加 `agent_` 前缀
+调用者通过 `query` 方法获取到的数据结构有些不同于 StaticMonitoring / DynamicMonitoring
 
-这两个方法用法类似，需要传入 `token`, `static(dynamic)_monitoring_data` 两个参数，`token` 为 String 类型，`static(dynamic)_monitoring_data` 即为上面的结构体
+其中 `uuid` / `timestamp` 字段为必需，其他均为可选，是为了定向提供数据，解析时请注意
 
-需要构建如下的结构体以上报:
+## 查询条件
 
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "report_static(dynamic)",
-  "params": {
-    "token": "demo_token",
-    "static(dynamic)_monitoring_data": {
-        // 上面的结构体
-    }
-  },
-  "id": 1
+### DataQueryField
+
+查询需要使用到 `StaticDataQueryField` 或 `DynamicDataQueryField`，其可选值分别为:
+
+- `StaticDataQueryField`: `cpu` / `system` / `gpu`
+- `DynamicDataQueryField`: `cpu` / `ram` / `load` /  `system` / `disk` / `network` / `gpu`
+
+
+### QueryCondition
+
+不论是查询 Static 信息还是 Dynamic 信息，都需要用到统一的结构体 `QueryCondition`
+
+其为 Rust Enum，解析时请注意
+
+```rust
+#[serde(rename_all = "snake_case")]
+pub enum QueryCondition {
+    Uuid(uuid::Uuid),
+    TimestampFromTo(i64, i64), // start, end
+    TimestampFrom(i64),        // start,
+    TimestampTo(i64),          // end
+
+    Limit(u64), // limit
+
+    Last,
 }
 ```
 
-或在 `params` 字段使用元组，需要确保位置正确:
+下面是一些解析的示例:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "report_static(dynamic)",
-  "params": [
-    "demo_token",
+    "uuid": "e8583352-39e8-5a5b-b66c-e450689088fd"
+}
+
+{
+    "timestamp_from_to": [1769344168646, 1769344169646]
+}
+
+{
+    "timestamp_from": 1769344168646
+}
+
+{
+    "limit": 1000 // 依照 timestamp 最新的 1000 条
+}
+
+"last" // 对就是一个 `last`，无其他东西
+```
+
+#### 注意事项
+
+`timestamp_from_to` 字段可看作是 `timestamp_from` 与 `timestamp_to` 的简略写法，下面的两种表达方式是等价的:
+
+```json
+{
+    "timestamp_from_to": [1769344168646, 1769344169646]
+}
+
+[
     {
-        // 上面的结构体
+        "timestamp_from": 1769344168646
+    },
+    {
+        "timestamp_to": 1769344169646
     }
-  ],
-  "id": 1 // 该 ID 可自定义，返回值也带统一 ID 用于辨别哪一个请求
-}
+]
 ```
 
-两种调用方式等价
-
-## 返回值
-
-上报成功后，会收到来自 服务器的返回信息:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "id": 11858 // 在数据库中表的 ID 字段
-  }
-}
-```
+`limit` 为 1 与 `last` 等价，在数据库层面限制查询结果，按照时间倒序排列

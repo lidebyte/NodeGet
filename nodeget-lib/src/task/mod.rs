@@ -9,7 +9,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 pub enum TaskEventType {
     Ping(String),       // 可能为域名，需解析
     TcpPing(String),    // 可能为域名，需解析
-    HttpPing(url::Url), // Url, Method, Body
+    HttpPing(url::Url), // Url
 
     WebShell(url::Url), // Websocket URL
     Execute(String),    // 命令执行
