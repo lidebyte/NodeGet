@@ -1,7 +1,7 @@
 use crate::{DB, SERVER_CONFIG};
 use log::{LevelFilter, error, info};
 use migration::{Migrator, MigratorTrait};
-use sea_orm::{ConnectOptions, Database};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database};
 use std::process;
 use std::str::FromStr;
 use std::time::Duration;
@@ -62,6 +62,13 @@ pub async fn init_db_connection() {
         }
 
         info!("Migrations applied successfully.");
+
+        if db.get_database_backend() == sea_orm::DatabaseBackend::Sqlite {
+            let _ = db
+                .execute_unprepared("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+                .await;
+            info!("SQLite WAL mode enabled.");
+        }
 
         db
     })

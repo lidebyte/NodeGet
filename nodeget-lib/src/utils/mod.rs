@@ -67,6 +67,7 @@ use serde_json::value::RawValue;
 
 // 直接序列化为 RawValue，避免 Value 树
 #[cfg(feature = "for-server")]
+
 pub fn to_raw_json<T: Serialize>(val: T) -> Box<RawValue> {
     serde_json::value::to_raw_value(&val).unwrap_or_else(|e| {
         error!("Serialization error: {e}");

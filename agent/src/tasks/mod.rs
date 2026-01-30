@@ -11,6 +11,7 @@ use tokio_tungstenite::tungstenite::{Message, Utf8Bytes};
 mod execute;
 mod ip;
 pub mod ping;
+mod pty;
 
 pub async fn handle_task() {
     time::sleep(Duration::from_secs(1)).await;
@@ -94,9 +95,17 @@ pub async fn handle_task() {
                                     Err("102: Permission Denied".to_string())
                                 }
                             }
-                            TaskEventType::WebShell(_) => {
+                            TaskEventType::WebShell(url) => {
                                 if server.allow_web_shell.unwrap_or(false) {
-                                    todo!()
+                                    let id = json_rpc.params.result.task_id;
+                                    let url = format!(
+                                        "{}&id={}", url.as_str(), id
+                                    );
+
+                                    match pty::handle_pty_url(url.parse().unwrap()).await {
+                                        Ok(_) => Ok(TaskEventResult::WebShell(true)),
+                                        Err(e) => Err(e),
+                                    }
                                 } else {
                                     Err("102: Permission Denied".to_string())
                                 }

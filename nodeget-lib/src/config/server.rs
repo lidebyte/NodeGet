@@ -9,6 +9,9 @@ pub struct ServerConfig {
     #[serde(deserialize_with = "deserialize_uuid_or_auto")]
     pub server_uuid: uuid::Uuid,
     pub ws_listener: String,
+
+    pub ws_host_url: String,
+
     pub database: DatabaseConfig,
 }
 

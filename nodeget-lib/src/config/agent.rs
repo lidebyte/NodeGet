@@ -16,6 +16,8 @@ pub struct AgentConfig {
     pub exec_shell: Option<String>, // Windows cmd / Others bash or sh
     pub exec_max_character: Option<usize>,
 
+    pub terminal_shell: Option<String>,
+
     pub ip_provider: Option<IpProvider>,
 }
 

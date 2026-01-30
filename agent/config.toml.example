@@ -3,6 +3,7 @@ monitoring_report_interval_ms = 1000
 
 agent_uuid = "auto_gen"
 connect_timeout_ms = 1000
+terminal_shell = "cmd"
 
 [[server]]
 name = "test_server1"

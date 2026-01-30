@@ -1,9 +1,10 @@
-// 101: Json Parse Error
+// 101: Parse Error
 // 102: Permission Denied
 // 103: Database Error
 // 104: Unable to connect agent
 // 105: Not Found in Database
 // 106: Uuid Not Found
+// 107: Config Not Found
 
 use serde_json::value::RawValue;
 
