@@ -120,3 +120,4 @@ pub enum TaskQueryCondition {
 
 解析方案与 Monitoring 的 `QueryCondition` 类似，不做示例
 
+多个条件并存时，为 `AND`，即只查询满足所有条件的数据

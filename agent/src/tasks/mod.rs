@@ -97,13 +97,16 @@ pub async fn handle_task() {
                             }
                             TaskEventType::WebShell(url) => {
                                 if server.allow_web_shell.unwrap_or(false) {
-                                    let id = json_rpc.params.result.task_id;
-                                    let url = format!(
-                                        "{}&id={}", url.as_str(), id
+                                    let task_id = json_rpc.params.result.task_id;
+
+                                    let url = pty::parse_url(
+                                        url,
+                                        task_id,
+                                        &json_rpc.params.result.task_token,
                                     );
 
-                                    match pty::handle_pty_url(url.parse().unwrap()).await {
-                                        Ok(_) => Ok(TaskEventResult::WebShell(true)),
+                                    match pty::handle_pty_url(url).await {
+                                        Ok(()) => Ok(TaskEventResult::WebShell(true)),
                                         Err(e) => Err(e),
                                     }
                                 } else {

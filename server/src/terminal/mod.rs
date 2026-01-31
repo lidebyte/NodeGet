@@ -1,16 +1,16 @@
 mod check_agent;
 
+use crate::terminal::check_agent::check_agent;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use axum::extract::{Query, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures::{SinkExt, StreamExt};
 use log::{error, info, warn};
+use nodeget_lib::utils::error_message::generate_error_message;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
-use nodeget_lib::utils::error_message::generate_error_message;
-use crate::terminal::check_agent::check_agent;
 
 // Key 是 agent_uuid
 #[derive(Clone)]
@@ -33,7 +33,7 @@ pub struct SessionSlots {
 pub struct TerminalParams {
     pub agent_uuid: String,
 
-    pub id: Option<u64>,         // 任务ID
+    pub task_id: Option<u64>,       // 任务ID
     pub task_token: Option<String>, // Task Token
 
     pub token: Option<String>,
@@ -49,7 +49,7 @@ pub async fn terminal_ws_handler(
 
 async fn handle_socket(socket: WebSocket, params: TerminalParams, state: TerminalState) {
     // 有 task_token 的是 Agent，否则是 User
-    if let (Some(task_token), Some(id)) = (params.task_token, params.id) {
+    if let (Some(task_token), Some(id)) = (params.task_token, params.task_id) {
         handle_agent(socket, params.agent_uuid, task_token, id, state).await;
     } else {
         handle_user(socket, params.agent_uuid, state).await;
@@ -66,13 +66,14 @@ async fn handle_agent(
     match check_agent(agent_uuid.clone(), task_token.clone(), id).await {
         Ok(true) => {}
         Ok(false) => {
-            let error_json = generate_error_message(102, "Permission Denied: Invalid Task Token or ID");
+            let error_json =
+                generate_error_message(102, "Permission Denied: Invalid Task Token or ID");
 
             if let Err(e) = socket
                 .send(Message::Text(Utf8Bytes::from(error_json.to_string())))
                 .await
             {
-                error!("Failed to send error message to agent: {}", e);
+                error!("Failed to send error message to agent: {e}");
             }
             return;
         }
@@ -83,13 +84,13 @@ async fn handle_agent(
                 .send(Message::Text(Utf8Bytes::from(error_json.to_string())))
                 .await
             {
-                error!("Failed to send error message to agent: {}", e);
+                error!("Failed to send error message to agent: {e}");
             }
             return;
         }
     }
 
-    info!("Agent connecting terminal: {}", agent_uuid);
+    info!("Agent connecting terminal: {agent_uuid}");
 
     // User -> Agent
     let (tx_to_agent, mut rx_from_user) = mpsc::unbounded_channel::<Message>();
@@ -140,11 +141,11 @@ async fn handle_agent(
             sessions.remove(&agent_uuid);
         }
     }
-    info!("Agent terminal disconnected: {}", agent_uuid);
+    info!("Agent terminal disconnected: {agent_uuid}");
 }
 
 async fn handle_user(socket: WebSocket, agent_uuid: String, state: TerminalState) {
-    info!("User connecting terminal to: {}", agent_uuid);
+    info!("User connecting terminal to: {agent_uuid}");
 
     // 获取会话槽位
     let (tx_to_agent, rx_from_agent) = {
@@ -155,14 +156,11 @@ async fn handle_user(socket: WebSocket, agent_uuid: String, state: TerminalState
             if let Some(rx) = slots.rx_from_agent.take() {
                 (slots.tx_to_agent.clone(), rx)
             } else {
-                warn!("Agent {} is already busy (session active)", agent_uuid);
+                warn!("Agent {agent_uuid} is already busy (session active)");
                 return;
             }
         } else {
-            warn!(
-                "Agent {} terminal session not found (Agent not connected?)",
-                agent_uuid
-            );
+            warn!("Agent {agent_uuid} terminal session not found (Agent not connected?)");
             return;
         }
     };
@@ -191,5 +189,5 @@ async fn handle_user(socket: WebSocket, agent_uuid: String, state: TerminalState
         _ = send_task => {},
     }
 
-    info!("User terminal disconnected: {}", agent_uuid);
+    info!("User terminal disconnected: {agent_uuid}");
 }

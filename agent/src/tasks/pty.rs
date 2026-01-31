@@ -1,21 +1,26 @@
-use std::fs;
+use crate::AGENT_CONFIG;
 use futures::{SinkExt, StreamExt};
 use log::{error, info};
-use serde::{Deserialize, Serialize};
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
+use serde::{Deserialize, Serialize};
+use std::fs;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use tokio::{sync::mpsc, task};
 use tokio_tungstenite::tungstenite::Bytes;
-use tokio_tungstenite::{WebSocketStream, tungstenite::protocol::Message, connect_async};
+use tokio_tungstenite::{WebSocketStream, connect_async, tungstenite::protocol::Message};
 use url::Url;
 
-pub async fn handle_pty_url(url: Url) -> Result<(), String> {
-    let ws = match connect_async(url.to_string()).await {
-        Ok(ws) => {ws}
-        Err(_) => {
-            return Err(String::from("Failed to connect to WebSocket"));
+pub async fn handle_pty_url(url: Result<Url, String>) -> Result<(), String> {
+    let url = match url {
+        Ok(url) => url,
+        Err(e) => {
+            return Err(e);
         }
+    };
+
+    let Ok(ws) = connect_async(url.to_string()).await else {
+        return Err(String::from("Failed to connect to WebSocket"));
     };
 
     let ws_stream = ws.0;
@@ -31,7 +36,7 @@ pub async fn handle_pty_url(url: Url) -> Result<(), String> {
     handle_pty_session(ws_stream, cmd).await
 }
 
-pub async fn handle_pty_session<S>(ws_stream: WebSocketStream<S>, cmd: &str) -> Result<(), String>
+async fn handle_pty_session<S>(ws_stream: WebSocketStream<S>, cmd: &str) -> Result<(), String>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
@@ -170,11 +175,9 @@ fn handle_ws_message(
     msg: Message,
     pty_writer: &Arc<Mutex<Box<dyn Write + Send>>>,
 ) -> Result<Option<NeedResize>, String> {
-
-
     match msg {
         Message::Text(text) => {
-            if serde_json::from_str::<HeartBeat>(text.as_ref()).is_ok()  {
+            if serde_json::from_str::<HeartBeat>(text.as_ref()).is_ok() {
                 return Ok(None);
             }
             if let Ok(resize) = serde_json::from_str::<NeedResize>(text.as_ref()) {
@@ -199,4 +202,32 @@ fn handle_ws_message(
         _ => {}
     }
     Ok(None)
+}
+
+pub fn parse_url(url: Url, task_id: u64, task_token: &str) -> Result<Url, String> {
+    let scheme = url.scheme();
+    if !((scheme == "ws") || (scheme == "wss")) {
+        return Err(format!("Invalid scheme: {scheme}"));
+    }
+
+    let url = if url.path() == "/auto_gen" {
+        let agent_uuid = AGENT_CONFIG
+            .get()
+            .ok_or("Agent Config 未初始化")?
+            .agent_uuid;
+        let host = url
+            .host_str()
+            .ok_or_else(|| format!("Invalid host: {url}"))?;
+        let port = url
+            .port_or_known_default()
+            .ok_or_else(|| format!("Invalid port: {url}"))?;
+
+        let url = format!(
+            "{scheme}://{host}:{port}/terminal?agent_uuid={agent_uuid}&task_id={task_id}&task_token={task_token}"
+        );
+        Url::parse(&url).map_err(|e| format!("Invalid URL: {e}"))?
+    } else {
+        url
+    };
+    Ok(url)
 }

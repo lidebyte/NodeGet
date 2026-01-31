@@ -64,6 +64,23 @@ export const themeZhConfig = {
                     text: '查询 Task API',
                     link: '/api/task/query.md'
                 }]
+            },
+            // Terminal
+            {
+                text: 'Terminal',
+                collapsed: false,
+                items: [{
+                    text: '介绍',
+                    link: '/api/terminal/index.md'
+                },
+                {
+                    text: 'Agent API',
+                    link: '/api/terminal/agent.md'
+                },
+                {
+                    text: '用户调用 Demo',
+                    link: '/api/terminal/user.md'
+                }]
             }]
         }]
     },
