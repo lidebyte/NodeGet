@@ -28,7 +28,7 @@ struct HeartBeat {
 }
 ```
 
-返回控制 (无数据) 即可
+返回空值 (无数据) 即可
 
 ### Resize
 
@@ -53,7 +53,7 @@ struct NeedResize {
 }
 ```
 
-根据 `cols` 与 `rows` 通知 Pty 即可，返回控制 (无数据) 即可
+根据 `cols` 与 `rows` 通知 Pty 即可，返回空值 (无数据) 即可
 
 ### Binary
 

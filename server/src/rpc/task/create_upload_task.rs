@@ -144,7 +144,7 @@ pub async fn upload_task_result(token: String, task_response: TaskEventResponse)
             u_arg.clone(),
             p_arg.clone(),
             vec![Scope::AgentUuid(task_response.agent_uuid)],
-            vec![Permission::Task(Task::Create(task_name.to_string()))],
+            vec![Permission::Task(Task::Write(task_name.to_string()))],
         )
             .await?;
 

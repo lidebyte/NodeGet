@@ -84,7 +84,27 @@ async fn main() {
     // 连接数据库
     db_connection::init_db_connection().await;
 
-    println!("{:?}", generate_super_token().await.unwrap());
+    // Show Super Token
+    {
+        let token = match generate_super_token().await {
+            Ok(token) => {
+                token
+            }
+            Err(e) => {
+                panic!("Failed to generate super token: {}", e);
+            }
+        };
+
+        match token {
+            Some(token) => {
+                info!("Super Token: {}", token.0);
+                info!("Root Password: {}", token.1);
+            }
+            None => {
+                info!("Super Token has been generated.");
+            }
+        }
+    }
 
     let task_manager = rpc::task::TaskManager::new();
     let terminal_state = terminal::TerminalState {

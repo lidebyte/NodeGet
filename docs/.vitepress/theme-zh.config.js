@@ -81,6 +81,15 @@ export const themeZhConfig = {
                     text: '用户调用 Demo',
                     link: '/api/terminal/user.md'
                 }]
+            },
+            // Token
+            {
+                text: 'Token',
+                collapsed: false,
+                items: [{
+                    text: '介绍',
+                    link: '/api/token/index.md'
+                }]
             }]
         }]
     },
