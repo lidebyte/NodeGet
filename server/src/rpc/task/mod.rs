@@ -2,25 +2,25 @@ mod create_upload_task;
 mod query;
 
 use crate::rpc::RpcHelper;
+use crate::token::get::check_token_limit;
+use crate::token::parse_token_and_auth;
 use jsonrpsee::PendingSubscriptionSink;
 use jsonrpsee::SubscriptionMessage;
 use jsonrpsee::core::{JsonRawValue, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use log::{error, info};
 use migration::async_trait::async_trait;
+use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
 use nodeget_lib::task::TaskEventType;
 use nodeget_lib::task::query::TaskDataQuery;
 use nodeget_lib::task::{TaskEvent, TaskEventResponse};
+use nodeget_lib::utils::JsonError;
 use serde_json::Value;
 use serde_json::value::RawValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
-use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
-use nodeget_lib::utils::JsonError;
-use crate::token::get::check_token_limit;
-use crate::token::parse_token_and_auth;
 
 #[rpc(server, namespace = "task")]
 pub trait Rpc {
@@ -81,7 +81,6 @@ impl RpcServer for TaskRpcImpl {
         token: String,
         uuid: Uuid,
     ) -> SubscriptionResult {
-
         let (token_arg, username_arg, password_arg) = parse_token_and_auth(&token);
 
         let is_allowed_result = check_token_limit(
@@ -91,7 +90,7 @@ impl RpcServer for TaskRpcImpl {
             vec![Scope::AgentUuid(uuid)],
             vec![Permission::Task(Task::Listen)],
         )
-            .await;
+        .await;
 
         match is_allowed_result {
             Ok(true) => {}
@@ -106,7 +105,7 @@ impl RpcServer for TaskRpcImpl {
                 return Ok(());
             }
             Err((code, msg)) => {
-                let _ = subscription_sink
+                let () = subscription_sink
                     .reject(jsonrpsee::types::ErrorObject::owned(
                         code as i32,
                         msg.as_str(),
@@ -116,7 +115,6 @@ impl RpcServer for TaskRpcImpl {
                 return Ok(());
             }
         }
-
 
         let sink = subscription_sink.accept().await?;
         let (tx, mut rx) = mpsc::channel(32);

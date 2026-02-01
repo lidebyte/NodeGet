@@ -2,8 +2,8 @@ pub mod monitoring_data_report;
 pub mod multi_server;
 
 use nodeget_lib::task::TaskEvent;
-use serde::{Deserialize, Serialize};
 use nodeget_lib::utils::JsonError;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct JsonRpc {
@@ -40,5 +40,3 @@ pub struct JsonRpcTaskResult {
 pub struct JsonRpcErrorMessage {
     pub result: JsonError,
 }
-
-

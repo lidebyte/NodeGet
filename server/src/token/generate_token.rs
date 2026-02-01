@@ -36,7 +36,7 @@ pub async fn generate_and_store_token(
 
     let db = DB
         .get()
-        .ok_or((103, "Database connection not initialized".to_string()))?;
+        .ok_or_else(|| (103, "Database connection not initialized".to_string()))?;
 
     if username.is_some() != password.is_some() {
         return Err((

@@ -190,7 +190,6 @@ Dynamic Monitoring 结构如下:
 - `StaticDataQueryField`: `cpu` / `system` / `gpu`
 - `DynamicDataQueryField`: `cpu` / `ram` / `load` /  `system` / `disk` / `network` / `gpu`
 
-
 ### QueryCondition
 
 不论是查询 Static 信息还是 Dynamic 信息，都需要用到统一的结构体 `QueryCondition`

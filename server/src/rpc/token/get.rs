@@ -1,8 +1,7 @@
-use log::debug;
-use serde_json::Value;
-use nodeget_lib::utils::error_message::generate_error_message;
 use crate::token::get::get_token;
-use crate::token::{parse_token_and_auth, split_username_password};
+use crate::token::parse_token_and_auth;
+use nodeget_lib::utils::error_message::generate_error_message;
+use serde_json::Value;
 
 pub async fn get(token: String) -> Value {
     let (token_arg, username_arg, password_arg) = parse_token_and_auth(&token);

@@ -10,7 +10,8 @@ outline: deep
 
 在 `nodeget-server` 中，上报方法为 `report_static` 与 `report_dynamic`，这两个方法位于 `agent` 下，使用需要添加 `agent_` 前缀
 
-这两个方法用法类似，需要传入 `token`, `static(dynamic)_monitoring_data` 两个参数，`token` 为 String 类型，`static(dynamic)_monitoring_data` 即为上面的结构体
+这两个方法用法类似，需要传入 `token`, `static(dynamic)_monitoring_data` 两个参数，`token` 为 String 类型，
+`static(dynamic)_monitoring_data` 即为上面的结构体
 
 需要构建如下的结构体以上报:
 

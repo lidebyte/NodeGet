@@ -1,5 +1,4 @@
-use crate::monitoring::query::{DynamicDataQueryField, StaticDataQuery, StaticDataQueryField};
-use crate::task::query::TaskQueryCondition;
+use crate::monitoring::query::{DynamicDataQueryField, StaticDataQueryField};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]

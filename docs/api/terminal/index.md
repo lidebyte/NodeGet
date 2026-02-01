@@ -6,7 +6,8 @@ WebShell 是 Task 任务系统下的一个特殊功能，也叫 `网页 SSH` / `
 
 Server 任务下发 与 Agent 接收到任务，还是由 Task 的监听器通信
 
-在接收到来自 Server 的 WebShell Task 后，Agent 会主动通过 WebSocket 连接到 Server 提供的 Url，等待 用户(网页) 连接后，开始双向 Binary Message 通信
+在接收到来自 Server 的 WebShell Task 后，Agent 会主动通过 WebSocket 连接到 Server 提供的 Url，等待 用户(网页) 连接后，开始双向
+Binary Message 通信
 
 ## Agent 获取的 URL
 

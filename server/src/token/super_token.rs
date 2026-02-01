@@ -7,7 +7,7 @@ use sea_orm::{EntityTrait, Set};
 pub async fn generate_super_token() -> Result<Option<(String, String)>, String> {
     let db = DB
         .get()
-        .ok_or("Database connection not initialized".to_string())?;
+        .ok_or_else(|| "Database connection not initialized".to_string())?;
 
     let existing_super = token::Entity::find_by_id(1)
         .one(db)
@@ -20,7 +20,7 @@ pub async fn generate_super_token() -> Result<Option<(String, String)>, String> 
 
     let token_key = generate_random_string(16);
     let token_secret = generate_random_string(32);
-    let full_token = format!("{}:{}", token_key, token_secret);
+    let full_token = format!("{token_key}:{token_secret}");
 
     let username = "root".to_string();
     let raw_password = generate_random_string(32);
@@ -75,26 +75,26 @@ pub async fn check_super_token(
     if let Some(full_token) = token {
         let (key, secret) = split_token(full_token)?;
 
-        if key != super_record.token_key {
-            token_match = false;
-        } else {
-            let hash = hash_string(&secret);
+        if key == super_record.token_key {
+            let hash = hash_string(secret);
             if hash != super_record.token_hash {
                 token_match = false;
             }
+        } else {
+            token_match = false;
         }
     }
 
     if let Some(req_user) = username {
         let req_pass = password.unwrap();
 
-        if Some(req_user.to_string()) != super_record.username {
-            auth_match = false;
-        } else {
+        if Some(req_user.to_string()) == super_record.username {
             let hash = hash_string(req_pass);
             if Some(hash) != super_record.password_hash {
                 auth_match = false;
             }
+        } else {
+            auth_match = false;
         }
     }
 

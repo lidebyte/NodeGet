@@ -1,11 +1,16 @@
 use crate::entity::{dynamic_monitoring, static_monitoring};
 use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
+use crate::token::get::check_token_limit;
+use crate::token::parse_token_and_auth;
 use futures::StreamExt;
 use jsonrpsee::core::RpcResult;
 use log::error;
 use nodeget_lib::monitoring::query::{
     DynamicDataQuery, DynamicDataQueryField, QueryCondition, StaticDataQuery, StaticDataQueryField,
+};
+use nodeget_lib::permission::data_structure::{
+    DynamicMonitoring, Permission, Scope, StaticMonitoring,
 };
 use nodeget_lib::utils::error_message::error_to_raw;
 use nodeget_lib::utils::rename_and_fix_json;
@@ -15,9 +20,6 @@ use sea_orm::{
 };
 use serde_json::Value;
 use serde_json::value::RawValue;
-use nodeget_lib::permission::data_structure::{DynamicMonitoring, Permission, Scope, StaticMonitoring};
-use crate::token::get::check_token_limit;
-use crate::token::parse_token_and_auth;
 
 pub async fn query_static(
     token: String,
@@ -54,14 +56,8 @@ pub async fn query_static(
             })
             .collect();
 
-        let is_allowed = check_token_limit(
-            token_arg,
-            username_arg,
-            password_arg,
-            scopes,
-            permissions,
-        )
-            .await?;
+        let is_allowed =
+            check_token_limit(token_arg, username_arg, password_arg, scopes, permissions).await?;
 
         if !is_allowed {
             return Err((
@@ -187,14 +183,8 @@ pub async fn query_dynamic(
             })
             .collect();
 
-        let is_allowed = check_token_limit(
-            token_arg,
-            username_arg,
-            password_arg,
-            scopes,
-            permissions,
-        )
-            .await?;
+        let is_allowed =
+            check_token_limit(token_arg, username_arg, password_arg, scopes, permissions).await?;
 
         if !is_allowed {
             return Err((

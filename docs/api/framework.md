@@ -32,7 +32,8 @@ outline: deep
 
 推荐阅读: <https://wiki.geekdream.com/Specification/json-rpc_2.0.html>
 
-`nodeget-server` 提供了一个 WebSocket JsonRpc 服务器，并在同端口同样提供 Http Post JsonRpc 服务器，除无法进行长连接外与 WebSocket JsonRpc 无异
+`nodeget-server` 提供了一个 WebSocket JsonRpc 服务器，并在同端口同样提供 Http Post JsonRpc 服务器，除无法进行长连接外与
+WebSocket JsonRpc 无异
 
 推荐使用 JsonRpc 进行二次开发时同时兼容 WebSocket 与 Http，并优先使用 WebSocket 通信
 
@@ -43,10 +44,9 @@ outline: deep
 - 内部测试或小型 (Agent 数目 <= 5) 可使用 Sqlite，性能问题不明显
 - 大量 Agents 务必使用 PostgreSQL，表内压缩、JsonBinary 等特性比 Sqlite 更省空间，更高效
 
-
 ## 注意特点
 
 - 任何功能，均不依赖其他功能
-    例如：`上报监控信息` 与 `Task 任务获取` 可以在不同地方实现，或只实现其中一个，不影响使用
+  例如：`上报监控信息` 与 `Task 任务获取` 可以在不同地方实现，或只实现其中一个，不影响使用
 - UUID 唯一: 虽然可以用户指定每一个 Server / Agent 的 UUID，但会根据环境自动生成，各系统下只要不刻意改变，UUID 也不会改变
-    整个系统内只有 UUID 作为唯一辨别 ID，不存在 `name` / `id` 等易混淆字段
+  整个系统内只有 UUID 作为唯一辨别 ID，不存在 `name` / `id` 等易混淆字段

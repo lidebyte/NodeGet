@@ -1,6 +1,7 @@
 # Agent Terminal 实现
 
-实际上，官方 Agent 几乎全部源自 `GenshinMinecraft/komari-monitor-rs:src/callbacks/pty.rs`，Komari 提供的 WebShell 是较为成熟的方案，可以参考
+实际上，官方 Agent 几乎全部源自 `GenshinMinecraft/komari-monitor-rs:src/callbacks/pty.rs`，Komari 提供的 WebShell
+是较为成熟的方案，可以参考
 
 ## 处理内容
 
@@ -53,7 +54,6 @@ struct NeedResize {
 ```
 
 根据 `cols` 与 `rows` 通知 Pty 即可，返回控制 (无数据) 即可
-
 
 ### Binary
 

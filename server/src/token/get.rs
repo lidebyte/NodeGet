@@ -1,12 +1,12 @@
 use crate::DB;
 use crate::entity::token;
+use crate::token::super_token::check_super_token;
 use crate::token::{hash_string, split_token};
 use nodeget_lib::permission::data_structure::{Limit, Permission, Scope, Token};
 use nodeget_lib::utils::get_local_timestamp_ms;
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
-use crate::token::super_token::check_super_token;
 
 pub async fn get_token(
     token_str: Option<String>,
@@ -15,7 +15,7 @@ pub async fn get_token(
 ) -> Result<Token, (i64, String)> {
     let db = DB
         .get()
-        .ok_or((107, "Database connection not initialized".to_string()))?;
+        .ok_or_else(|| (107, "Database connection not initialized".to_string()))?;
     let token_model = if let Some(full_token) = token_str {
         let (key, secret) = split_token(&full_token).map_err(|e| (101, e))?;
         let model = token::Entity::find()
@@ -23,7 +23,7 @@ pub async fn get_token(
             .one(db)
             .await
             .map_err(|e| (103, format!("Database query error: {e}")))?
-            .ok_or((105, "Token key not found in database".to_string()))?;
+            .ok_or_else(|| (105, "Token key not found in database".to_string()))?;
 
         if model.token_hash != hash_string(secret) {
             return Err((102, "Invalid token secret".to_string()));
@@ -35,7 +35,7 @@ pub async fn get_token(
             .one(db)
             .await
             .map_err(|e| (103, format!("Database query error: {e}")))?
-            .ok_or((105, "Username not found in database".to_string()))?;
+            .ok_or_else(|| (105, "Username not found in database".to_string()))?;
         let p_hash = hash_string(&p);
         if model.password_hash != Some(p_hash) {
             return Err((102, "Invalid password".to_string()));
@@ -64,30 +64,31 @@ pub async fn check_token_limit(
     scopes: Vec<Scope>,
     permissions: Vec<Permission>,
 ) -> Result<bool, (i64, String)> {
-    if let Ok(true) = check_super_token(
+    if check_super_token(
         token_str.as_deref(),
         username.as_deref(),
         password.as_deref(),
     )
-        .await
+    .await
+        == Ok(true)
     {
         return Ok(true);
     }
 
     let token = get_token(token_str, username, password).await?;
 
-    let now = get_local_timestamp_ms() as i64;
+    let now = get_local_timestamp_ms().cast_signed();
 
-    if let Some(from) = token.timestamp_from {
-        if now < from {
-            return Ok(false);
-        }
+    if let Some(from) = token.timestamp_from
+        && now < from
+    {
+        return Ok(false);
     }
 
-    if let Some(to) = token.timestamp_to {
-        if now > to {
-            return Ok(false);
-        }
+    if let Some(to) = token.timestamp_to
+        && now > to
+    {
+        return Ok(false);
     }
 
     // 对于传入的每一个 Scope 和每一个 Permission，Token 中必须至少有一个 Limit 规则能够同时满足它们。

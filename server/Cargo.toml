@@ -21,7 +21,7 @@ serde = "1.0.228"
 serde_json = "1.0.149"
 jsonrpsee = { version = "0.26.0", default-features = false, features = ["server", "macros"] }
 axum = { version = "0.8.8", default-features = false, features = ["tokio", "ws", "macros", "http1", "query"] }
-tower = { version = "0.5.3" , default-features = false, features = ["tokio"]}
+tower = { version = "0.5.3", default-features = false, features = ["tokio"] }
 
 # Logging
 log = { version = "0.4.29", default-features = false, features = ["std", "serde"] }

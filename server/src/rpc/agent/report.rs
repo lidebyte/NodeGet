@@ -1,21 +1,20 @@
 use crate::entity::{dynamic_monitoring, static_monitoring};
 use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
+use crate::token::get::check_token_limit;
+use crate::token::parse_token_and_auth;
 use log::{debug, error};
 use nodeget_lib::monitoring::data_structure::{DynamicMonitoringData, StaticMonitoringData};
+use nodeget_lib::permission::data_structure::{Permission, Scope, StaticMonitoring};
 use nodeget_lib::utils::error_message::generate_error_message;
 use sea_orm::{ActiveValue, EntityTrait, Set};
 use serde_json::{Value, json};
 use std::str::FromStr;
-use nodeget_lib::permission::data_structure::{Permission, Scope, StaticMonitoring};
-use nodeget_lib::permission::data_structure::Permission::DynamicMonitoring;
-use crate::token::get::check_token_limit;
-use crate::token::parse_token_and_auth;
 
 pub async fn report_static(token: String, static_monitoring_data: StaticMonitoringData) -> Value {
     let process_logic = async {
         let agent_uuid = uuid::Uuid::from_str(&static_monitoring_data.uuid)
-            .map_err(|e| (101, format!("Invalid UUID format: {}", e)))?;
+            .map_err(|e| (101, format!("Invalid UUID format: {e}")))?;
 
         let (token_arg, username_arg, password_arg) = parse_token_and_auth(&token);
 
@@ -26,7 +25,7 @@ pub async fn report_static(token: String, static_monitoring_data: StaticMonitori
             vec![Scope::AgentUuid(agent_uuid)],
             vec![Permission::StaticMonitoring(StaticMonitoring::Write)],
         )
-            .await?;
+        .await?;
 
         if !is_allowed {
             return Err((
@@ -81,7 +80,7 @@ pub async fn report_dynamic(
 ) -> Value {
     let process_logic = async {
         let agent_uuid = uuid::Uuid::from_str(&dynamic_monitoring_data.uuid)
-            .map_err(|e| (101, format!("Invalid UUID format: {}", e)))?;
+            .map_err(|e| (101, format!("Invalid UUID format: {e}")))?;
 
         let (token_arg, username_arg, password_arg) = parse_token_and_auth(&token);
 
@@ -90,9 +89,11 @@ pub async fn report_dynamic(
             username_arg,
             password_arg,
             vec![Scope::AgentUuid(agent_uuid)],
-            vec![Permission::DynamicMonitoring(nodeget_lib::permission::data_structure::DynamicMonitoring::Write)],
+            vec![Permission::DynamicMonitoring(
+                nodeget_lib::permission::data_structure::DynamicMonitoring::Write,
+            )],
         )
-            .await?;
+        .await?;
 
         if !is_allowed {
             return Err((

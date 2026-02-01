@@ -1,7 +1,7 @@
 use crate::AGENT_CONFIG;
 use crate::rpc::multi_server::{send_to, subscribe_to};
 use crate::rpc::{JsonRpcTask, wrap_json_into_rpc_with_id_1};
-use log::{debug, error, info, trace};
+use log::{error, info};
 use nodeget_lib::task::{TaskEventResponse, TaskEventResult, TaskEventType};
 use nodeget_lib::utils::get_local_timestamp_ms;
 use std::time::Duration;
