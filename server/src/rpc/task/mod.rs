@@ -12,6 +12,7 @@ use jsonrpsee::proc_macros::rpc;
 use log::{error, info};
 use migration::async_trait::async_trait;
 use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
+use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::task::TaskEventType;
 use nodeget_lib::task::query::TaskDataQuery;
 use nodeget_lib::task::{TaskEvent, TaskEventResponse};
@@ -22,29 +23,28 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
-use nodeget_lib::permission::token_auth::TokenOrAuth;
 
 // 任务管理相关的 RPC 接口定义，包括任务注册、创建、结果上传和查询功能
 #[rpc(server, namespace = "task")]
 pub trait Rpc {
     // 任务订阅接口，允许客户端注册接收任务事件
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `uuid` - Agent 的 UUID
-    // 
+    //
     // # 返回值
     // 返回订阅结果
     #[subscription(name = "register_task", item = TaskEvent, unsubscribe = "unregister_task")]
     async fn register_task(&self, token: String, uuid: Uuid) -> SubscriptionResult;
 
     // 创建任务方法
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `target_uuid` - 目标 Agent 的 UUID
     // * `task_type` - 任务事件类型
-    // 
+    //
     // # 返回值
     // 返回创建任务的结果
     #[method(name = "create_task")]
@@ -56,22 +56,22 @@ pub trait Rpc {
     ) -> Value;
 
     // 上传任务执行结果方法
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `task_response` - 任务事件响应
-    // 
+    //
     // # 返回值
     // 返回上传结果
     #[method(name = "upload_task_result")]
     async fn upload_task_result(&self, token: String, task_response: TaskEventResponse) -> Value;
 
     // 查询任务数据方法
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `task_data_query` - 任务数据查询条件
-    // 
+    //
     // # 返回值
     // 返回查询结果的原始 JSON 值
     #[method(name = "query")]
@@ -94,12 +94,12 @@ impl RpcHelper for TaskRpcImpl {}
 #[async_trait]
 impl RpcServer for TaskRpcImpl {
     // 创建任务实现
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `target_uuid` - 目标 Agent 的 UUID
     // * `task_type` - 任务事件类型
-    // 
+    //
     // # 返回值
     // 返回创建任务的结果
     async fn create_task(
@@ -112,11 +112,11 @@ impl RpcServer for TaskRpcImpl {
     }
 
     // 上传任务结果实现
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `task_response` - 任务事件响应
-    // 
+    //
     // # 返回值
     // 返回上传结果
     async fn upload_task_result(&self, token: String, task_response: TaskEventResponse) -> Value {
@@ -124,11 +124,11 @@ impl RpcServer for TaskRpcImpl {
     }
 
     // 查询任务数据实现
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `task_data_query` - 任务数据查询条件
-    // 
+    //
     // # 返回值
     // 返回查询结果的原始 JSON 值
     async fn query(
@@ -140,12 +140,12 @@ impl RpcServer for TaskRpcImpl {
     }
 
     // 任务注册实现，建立订阅连接
-    // 
+    //
     // # 参数
     // * `subscription_sink` - 订阅接收器
     // * `token` - 认证令牌
     // * `uuid` - Agent 的 UUID
-    // 
+    //
     // # 返回值
     // 返回订阅结果
     async fn register_task(
@@ -251,7 +251,7 @@ pub struct TaskManager {
 
 impl TaskManager {
     // 创建新的任务管理器实例
-    // 
+    //
     // # 返回值
     // 返回初始化的任务管理器
     #[must_use]
@@ -262,7 +262,7 @@ impl TaskManager {
     }
 
     // 为指定 UUID 添加会话
-    // 
+    //
     // # 参数
     // * `uuid` - Agent 的 UUID
     // * `reg_id` - 注册 ID
@@ -272,7 +272,7 @@ impl TaskManager {
     }
 
     // 移除指定 UUID 的会话
-    // 
+    //
     // # 参数
     // * `uuid` - Agent 的 UUID
     // * `reg_id` - 注册 ID
@@ -287,11 +287,11 @@ impl TaskManager {
     }
 
     // 向指定 UUID 的 Agent 发送任务事件
-    // 
+    //
     // # 参数
     // * `uuid` - Agent 的 UUID
     // * `event` - 任务事件
-    // 
+    //
     // # 返回值
     // 成功返回空值，失败返回错误代码和消息
     pub async fn send_event(&self, uuid: Uuid, event: TaskEvent) -> Result<(), (u32, String)> {

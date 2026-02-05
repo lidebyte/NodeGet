@@ -12,21 +12,21 @@ use serde_json::Value;
 #[rpc(server, namespace = "token")]
 pub trait Rpc {
     // 获取令牌信息方法
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
-    // 
+    //
     // # 返回值
     // 返回令牌信息
     #[method(name = "get")]
     async fn get(&self, token: String) -> Value;
 
     // 创建新令牌方法
-    // 
+    //
     // # 参数
     // * `father_token` - 父级令牌
     // * `token_creation` - 令牌创建请求参数
-    // 
+    //
     // # 返回值
     // 返回创建的令牌信息
     #[method(name = "create")]
@@ -38,10 +38,10 @@ pub struct TokenRpcImpl;
 #[async_trait]
 impl RpcServer for TokenRpcImpl {
     // 获取令牌信息实现
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
-    // 
+    //
     // # 返回值
     // 返回令牌信息
     async fn get(&self, token: String) -> Value {
@@ -49,11 +49,11 @@ impl RpcServer for TokenRpcImpl {
     }
 
     // 创建新令牌实现
-    // 
+    //
     // # 参数
     // * `father_token` - 父级令牌
     // * `token_creation` - 令牌创建请求参数
-    // 
+    //
     // # 返回值
     // 返回创建的令牌信息
     async fn create(&self, father_token: String, token_creation: TokenCreationRequest) -> Value {

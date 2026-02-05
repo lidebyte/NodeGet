@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 // 初始化数据库连接并应用迁移
-// 
+//
 // 该函数连接到数据库，应用必要的迁移，并根据数据库类型进行特定配置。
 // 如果配置无效或连接失败，则会记录错误并退出进程。
 pub async fn init_db_connection() {

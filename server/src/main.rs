@@ -21,6 +21,7 @@ use tower::Service;
 use crate::token::super_token::generate_super_token;
 #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
 use tikv_jemallocator::Jemalloc;
+use crate::rpc::metadata::RpcServer;
 
 #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
 #[global_allocator]
@@ -44,7 +45,7 @@ static SERVER_CONFIG: std::sync::OnceLock<nodeget_lib::config::server::ServerCon
     std::sync::OnceLock::new();
 
 // 服务器主函数
-// 
+//
 // 该函数启动 NodeGet 服务器，初始化配置、日志、数据库连接、超级令牌，
 // 然后设置 RPC 服务和 WebSocket 终端处理器，并最终启动 HTTP 服务器。
 #[tokio::main]
@@ -85,8 +86,7 @@ async fn main() {
     });
 
     // 对比 Uuid，发送警告
-    let _ =
-        nodeget_lib::utils::uuid::compare_uuid(config.server_uuid);
+    let _ = nodeget_lib::utils::uuid::compare_uuid(config.server_uuid);
 
     info!("Starting nodeget-server with config: {config:?}");
 
@@ -135,6 +135,9 @@ async fn main() {
         .unwrap();
     rpc_module
         .merge(rpc::token::TokenRpcImpl.into_rpc())
+        .unwrap();
+    rpc_module
+        .merge(rpc::metadata::MetadataRpcImpl.into_rpc())
         .unwrap();
 
     let (stop_handle, _server_handle) = jsonrpsee::server::stop_channel();

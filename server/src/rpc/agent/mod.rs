@@ -18,11 +18,11 @@ use serde_json::value::RawValue;
 #[rpc(server, namespace = "agent")]
 pub trait Rpc {
     // 上报静态监控数据方法
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `static_monitoring_data` - 静态监控数据
-    // 
+    //
     // # 返回值
     // 返回操作结果
     #[method(name = "report_static")]
@@ -33,11 +33,11 @@ pub trait Rpc {
     ) -> Value;
 
     // 上报动态监控数据方法
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `dynamic_monitoring_data` - 动态监控数据
-    // 
+    //
     // # 返回值
     // 返回操作结果
     #[method(name = "report_dynamic")]
@@ -48,11 +48,11 @@ pub trait Rpc {
     ) -> Value;
 
     // 查询静态监控数据方法
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `static_data_query` - 静态数据查询条件
-    // 
+    //
     // # 返回值
     // 返回查询结果，格式为 Vec<StaticResponseItem>
     #[method(name = "query_static")]
@@ -63,11 +63,11 @@ pub trait Rpc {
     ) -> RpcResult<Box<RawValue>>; // Vec<StaticResponseItem>
 
     // 查询动态监控数据方法
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `dynamic_data_query` - 动态数据查询条件
-    // 
+    //
     // # 返回值
     // 返回查询结果，格式为 Vec<DynamicResponseItem>
     #[method(name = "query_dynamic")]
@@ -86,11 +86,11 @@ impl RpcHelper for AgentRpcImpl {}
 #[async_trait]
 impl RpcServer for AgentRpcImpl {
     // 上报静态监控数据实现
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `static_monitoring_data` - 静态监控数据
-    // 
+    //
     // # 返回值
     // 返回操作结果
     async fn report_static(
@@ -102,11 +102,11 @@ impl RpcServer for AgentRpcImpl {
     }
 
     // 上报动态监控数据实现
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `dynamic_monitoring_data` - 动态监控数据
-    // 
+    //
     // # 返回值
     // 返回操作结果
     async fn report_dynamic(
@@ -118,11 +118,11 @@ impl RpcServer for AgentRpcImpl {
     }
 
     // 查询静态监控数据实现
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `static_data_query` - 静态数据查询条件
-    // 
+    //
     // # 返回值
     // 返回查询结果，格式为 Vec<StaticResponseItem>
     async fn query_static(
@@ -134,11 +134,11 @@ impl RpcServer for AgentRpcImpl {
     }
 
     // 查询动态监控数据实现
-    // 
+    //
     // # 参数
     // * `token` - 认证令牌
     // * `dynamic_data_query` - 动态数据查询条件
-    // 
+    //
     // # 返回值
     // 返回查询结果，格式为 Vec<DynamicResponseItem>
     async fn query_dynamic(

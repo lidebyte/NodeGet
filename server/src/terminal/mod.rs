@@ -22,7 +22,7 @@ pub struct TerminalState {
 }
 
 // 会话槽位结构，Agent 连接时创建，User 连接时取走需要的部分
-// 
+//
 // Agent 连接时创建这个结构，User 连接时取走需要的部分
 pub struct SessionSlots {
     // User -> Agent 的无界发送通道
@@ -48,12 +48,12 @@ pub struct TerminalParams {
 }
 
 // 终端 WebSocket 处理器
-// 
+//
 // # 参数
 // * `ws` - WebSocket 升级实例
 // * `Query(params)` - 查询参数
 // * `State(state)` - 终端状态
-// 
+//
 // # 返回值
 // 返回可转换为响应的类型
 pub async fn terminal_ws_handler(
@@ -65,7 +65,7 @@ pub async fn terminal_ws_handler(
 }
 
 // 处理 WebSocket 连接
-// 
+//
 // # 参数
 // * `socket` - WebSocket 连接实例
 // * `params` - 终端参数
@@ -80,7 +80,7 @@ async fn handle_socket(socket: WebSocket, params: TerminalParams, state: Termina
 }
 
 // 处理 Agent 连接
-// 
+//
 // # 参数
 // * `socket` - WebSocket 连接实例
 // * `agent_uuid` - Agent 的 UUID
@@ -176,7 +176,7 @@ async fn handle_agent(
 }
 
 // 处理 User 连接
-// 
+//
 // # 参数
 // * `socket` - WebSocket 连接实例
 // * `agent_uuid` - Agent 的 UUID

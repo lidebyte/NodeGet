@@ -22,7 +22,7 @@ pub struct NodegetServerRpcImpl;
 #[async_trait]
 impl RpcServer for NodegetServerRpcImpl {
     // 服务健康检查实现
-    // 
+    //
     // # 返回值
     // 返回 "NodeGet Server Is Running!" 字符串表示服务正常运行
     async fn hello(&self) -> String {
@@ -31,7 +31,7 @@ impl RpcServer for NodegetServerRpcImpl {
     }
 
     // 获取服务版本信息实现
-    // 
+    //
     // # 返回值
     // 返回当前服务版本信息的 JSON 值
     async fn version(&self) -> Value {
