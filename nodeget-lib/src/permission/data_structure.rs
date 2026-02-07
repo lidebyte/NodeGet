@@ -105,4 +105,5 @@ pub enum Metadata {
 pub enum Crontab {
     Read,
     Write,
+    Delete,
 }

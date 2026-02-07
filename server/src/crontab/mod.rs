@@ -14,6 +14,80 @@ use std::str::FromStr;
 use std::time::Duration;
 use tokio::time::sleep;
 
+pub async fn delete_crontab_by_name(name: String) -> Result<bool, sea_orm::DbErr> {
+    let db = match DB.get() {
+        None => {
+            return Err(sea_orm::DbErr::Conn(sea_orm::RuntimeErr::Internal("Database not initialized".to_string())));
+        }
+        Some(db) => db,
+    };
+
+    let result = crontab::Entity::delete_many()
+        .filter(crontab::Column::Name.eq(name))
+        .exec(db)
+        .await?;
+
+    Ok(result.rows_affected > 0)
+}
+
+pub async fn toggle_crontab_enable_by_name(name: String) -> Result<Option<bool>, sea_orm::DbErr> {
+    let db = match DB.get() {
+        None => {
+            return Err(sea_orm::DbErr::Conn(sea_orm::RuntimeErr::Internal("Database not initialized".to_string())));
+        }
+        Some(db) => db,
+    };
+
+    // 首先查找 crontab
+    let crontab_option = crontab::Entity::find()
+        .filter(crontab::Column::Name.eq(&name))
+        .one(db)
+        .await?;
+
+    match crontab_option {
+        Some(mut model) => {
+            // 获取当前的启用状态并切换
+            let current_enable = model.enable;
+            let new_enable = !current_enable;
+            
+            // 更新 enable 状态
+            model.enable = new_enable;
+            let active_model: crontab::ActiveModel = model.into();
+            active_model.update(db).await?;
+            
+            Ok(Some(new_enable))
+        }
+        None => Ok(None) // 没找到对应的 crontab
+    }
+}
+
+pub async fn set_crontab_enable_by_name(name: String, enable: bool) -> Result<Option<bool>, sea_orm::DbErr> {
+    let db = match DB.get() {
+        None => {
+            return Err(sea_orm::DbErr::Conn(sea_orm::RuntimeErr::Internal("Database not initialized".to_string())));
+        }
+        Some(db) => db,
+    };
+
+    // 首先查找 crontab
+    let crontab_option = crontab::Entity::find()
+        .filter(crontab::Column::Name.eq(&name))
+        .one(db)
+        .await?;
+
+    match crontab_option {
+        Some(mut model) => {
+            // 设置为指定的启用状态
+            model.enable = enable;
+            let active_model: crontab::ActiveModel = model.into();
+            active_model.update(db).await?;
+            
+            Ok(Some(enable))
+        }
+        None => Ok(None) // 没找到对应的 crontab
+    }
+}
+
 pub fn init_crontab_worker() {
     tokio::spawn(async move {
         info!("Crontab scheduler started.");
