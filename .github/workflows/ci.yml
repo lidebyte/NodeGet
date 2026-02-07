@@ -1,0 +1,227 @@
+name: nodeget-ci
+
+on:
+  workflow_dispatch:
+  merge_group:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+  push:
+    branches:
+      - main
+      - dev
+    paths-ignore:
+      - ".github/**"
+      - "docs/**"
+      - "README.md"
+
+concurrency:
+  group: nodeget-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt: # 这个不要可以注掉...
+    name: Rustfmt (check only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true # 先留着..万一呢
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect Rust changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          filters: |
+            rust:
+              - "**/*.rs"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - "**/Cargo.toml"
+              - "**/Cargo.lock"
+              - "**/build.rs"
+              - "rust-toolchain"
+              - "rust-toolchain.toml"
+              - ".cargo/**"
+
+      - name: Setup Rust (nightly)
+        if: steps.changes.outputs.rust == 'true'
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rustfmt
+
+      - name: Cargo fmt --check
+        if: steps.changes.outputs.rust == 'true'
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy (workspace, warnings as errors)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect Rust changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          filters: |
+            rust:
+              - "**/*.rs"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - "**/Cargo.toml"
+              - "**/Cargo.lock"
+              - "**/build.rs"
+              - "rust-toolchain"
+              - "rust-toolchain.toml"
+              - ".cargo/**"
+
+      - name: Setup system and Rust (nightly)
+        if: steps.changes.outputs.rust == 'true'
+        uses: ./.github/actions/setup-system
+        with:
+          toolchain: nightly
+          components: clippy
+
+      - name: Cargo clippy (workspace, minimal)
+        if: steps.changes.outputs.rust == 'true'
+        run: cargo clippy --workspace --locked --profile minimal -- -D warnings
+
+  check:
+    name: Cargo check (workspace, minimal)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect Rust changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          filters: |
+            rust:
+              - "**/*.rs"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - "**/Cargo.toml"
+              - "**/Cargo.lock"
+              - "**/build.rs"
+              - "rust-toolchain"
+              - "rust-toolchain.toml"
+              - ".cargo/**"
+
+      - name: Setup Rust (nightly)
+        if: steps.changes.outputs.rust == 'true'
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+
+      - name: Cargo check (workspace, minimal)
+        if: steps.changes.outputs.rust == 'true'
+        run: cargo check --workspace --locked --profile minimal
+
+  build_and_artifacts:
+    name: Build & Artifacts (${{ matrix.target }})
+    needs: [fmt, clippy, check]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            use_cross: false
+          # ...ci就不需要加别的了吧
+
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (nightly)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.target }}
+
+      - name: Install cross (Linux ARM64 only)
+        if: matrix.use_cross == true
+        shell: bash
+        run: |
+          cargo install cross --locked --git https://github.com/cross-rs/cross || \
+          cargo install cross --locked
+
+      - name: Build agent & server (minimal)
+        shell: bash
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build -p nodeget-agent --profile minimal --locked --target ${{ matrix.target }}
+            cross build -p nodeget-server --profile minimal --locked --target ${{ matrix.target }}
+          else
+            cargo build -p nodeget-agent --profile minimal --locked --target ${{ matrix.target }}
+            cargo build -p nodeget-server --profile minimal --locked --target ${{ matrix.target }}
+          fi
+
+      - name: Upload agent aritfact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodeget-agent-${{ matrix.target }}
+          path: target/${{ matrix.target }}/minimal/nodeget-agent*
+          if-no-files-found: error
+
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodeget-server-${{ matrix.target }}
+          path: target/${{ matrix.target }}/minimal/nodeget-server*
+          if-no-files-found: error
