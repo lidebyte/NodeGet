@@ -22,7 +22,7 @@ pub fn hash_string(need_hash: &str) -> String {
 
 use crate::DB;
 use crate::entity::token;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DeleteResult, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DeleteResult, EntityTrait, QueryFilter};
 
 // 删除令牌的方法
 //
