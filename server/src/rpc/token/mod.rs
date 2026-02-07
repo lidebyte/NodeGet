@@ -2,13 +2,15 @@
 mod create;
 // 令牌获取模块
 mod get;
+// 令牌删除模块
+mod delete;
 
 use jsonrpsee::proc_macros::rpc;
 use migration::async_trait::async_trait;
 use nodeget_lib::permission::create::TokenCreationRequest;
 use serde_json::Value;
 
-// 令牌管理相关的 RPC 接口定义，包括获取和创建令牌功能
+// 令牌管理相关的 RPC 接口定义，包括获取、创建和删除令牌功能
 #[rpc(server, namespace = "token")]
 pub trait Rpc {
     // 获取令牌信息方法
@@ -31,6 +33,17 @@ pub trait Rpc {
     // 返回创建的令牌信息
     #[method(name = "create")]
     async fn create(&self, father_token: String, token_creation: TokenCreationRequest) -> Value;
+
+    // 删除令牌方法
+    //
+    // # 参数
+    // * `token` - 认证令牌
+    // * `target_token_key` - 要删除的目标令牌的 key（可选）
+    //
+    // # 返回值
+    // 返回删除结果
+    #[method(name = "delete")]
+    async fn delete(&self, token: String, target_token_key: Option<String>) -> Value;
 }
 // 令牌管理 RPC 实现结构体
 pub struct TokenRpcImpl;
@@ -58,5 +71,17 @@ impl RpcServer for TokenRpcImpl {
     // 返回创建的令牌信息
     async fn create(&self, father_token: String, token_creation: TokenCreationRequest) -> Value {
         create::create(father_token, token_creation).await
+    }
+
+    // 删除令牌实现
+    //
+    // # 参数
+    // * `token` - 认证令牌
+    // * `target_token_key` - 要删除的目标令牌的 key（可选）
+    //
+    // # 返回值
+    // 返回删除结果
+    async fn delete(&self, token: String, target_token_key: Option<String>) -> Value {
+        delete::delete(token, target_token_key).await
     }
 }

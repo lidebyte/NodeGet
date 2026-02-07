@@ -31,14 +31,21 @@ pub async fn delete(token: String, name: String) -> Value {
 
         // 检查用户是否有 Crontab::Delete 权限
         let has_crontab_delete_permission = token_info.token_limit.iter().any(|limit| {
-            limit.permissions.iter().any(|perm| matches!(perm, Permission::Crontab(CrontabPermission::Delete)))
+            limit
+                .permissions
+                .iter()
+                .any(|perm| matches!(perm, Permission::Crontab(CrontabPermission::Delete)))
         });
 
         if !has_crontab_delete_permission {
-            return Err((102, "Permission Denied: Insufficient Crontab Delete permission".to_string()));
+            return Err((
+                102,
+                "Permission Denied: Insufficient Crontab Delete permission".to_string(),
+            ));
         }
 
-        let deleted = delete_crontab_by_name(name).await
+        let deleted = delete_crontab_by_name(name)
+            .await
             .map_err(|e| (103, e.to_string()))?;
 
         if deleted {
@@ -48,5 +55,7 @@ pub async fn delete(token: String, name: String) -> Value {
         }
     };
 
-    process_logic.await.unwrap_or_else(|(code, msg)| generate_error_message(code, &msg))
+    process_logic
+        .await
+        .unwrap_or_else(|(code, msg)| generate_error_message(code, &msg))
 }

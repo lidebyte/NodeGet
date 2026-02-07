@@ -1,8 +1,8 @@
 mod create;
-mod get;
 mod delete;
-mod toggle_enable;
+mod get;
 mod set_enable;
+mod toggle_enable;
 
 use crate::rpc::RpcHelper;
 use jsonrpsee::core::async_trait;

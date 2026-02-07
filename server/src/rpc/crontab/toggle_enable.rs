@@ -31,15 +31,23 @@ pub async fn toggle_enable(token: String, name: String) -> Value {
 
         // 检查用户是否有 Crontab::Write 权限
         let has_crontab_write_permission = token_info.token_limit.iter().any(|limit| {
-            limit.permissions.iter().any(|perm| matches!(perm, Permission::Crontab(CrontabPermission::Write)))
+            limit
+                .permissions
+                .iter()
+                .any(|perm| matches!(perm, Permission::Crontab(CrontabPermission::Write)))
         });
 
         if !has_crontab_write_permission {
-            return Err((102, "Permission Denied: Insufficient Crontab Write permission".to_string()));
+            return Err((
+                102,
+                "Permission Denied: Insufficient Crontab Write permission".to_string(),
+            ));
         }
 
-        match toggle_crontab_enable_by_name(name).await
-            .map_err(|e| (103, e.to_string()))? {
+        match toggle_crontab_enable_by_name(name)
+            .await
+            .map_err(|e| (103, e.to_string()))?
+        {
             Some(new_state) => {
                 let message = if new_state {
                     "Crontab enabled successfully"
@@ -52,14 +60,14 @@ pub async fn toggle_enable(token: String, name: String) -> Value {
                     "message": message
                 }))
             }
-            None => {
-                Ok(json!({
-                    "success": false,
-                    "message": "Crontab not found"
-                }))
-            }
+            None => Ok(json!({
+                "success": false,
+                "message": "Crontab not found"
+            })),
         }
     };
 
-    process_logic.await.unwrap_or_else(|(code, msg)| generate_error_message(code, &msg))
+    process_logic
+        .await
+        .unwrap_or_else(|(code, msg)| generate_error_message(code, &msg))
 }

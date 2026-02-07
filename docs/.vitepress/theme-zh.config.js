@@ -96,6 +96,10 @@ export const themeZhConfig = {
 				{
 					text: '获取 Token 信息',
 					link: '/api/token/get.md'
+				},
+				{
+					text: '删除 Token',
+					link: '/api/token/delete.md'
 				}]
 			},
 			// Metadata

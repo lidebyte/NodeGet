@@ -162,3 +162,43 @@ Task、上报目前所有 Task 任务类型 的权限
 它表示:
 
 用户可以查询 Agent Uuid 为 `ad..af` 与 `33..5c` 的 Agent 的 StaticMonitoring / DynamicMonitoring Data 中 cpu / system 字段
+
+### Crontab 权限示例
+
+现有这么一个结构体
+
+```json
+{
+  "scopes": [
+    {"global": null}
+  ],
+  "permissions": [
+    {"crontab": "read"},
+    {"crontab": "write"},
+    {"crontab": "delete"}
+  ]
+}
+```
+
+这是一个具有全局 Crontab 权限的 Limit，它表示:
+
+具有对所有 Crontab 的读取、写入和删除权限。
+
+或针对特定 Agent 的权限:
+
+```json
+{
+  "scopes": [
+    {"agent_uuid": "00000000-0000-0000-0000-000000000001"},
+    {"agent_uuid": "00000000-0000-0000-0000-000000000002"}
+  ],
+  "permissions": [
+    {"crontab": "read"},
+    {"crontab": "write"}
+  ]
+}
+```
+
+这表示:
+
+对 UUID 为 `00000000-0000-0000-0000-000000000001` 和 `00000000-0000-0000-0000-000000000002` 的 Agent 相关的 Crontab 具有读取和写入权限。
