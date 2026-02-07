@@ -1,0 +1,58 @@
+name: nodeget-server-ci
+
+on:
+  workflow_dispatch:
+  merge_group:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+  push:
+    branches:
+      - main
+      - dev
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+
+concurrency:
+  group: nodeget-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  clippy:
+    name: Server Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-system
+        with:
+          toolchain: nightly
+          components: clippy
+
+      - name: Cargo clippy
+        working-directory: ./server
+        run: cargo clippy --locked --profile minimal -- -D warnings
+
+  check:
+    name: Server Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses:
+        with:
+          toolchain: nightly
+          components: clippy
+
+      - name: Cargo clippy
+        working-directory: ./server
+        run: cargo clippy --locked --profile minimal -- -D warnings
