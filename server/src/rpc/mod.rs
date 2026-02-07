@@ -12,6 +12,7 @@ pub mod task;
 // 令牌管理 RPC 接口模块
 pub mod token;
 
+pub mod crontab;
 pub mod metadata;
 
 // RPC 辅助功能 trait，提供数据库操作和序列化工具方法

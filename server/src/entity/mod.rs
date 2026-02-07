@@ -2,6 +2,8 @@
 
 pub mod prelude;
 
+pub mod crontab;
+pub mod crontab_result;
 pub mod dynamic_monitoring;
 pub mod metadata;
 pub mod static_monitoring;

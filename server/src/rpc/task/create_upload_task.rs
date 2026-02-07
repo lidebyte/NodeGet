@@ -12,6 +12,7 @@ use sea_orm::ColumnTrait;
 use sea_orm::QueryFilter;
 use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, Set};
 use serde_json::{Value, json};
+use std::sync::Arc;
 use uuid::Uuid;
 
 // 创建任务并将其发送给目标 Agent
@@ -25,7 +26,7 @@ use uuid::Uuid;
 // # 返回值
 // 返回创建任务的结果，成功时包含任务 ID，失败时包含错误信息
 pub async fn create_task(
-    manager: &TaskManager,
+    manager: &Arc<TaskManager>,
     token: String,
     target_uuid: Uuid,
     task_type: TaskEventType,

@@ -14,7 +14,6 @@ pub struct TokenCreationRequest {
 
     pub version: Option<u8>,
 
-
     pub token_limit: Vec<Limit>,
 }
 ```
@@ -46,10 +45,10 @@ Version 固定为 1 (暂时)
 
 ```json
 {
-    "father_token": "demo_super_token",
-    "token_creation": {
-        // TokenCreationRequest 结构体
-    }
+  "father_token": "demo_super_token",
+  "token_creation": {
+    // TokenCreationRequest 结构体
+  }
 }
 ```
 
@@ -59,7 +58,7 @@ Version 固定为 1 (暂时)
 
 ```json
 {
-    "key": "n0kB8lSAykFd9Egu",
-    "secret": "a0a7V3g43xjUCYIU5Md76H5QMPSlPPT6"
+  "key": "n0kB8lSAykFd9Egu",
+  "secret": "a0a7V3g43xjUCYIU5Md76H5QMPSlPPT6"
 }
 ```

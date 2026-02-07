@@ -96,6 +96,10 @@ export const themeZhConfig = {
 				{
 					text: '获取 Token 信息',
 					link: '/api/token/get.md'
+				},
+				{
+					text: '删除 Token',
+					link: '/api/token/delete.md'
 				}]
 			},
 			// Metadata
@@ -113,6 +117,35 @@ export const themeZhConfig = {
 				{
 					text: '获取 Metadata 信息',
 					link: '/api/metadata/get.md'
+				}]
+			},
+			// Crontab
+			{
+				text: 'Crontab',
+				collapsed: false,
+				items: [{
+					text: '介绍',
+					link: '/api/crontab/index.md'
+				},
+				{
+					text: '创建 Crontab',
+					link: '/api/crontab/create.md'
+				},
+				{
+					text: '读取 Crontab',
+					link: '/api/crontab/get.md'
+				},
+				{
+					text: '删除 Crontab',
+					link: '/api/crontab/delete.md'
+				},
+				{
+					text: '切换启用状态',
+					link: '/api/crontab/toggle_enable.md'
+				},
+				{
+					text: '设置启用状态',
+					link: '/api/crontab/set_enable.md'
 				}]
 			}]
 		}]

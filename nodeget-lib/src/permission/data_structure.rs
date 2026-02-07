@@ -51,6 +51,8 @@ pub enum Permission {
     Task(Task),
     // Metadata 权限
     Metadata(Metadata),
+    // Crontab 权限
+    Crontab(Crontab),
 }
 
 // 静态监控权限枚举
@@ -95,4 +97,13 @@ pub enum Task {
 pub enum Metadata {
     Read,
     Write,
+}
+
+// Crontab 权限枚举
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Crontab {
+    Read,
+    Write,
+    Delete,
 }

@@ -13,6 +13,7 @@ tokio = { version = "1.48.0", default-features = false, features = ["macros", "r
 nodeget-lib = { path = "../nodeget-lib", features = ["for-server"] }
 migration = { path = "migration" }
 
+chrono = { version = "0.4.43", default-features = false, features = ["now", "std"] }
 uuid = { version = "1.19.0", default-features = false, features = ["v4"] }
 futures = "0.3.31"
 sha2 = "0.11.0-rc.3"
@@ -22,12 +23,11 @@ serde_json = "1.0.149"
 jsonrpsee = { version = "0.26.0", default-features = false, features = ["server", "macros"] }
 axum = { version = "0.8.8", default-features = false, features = ["tokio", "ws", "macros", "http1", "query"] }
 tower = { version = "0.5.3", default-features = false, features = ["tokio"] }
-
-# Logging
 log = { version = "0.4.29", default-features = false, features = ["std", "serde"] }
 simple_logger = { version = "5.1.0", default-features = false, features = ["threads", "time", "timestamps", "colored", "colors"] }
 url = "2.5.8"
 hex = "0.4.3"
+cron = "0.15.0"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 tikv-jemallocator = { version = "0.6.1", optional = true }

@@ -71,6 +71,7 @@ pub enum Permission {
     DynamicMonitoring(DynamicMonitoring),
     Task(Task),
     Metadata(Metadata),
+    Crontab(Crontab),
 }
 
 pub enum StaticMonitoring {
@@ -96,6 +97,12 @@ pub enum Metadata {
     Read,
     Write,
 }
+
+pub enum Crontab {
+    Read,    // 读取权限
+    Write,   // 写入权限
+    Delete,  // 删除权限
+}
 ```
 
 若存在于 Limit 的 permissions 中，即为拥有该权限
@@ -109,21 +116,53 @@ pub enum Metadata {
 ```json
 {
   "scopes": [
-    {"agent_uuid": "adf78235-a23c-46fc-bc85-694f64c39aaf"},
-    {"agent_uuid": "33c1b63a-35f1-4b9f-9659-66e7a3e5a75c"}
+    {
+      "agent_uuid": "adf78235-a23c-46fc-bc85-694f64c39aaf"
+    },
+    {
+      "agent_uuid": "33c1b63a-35f1-4b9f-9659-66e7a3e5a75c"
+    }
   ],
   "permissions": [
-    {"dynamic_monitoring": "write"},
-    {"static_monitoring": "write"},
-
-    {"task": "listen"},
-
-    {"task": {"write": "ping"}},
-    {"task": {"write": "tcp_ping"}},
-    {"task": {"write": "http_ping"}},
-    {"task": {"write": "web_shell"}},
-    {"task": {"write": "execute"}},
-    {"task": {"write": "ip"}}
+    {
+      "dynamic_monitoring": "write"
+    },
+    {
+      "static_monitoring": "write"
+    },
+    {
+      "task": "listen"
+    },
+    {
+      "task": {
+        "write": "ping"
+      }
+    },
+    {
+      "task": {
+        "write": "tcp_ping"
+      }
+    },
+    {
+      "task": {
+        "write": "http_ping"
+      }
+    },
+    {
+      "task": {
+        "write": "web_shell"
+      }
+    },
+    {
+      "task": {
+        "write": "execute"
+      }
+    },
+    {
+      "task": {
+        "write": "ip"
+      }
+    }
   ]
 }
 ```
@@ -140,14 +179,34 @@ Task、上报目前所有 Task 任务类型 的权限
 ```json
 {
   "scopes": [
-    {"agent_uuid": "53f125b6-e7aa-447f-a27c-085a53a36462"},
-    {"agent_uuid": "3e6f227f-56e3-4ca0-a12f-04014ebeebe7"}
+    {
+      "agent_uuid": "53f125b6-e7aa-447f-a27c-085a53a36462"
+    },
+    {
+      "agent_uuid": "3e6f227f-56e3-4ca0-a12f-04014ebeebe7"
+    }
   ],
   "permissions": [
-    {"dynamic_monitoring": {"read": "cpu"}},
-    {"dynamic_monitoring": {"read": "system"}},
-    {"static_monitoring": {"read": "cpu"}},
-    {"static_monitoring": {"read": "system"}}
+    {
+      "dynamic_monitoring": {
+        "read": "cpu"
+      }
+    },
+    {
+      "dynamic_monitoring": {
+        "read": "system"
+      }
+    },
+    {
+      "static_monitoring": {
+        "read": "cpu"
+      }
+    },
+    {
+      "static_monitoring": {
+        "read": "system"
+      }
+    }
   ]
 }
 ```
@@ -155,3 +214,60 @@ Task、上报目前所有 Task 任务类型 的权限
 它表示:
 
 用户可以查询 Agent Uuid 为 `ad..af` 与 `33..5c` 的 Agent 的 StaticMonitoring / DynamicMonitoring Data 中 cpu / system 字段
+
+### Crontab 权限示例
+
+现有这么一个结构体
+
+```json
+{
+  "scopes": [
+    {
+      "global": null
+    }
+  ],
+  "permissions": [
+    {
+      "crontab": "read"
+    },
+    {
+      "crontab": "write"
+    },
+    {
+      "crontab": "delete"
+    }
+  ]
+}
+```
+
+这是一个具有全局 Crontab 权限的 Limit，它表示:
+
+具有对所有 Crontab 的读取、写入和删除权限。
+
+或针对特定 Agent 的权限:
+
+```json
+{
+  "scopes": [
+    {
+      "agent_uuid": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "agent_uuid": "00000000-0000-0000-0000-000000000002"
+    }
+  ],
+  "permissions": [
+    {
+      "crontab": "read"
+    },
+    {
+      "crontab": "write"
+    }
+  ]
+}
+```
+
+这表示:
+
+对 UUID 为 `00000000-0000-0000-0000-000000000001` 和 `00000000-0000-0000-0000-000000000002` 的 Agent 相关的 Crontab
+具有读取和写入权限。

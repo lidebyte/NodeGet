@@ -20,7 +20,7 @@ use nodeget_lib::utils::JsonError;
 use serde_json::Value;
 use serde_json::value::RawValue;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
 
@@ -85,7 +85,7 @@ pub trait Rpc {
 // 任务管理 RPC 实现结构体
 pub struct TaskRpcImpl {
     // 任务管理器实例
-    pub manager: TaskManager,
+    pub manager: Arc<TaskManager>,
 }
 
 // 为 TaskRpcImpl 实现 RPC 辅助功能
@@ -240,6 +240,10 @@ impl RpcServer for TaskRpcImpl {
 
 // 任务连接池类型别名，存储 Agent UUID 到会话 ID 和发送通道的映射
 type Peers = Arc<RwLock<HashMap<Uuid, (Uuid, mpsc::Sender<TaskEvent>)>>>;
+
+// 全局任务管理器实例
+static GLOBAL_TASK_MANAGER: OnceLock<Arc<TaskManager>> = OnceLock::new();
+
 // 任务管理器，负责管理任务订阅和事件分发
 #[derive(Clone)]
 pub struct TaskManager {
@@ -257,6 +261,15 @@ impl TaskManager {
         Self {
             peers: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    // 获取全局任务管理器实例
+    //
+    // # 返回值
+    // 返回全局任务管理器的 Arc 引用
+    #[must_use]
+    pub fn global() -> &'static Arc<Self> {
+        GLOBAL_TASK_MANAGER.get_or_init(|| Arc::new(Self::new()))
     }
 
     // 为指定 UUID 添加会话

@@ -10,7 +10,7 @@
 
 ```json
 {
-    "token": "demo_token"
+  "token": "demo_token"
 }
 ```
 
@@ -52,5 +52,23 @@
   ],
   "username": null,
   "version": 1
+}
+```
+
+当 Token 具有 Crontab 权限时，返回值中可能会包含类似以下的权限信息：
+
+```json
+{
+  "permissions": [
+    {
+      "crontab": "read"
+    },
+    {
+      "crontab": "write"
+    },
+    {
+      "crontab": "delete"
+    }
+  ]
 }
 ```
