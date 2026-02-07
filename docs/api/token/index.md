@@ -71,6 +71,7 @@ pub enum Permission {
     DynamicMonitoring(DynamicMonitoring),
     Task(Task),
     Metadata(Metadata),
+    Crontab(Crontab),
 }
 
 pub enum StaticMonitoring {
@@ -95,6 +96,12 @@ pub enum Task {
 pub enum Metadata {
     Read,
     Write,
+}
+
+pub enum Crontab {
+    Read,    // 读取权限
+    Write,   // 写入权限
+    Delete,  // 删除权限
 }
 ```
 
