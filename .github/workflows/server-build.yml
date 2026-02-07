@@ -92,16 +92,14 @@ jobs:
           CROSS_NO_WARNINGS: 0
 
       - name: Compress binary
-        working-directory: ./server
-        run: upx --brute target/${{ matrix.platform.target }}/minimal/nodeget-server
+        run: upx --brute ./target/${{ matrix.platform.target }}/minimal/nodeget-server
 
       - name: Rename binary
-        working-directory: ./server
         run: cp target/${{ matrix.platform.target }}/minimal/nodeget-server target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform.target }}
-          path: ./server/target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
+          path: target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
           if-no-files-found: error
