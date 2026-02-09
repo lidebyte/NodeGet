@@ -68,16 +68,3 @@ Agent 会在这一 Websocket 长连接中接收到 method 为 `task_register_tas
 ```
 
 Server 会使用 `token` / `task_id` / `agent_uuid` / `task_token` 进行鉴权，需四项均统一
-
-## Error
-
-该方法可能返回错误
-
-Task 验证未通过:
-
-```json
-{
-  "error_id": 105,
-  "error_message": "Task validation failed: Invalid ID, UUID, or Token"
-}
-```

@@ -95,34 +95,3 @@ ping 任务。
     "id": 123
 }
 ```
-
-## Error
-
-该方法可能返回错误：
-
-无效的 Cron 表达式:
-
-```json
-{
-    "error_id": 101,
-    "error_message": "Invalid cron expression: Invalid character in second field: 60"
-}
-```
-
-权限不足:
-
-```json
-{
-    "error_id": 102,
-    "error_message": "Permission Denied: Insufficient Crontab or Task permissions"
-}
-```
-
-数据库错误:
-
-```json
-{
-    "error_id": 103,
-    "error_message": "Database insert error: ..."
-}
-```

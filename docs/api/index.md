@@ -5,6 +5,7 @@ outline: deep
 # API文档
 
 - [框架](./framework.md)
+- [错误处理](./errors.md)
 
 ## 功能模块
 

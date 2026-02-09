@@ -25,6 +25,10 @@ export const themeZhConfig = {
 				text: '项目框架',
 				link: '/api/framework.md'
 			},
+			{
+				text: '错误处理',
+				link: '/api/errors.md'
+			},
 			// Nodeget
 			{
 				text: 'Nodeget',
