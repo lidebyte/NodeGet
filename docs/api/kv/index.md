@@ -100,6 +100,8 @@ pub enum Kv {
 
 每一个 Agent 都建议在 Kv 系统中拥有以自身 Uuid 为 Name 的 Kv Namespace，但该 Kv 并非必须，也不会自动创建
 
+每一个 Server 都建议在 Kv 系统中拥有 `global` 为 Name 的 Kv Namespace，但该 Kv 并非必须，也不会自动创建
+
 ### 特殊键
 
 在一个 Kv 中，非 Agent / Server 开发者不建议使用以下的键，其在 Agent / Server 内部有特殊用途，或为共同认定的功能键
@@ -117,6 +119,7 @@ pub enum Kv {
         若某一 Agent 设置了该值，并在历史某一时刻不再上传数据，则不会影响其 `从 (最后一个 Timestamp - 该值) 至 最后一个 Timestamp` 的数据
   - `database_limit_dynamic_monitoring`: 同上，Dynamic Monitoring Data
   - `database_limit_task`: 同上，Task 记录
+  - `database_limit_crontab_result`: 同上，Crontab 执行记录，但必须存在于 `global` Kv 中，其他位置无效
 - `metadata_*`
   - `metadata_name`: 前端展示 Agent 名字
   - `metadata_tags`: 前端展示的 Tag，为数组，值为 String，如: `["tag1", "tag2"]`

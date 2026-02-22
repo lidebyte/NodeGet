@@ -44,6 +44,12 @@ pub async fn cleanup_expired_data_postgres(db: &DatabaseConnection) -> Result<Cl
         }
     }
 
+    // 清理 crontab_result（全局表，从 global 配置读取）
+    if let Some(limit) = get_global_crontab_result_limit_postgres(db).await? {
+        let deleted = cleanup_crontab_result_table_postgres(db, limit).await?;
+        result.crontab_result_deleted = deleted;
+    }
+
     Ok(result)
 }
 
@@ -91,6 +97,7 @@ async fn get_cleanup_configs_postgres(
             static_monitoring_limit: row.static_limit.and_then(|s| s.parse().ok()),
             dynamic_monitoring_limit: row.dynamic_limit.and_then(|s| s.parse().ok()),
             task_limit: row.task_limit.and_then(|s| s.parse().ok()),
+            crontab_result_limit: None,
         })
         .collect();
 
@@ -155,8 +162,66 @@ async fn cleanup_task_table_postgres(
     Ok(result.rows_affected())
 }
 
+/// PostgreSQL: 清理 crontab_result 表
+///
+/// # 参数
+/// * `limit_millis` - 保留的毫秒数
+///
+/// 注意：crontab_result 是全局表，不关联特定 agent
+async fn cleanup_crontab_result_table_postgres(
+    db: &DatabaseConnection,
+    limit_millis: i64,
+) -> Result<u64> {
+    let sql = format!(
+        r#"
+        DELETE FROM crontab_result
+        WHERE run_time IS NOT NULL
+        AND run_time < (
+            SELECT MAX(run_time) - {}
+            FROM crontab_result
+            WHERE run_time IS NOT NULL
+        )
+        "#,
+        limit_millis
+    );
+
+    let result = db.execute_unprepared(&sql).await?;
+
+    Ok(result.rows_affected())
+}
+
 /// PostgreSQL 优化版本
 /// 使用 JSONB 特性直接在数据库层面过滤
+/// 从 global 配置中获取 crontab_result 的清理限制 (PostgreSQL 版本)
+///
+/// 查找 name 为 "global" 的 KV 记录，读取其中的 database_limit_crontab_result
+/// 若不存在则返回 None
+async fn get_global_crontab_result_limit_postgres(
+    db: &DatabaseConnection,
+) -> Result<Option<i64>> {
+    let sql = r#"
+        SELECT 
+            kv_value->'kv'->>'database_limit_crontab_result' as limit_value
+        FROM kv
+        WHERE name = 'global'
+        AND kv_value->'kv' ? 'database_limit_crontab_result'
+    "#;
+
+    #[derive(FromQueryResult)]
+    struct LimitRow {
+        limit_value: Option<String>,
+    }
+
+    let result = LimitRow::find_by_statement(Statement::from_string(
+        DatabaseBackend::Postgres,
+        sql.to_string(),
+    ))
+    .one(db)
+    .await?;
+
+    Ok(result.and_then(|row| row.limit_value.and_then(|s| s.parse().ok())))
+}
+
 pub async fn find_uuids_with_database_limit_postgres(
     db: &DatabaseConnection,
 ) -> Result<Vec<String>> {

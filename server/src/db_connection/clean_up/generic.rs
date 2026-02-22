@@ -1,7 +1,7 @@
 use super::config::CleanupConfig;
 use super::utils::{get_limit_millis, is_valid_uuid};
 use super::CleanupResult;
-use crate::entity::{dynamic_monitoring, kv, static_monitoring, task};
+use crate::entity::{crontab_result, dynamic_monitoring, kv, static_monitoring, task};
 use anyhow::Result;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
@@ -36,6 +36,12 @@ pub async fn cleanup_expired_data_generic(db: &DatabaseConnection) -> Result<Cle
         }
     }
 
+    // 清理 crontab_result（全局表，从 global 配置读取）
+    if let Some(limit) = get_global_crontab_result_limit(db).await? {
+        let deleted = cleanup_crontab_result_generic(db, limit).await?;
+        result.crontab_result_deleted = deleted;
+    }
+
     Ok(result)
 }
 
@@ -65,6 +71,7 @@ async fn get_cleanup_configs_generic(
                 static_monitoring_limit: static_limit,
                 dynamic_monitoring_limit: dynamic_limit,
                 task_limit,
+                crontab_result_limit: None,
             });
         }
     }
@@ -189,6 +196,60 @@ async fn cleanup_task_generic(
         .await?;
 
     Ok(deleted.rows_affected)
+}
+
+/// 通用版本: 清理 crontab_result 表
+///
+/// # 参数
+/// * `limit_millis` - 保留的毫秒数
+///
+/// 注意：crontab_result 是全局表，不关联特定 agent
+async fn cleanup_crontab_result_generic(
+    db: &DatabaseConnection,
+    limit_millis: i64,
+) -> Result<u64> {
+    // 获取 crontab_result 的最大 run_time
+    let max_run_time: Option<i64> = crontab_result::Entity::find()
+        .filter(crontab_result::Column::RunTime.is_not_null())
+        .select_only()
+        .column(crontab_result::Column::RunTime)
+        .order_by_desc(crontab_result::Column::RunTime)
+        .into_tuple()
+        .one(db)
+        .await?;
+
+    let max_run_time = match max_run_time {
+        Some(ts) => ts,
+        None => return Ok(0),
+    };
+
+    // 计算需要保留的最小 run_time
+    let min_run_time = max_run_time - limit_millis;
+
+    // 删除旧数据
+    let deleted = crontab_result::Entity::delete_many()
+        .filter(crontab_result::Column::RunTime.is_not_null())
+        .filter(crontab_result::Column::RunTime.lt(min_run_time))
+        .exec(db)
+        .await?;
+
+    Ok(deleted.rows_affected)
+}
+
+/// 从 global 配置中获取 crontab_result 的清理限制
+///
+/// 查找 name 为 "global" 的 KV 记录，读取其中的 database_limit_crontab_result
+/// 若不存在则返回 None
+async fn get_global_crontab_result_limit(db: &DatabaseConnection) -> Result<Option<i64>> {
+    let global_record = kv::Entity::find()
+        .filter(kv::Column::Name.eq("global"))
+        .one(db)
+        .await?;
+
+    match global_record {
+        Some(record) => Ok(get_limit_millis(&record.kv_value, "database_limit_crontab_result")),
+        None => Ok(None),
+    }
 }
 
 /// 通用版本（适用于 SQLite）

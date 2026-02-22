@@ -3,13 +3,13 @@ mod task;
 
 use crate::db_connection::clean_up::cleanup_expired_data;
 use crate::DB;
-use crate::entity::crontab;
+use crate::entity::{crontab, crontab_result};
 use chrono::{TimeZone, Utc};
 use cron::Schedule;
 use log::info;
 use log::{error, warn};
 use nodeget_lib::crontab::{AgentCronType, Cron, CronType, ServerCronType};
-use sea_orm::{ActiveModelTrait, ColumnTrait, Set};
+use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, Set};
 use sea_orm::{EntityTrait, QueryFilter};
 use std::str::FromStr;
 use std::time::Duration;
@@ -173,9 +173,52 @@ async fn run_job_logic(job: Cron) {
         }
 
         CronType::Server(ServerCronType::CleanUpDatabase) => {
-            if let Err(e) = cleanup_expired_data().await {
-                error!("Database cleanup failed: {}", e);
-            }
+            run_cleanup_database_job(job.id, job.name).await;
         }
+    }
+}
+
+/// 运行数据库清理任务并记录结果
+async fn run_cleanup_database_job(cron_id: i64, cron_name: String) {
+    let db = match DB.get() {
+        Some(db) => db,
+        None => {
+            error!("DB not initialized for cleanup job [{cron_name}]");
+            return;
+        }
+    };
+
+    // 执行清理
+    let (success, message) = match cleanup_expired_data().await {
+        Ok(result) => {
+            let msg = format!(
+                "Database cleanup completed. Deleted: static_monitoring={}, dynamic_monitoring={}, task={}, crontab_result={}",
+                result.static_monitoring_deleted,
+                result.dynamic_monitoring_deleted,
+                result.task_deleted,
+                result.crontab_result_deleted
+            );
+            info!("{msg}");
+            (true, msg)
+        }
+        Err(e) => {
+            let msg = format!("Database cleanup failed: {e}");
+            error!("{msg}");
+            (false, msg)
+        }
+    };
+
+    // 记录执行结果到 crontab_result
+    let crontab_log = crontab_result::ActiveModel {
+        id: ActiveValue::NotSet,
+        cron_id: Set(cron_id),
+        cron_name: Set(cron_name.clone()),
+        run_time: Set(Some(Utc::now().timestamp_millis())),
+        success: Set(Some(success)),
+        message: Set(Some(message)),
+    };
+
+    if let Err(e) = crontab_result::Entity::insert(crontab_log).exec(db).await {
+        error!("Failed to save CrontabResult for cleanup job [{cron_name}]: {e}");
     }
 }

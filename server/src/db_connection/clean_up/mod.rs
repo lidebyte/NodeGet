@@ -13,6 +13,7 @@ pub struct CleanupResult {
     pub static_monitoring_deleted: u64,
     pub dynamic_monitoring_deleted: u64,
     pub task_deleted: u64,
+    pub crontab_result_deleted: u64,
 }
 
 /// 获取数据库连接
