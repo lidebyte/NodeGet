@@ -59,6 +59,9 @@ pub enum Permission {
 
     // Terminal 权限
     Terminal(Terminal),
+
+    // CrontabResult 权限
+    CrontabResult(CrontabResult),
 }
 
 // 静态监控权限枚举
@@ -104,6 +107,17 @@ pub enum Crontab {
     Read,
     Write,
     Delete,
+}
+
+// CrontabResult 权限枚举
+// 注意：该权限仅在 Global Scope 下有效
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CrontabResult {
+    // 读取权限，指定可读取的 cron_name
+    Read(String),
+    // 删除权限，指定可删除的 cron_name
+    Delete(String),
 }
 
 // Kv 权限枚举

@@ -171,6 +171,23 @@ export const themeZhConfig = {
 					link: '/api/crontab/set_enable.md'
 				}]
 			},
+			// CrontabResult
+			{
+				text: 'CrontabResult',
+				collapsed: false,
+				items: [{
+					text: '介绍',
+					link: '/api/crontab_result/index.md'
+				},
+				{
+					text: '查询 CrontabResult',
+					link: '/api/crontab_result/query.md'
+				},
+				{
+					text: '删除 CrontabResult',
+					link: '/api/crontab_result/delete.md'
+				}]
+			},
 			// KV
 			{
 				text: 'KV',
