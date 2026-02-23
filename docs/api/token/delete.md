@@ -18,3 +18,5 @@
 只有 **SuperToken** 可以删除 Token，且必须提供 `target_token_key` 参数指定要删除的目标 Token。
 
 普通 Token 无法删除自己或其他 Token。
+
+实际上，Target Token Key 并不需要 Secret 部分，不需要校验 Target Token 的权限
