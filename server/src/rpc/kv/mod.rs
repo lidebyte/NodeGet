@@ -9,9 +9,23 @@ mod auth;
 mod create;
 mod delete_key;
 mod get_all_keys;
+mod get_multi_value;
 mod get_value;
 mod list_all_namespace;
 mod set_value;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NamespaceKeyItem {
+    pub namespace: String,
+    pub key: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct KvValueItem {
+    pub namespace: String,
+    pub key: String,
+    pub value: Value,
+}
 
 #[rpc(server, namespace = "kv")]
 pub trait Rpc {
@@ -24,6 +38,13 @@ pub trait Rpc {
         token: String,
         namespace: String,
         key: String,
+    ) -> RpcResult<Box<RawValue>>;
+
+    #[method(name = "get_multi_value")]
+    async fn get_multi_value(
+        &self,
+        token: String,
+        namespace_key: Vec<NamespaceKeyItem>,
     ) -> RpcResult<Box<RawValue>>;
 
     #[method(name = "set_value")]
@@ -67,6 +88,14 @@ impl RpcServer for KvRpcImpl {
         key: String,
     ) -> RpcResult<Box<RawValue>> {
         get_value::get_value(token, namespace, key).await
+    }
+
+    async fn get_multi_value(
+        &self,
+        token: String,
+        namespace_key: Vec<NamespaceKeyItem>,
+    ) -> RpcResult<Box<RawValue>> {
+        get_multi_value::get_multi_value(token, namespace_key).await
     }
 
     async fn set_value(

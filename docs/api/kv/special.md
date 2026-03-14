@@ -13,6 +13,8 @@
 - 每一个 Server 中以 `frontend_[主题名]` 为 Name 的 Namespace，称之为 `Frontend Namespace`，是用于存放给主题所需要的配置文件的，比如官方的前端为
   `frontend_nodeget`
 
+- 每一个 Token 的以自身 Token Key 为 Name 的 Namespace，称之为 `Token Namespace`
+
 ## 特殊键
 
 在一个 Kv 中，非 Agent / Server 开发者不建议使用以下的键，其在 Agent / Server 内部有特殊用途，或为共同认定的功能键
@@ -50,3 +52,13 @@
 - `description`
 - `custom_body`
 - `custom_head`
+
+### Token Namespace
+
+- `frontend_custom_body`
+- `frontend_custom_head`
+
+
+需要解释的是，Frontend 和 Token 的 Namespace 并不冲突。
+
+Token Namespace 意为在使用这一 Token 登陆后，前端会使用的参数 (这里的 Token 应该是供给展示的)，前端可以进行拼接或优先使用 Token Namespace 定义的参数

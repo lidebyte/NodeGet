@@ -225,6 +225,10 @@ export const themeZhConfig = {
 					link: '/api/kv/list_all_namespace.md'
 				},
 				{
+					text: '批量读取键值',
+					link: '/api/kv/get_multi_value.md'
+				},
+				{
 					text: '增删改查',
 					link: '/api/kv/crud.md'
 				},

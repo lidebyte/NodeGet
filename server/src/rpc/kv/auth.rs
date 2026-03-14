@@ -26,6 +26,32 @@ pub fn validate_key(key: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// 检查 key pattern 是否合法（允许后缀通配符）
+///
+/// 合法形式：
+/// - `abc`
+/// - `metadata_*`
+/// - `*`
+pub fn validate_key_pattern(key: &str) -> anyhow::Result<()> {
+    if key.is_empty() {
+        return Err(NodegetError::InvalidInput("Key cannot be empty".to_owned()).into());
+    }
+
+    if !key.contains('*') {
+        return Ok(());
+    }
+
+    let star_count = key.chars().filter(|c| *c == '*').count();
+    if (star_count != 1) || !key.ends_with('*') {
+        return Err(NodegetError::InvalidInput(
+            "Wildcard key must contain exactly one '*' and it must be at the end".to_owned(),
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
 /// 检查是否有 KV 读权限
 ///
 /// # 参数
@@ -73,6 +99,53 @@ pub async fn check_kv_read_permission(
 
     Err(NodegetError::PermissionDenied(format!(
         "No read permission for key '{key}' in namespace '{namespace}'"
+    ))
+    .into())
+}
+
+/// 检查是否有 KV 读权限（允许后缀 `*` 通配符）
+///
+/// # 参数
+/// * `token` - 令牌字符串
+/// * `namespace` - 命名空间
+/// * `key_pattern` - 要读取的 key 或 key 前缀通配符（如 `metadata_*`）
+///
+/// # 返回值
+/// 如果有权限返回 Ok(()，否则返回错误
+pub async fn check_kv_read_permission_with_pattern(
+    token: &str,
+    namespace: &str,
+    key_pattern: &str,
+) -> anyhow::Result<()> {
+    validate_key_pattern(key_pattern)?;
+
+    let token_or_auth = TokenOrAuth::from_full_token(token)
+        .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
+
+    let scope = Scope::KvNamespace(namespace.to_owned());
+
+    let global_read_perm = Permission::Kv(Kv::Read("*".to_owned()));
+    let has_global_read =
+        check_token_limit(&token_or_auth, vec![scope.clone()], vec![global_read_perm]).await?;
+
+    if has_global_read {
+        return Ok(());
+    }
+
+    let specific_read_perm = Permission::Kv(Kv::Read(key_pattern.to_owned()));
+    let has_specific_read = check_token_limit(
+        &token_or_auth,
+        vec![scope.clone()],
+        vec![specific_read_perm],
+    )
+    .await?;
+
+    if has_specific_read {
+        return Ok(());
+    }
+
+    Err(NodegetError::PermissionDenied(format!(
+        "No read permission for key '{key_pattern}' in namespace '{namespace}'"
     ))
     .into())
 }

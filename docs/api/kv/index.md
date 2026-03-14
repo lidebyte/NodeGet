@@ -66,6 +66,8 @@ pub enum Kv {
 `Read` / `Write` / `Delete` 的 String，可以拥有通配符，比如 `metadata_*`，表达可以操作 这一 KvNamespace Scope 下的所有以
 `metadata_` 开头的键
 
+`kv_get_multi_value` 支持批量读取，并支持在请求 key 中直接使用后缀通配符（如 `metadata_*`）
+
 ## 权限 Demo Json
 
 ```json
