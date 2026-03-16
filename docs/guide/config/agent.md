@@ -22,9 +22,6 @@ terminal_shell = "bash"
 # 超出该数量只返回命令的最后结果，上文将被截断，默认 10000
 exec_max_character = 10000
 
-# 执行命令使用的 Shell，Linux 下默认 Bash，Windows 下默认 CMD
-exec_shell = "bash"
-
 # IP 地址获取服务提供商，可选 ipinfo / cloudflare，默认 ipinfo
 ip_provider = "ipinfo"
 

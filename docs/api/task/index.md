@@ -28,7 +28,7 @@ pub enum TaskEventType {
     HttpPing(url::Url), // Url, Method, Body
 
     WebShell(WebShellTask), // Websocket URL + terminal_id
-    Execute(String),    // 命令执行
+    Execute(ExecuteTask), // 结构化命令执行
     ReadConfig,         // 读取本地 config.toml
     EditConfig(String), // 编辑本地 config.toml（完整 TOML 字符串）
 
@@ -38,6 +38,11 @@ pub enum TaskEventType {
 pub struct WebShellTask {
     pub url: url::Url,
     pub terminal_id: uuid::Uuid,
+}
+
+pub struct ExecuteTask {
+    pub cmd: String,
+    pub args: Vec<String>,
 }
 ```
 
@@ -64,7 +69,13 @@ pub struct WebShellTask {
 }
 
 {
-  "execute": "echo 'WE LOVE OPEN-SOURCE'"
+  "execute": {
+    "cmd": "ls",
+    "args": [
+      "-1",
+      "tmp"
+    ]
+  }
 }
 
 "read_config"
@@ -74,6 +85,21 @@ pub struct WebShellTask {
 }
 
 "ip" // 对就是一个 `ip`，无其他东西
+```
+
+`execute` 不再提供字符串拼接 shell 的直接接口。  
+如果你确实需要 shell 语法，请显式调用 shell 程序并传参数，例如：
+
+```json
+{
+  "execute": {
+    "cmd": "bash",
+    "args": [
+      "-c",
+      "ls -l /tmp"
+    ]
+  }
+}
 ```
 
 ## 任务回报

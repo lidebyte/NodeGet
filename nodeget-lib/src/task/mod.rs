@@ -15,6 +15,15 @@ pub struct WebShellTask {
     pub terminal_id: uuid::Uuid,
 }
 
+// Execute 任务参数
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct ExecuteTask {
+    // 可执行文件名或路径
+    pub cmd: String,
+    // 传递给 cmd 的参数列表
+    pub args: Vec<String>,
+}
+
 // 任务事件类型枚举，定义各种可执行的任务类型
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -29,7 +38,7 @@ pub enum TaskEventType {
     // Web Shell 任务
     WebShell(WebShellTask),
     // 命令执行任务
-    Execute(String), // 命令执行
+    Execute(ExecuteTask), // 结构化命令执行
 
     // 读取 Agent 配置任务
     ReadConfig,

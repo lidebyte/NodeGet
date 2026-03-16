@@ -18,8 +18,6 @@ pub struct AgentConfig {
     // WebSocket 连接超时时间（毫秒）
     pub connect_timeout_ms: Option<u64>,
 
-    // 执行命令使用的 Shell，Windows 用 cmd，其他系统用 bash 或 sh
-    pub exec_shell: Option<String>,
     // 执行命令输出的最大字符数限制
     pub exec_max_character: Option<usize>,
 

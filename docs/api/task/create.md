@@ -39,6 +39,27 @@
 }
 ```
 
+当 `task_type` 为 `execute` 时，必须使用结构化参数（`cmd + args`）：
+
+```json
+{
+    "token": "demo_token",
+    "target_uuid": "AGENT_UUID_HERE",
+    "task_type": {
+        "execute": {
+            "cmd": "ls",
+            "args": [
+                "-1",
+                "tmp"
+            ]
+        }
+    }
+}
+```
+
+如需 shell 语法，请显式调用 shell 程序并传参（示例：`bash -c` 或 `cmd /C`），而不是直接传一整段 shell 字符串。
+同时 `execute.cmd` 不能为空字符串。
+
 ## Error
 
 该方法可能返回错误

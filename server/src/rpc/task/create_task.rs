@@ -14,6 +14,16 @@ use serde_json::value::RawValue;
 use std::sync::Arc;
 use uuid::Uuid;
 
+fn validate_task_type(task_type: &TaskEventType) -> anyhow::Result<()> {
+    if let TaskEventType::Execute(execute_task) = task_type
+        && execute_task.cmd.trim().is_empty()
+    {
+        return Err(NodegetError::InvalidInput("Execute cmd cannot be empty".to_owned()).into());
+    }
+
+    Ok(())
+}
+
 pub async fn create_task(
     manager: &Arc<TaskManager>,
     token: String,
@@ -21,6 +31,8 @@ pub async fn create_task(
     task_type: TaskEventType,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
+        validate_task_type(&task_type)?;
+
         let task_name = task_type.task_name();
 
         let token_or_auth = TokenOrAuth::from_full_token(&token)
