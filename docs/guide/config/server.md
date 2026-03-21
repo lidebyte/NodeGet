@@ -8,6 +8,9 @@ log_level = "debug"
 # WebSocket 监听地址，同时也会监听 Http 服务
 ws_listener = "0.0.0.0:3000"
 
+# JSON-RPC 最大连接数，默认 100
+jsonrpc_max_connections = 100
+
 # Server 的 Uuid，建议设置为 auto_gen 以自动生成，根据系统环境自动生成，可保证数据不冲突（概率极小）
 # 如果不是 auto_gen，请自行确保 Uuid 唯一，否则可能导致数据混乱或 UB
 server_uuid = "auto_gen"

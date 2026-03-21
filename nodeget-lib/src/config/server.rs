@@ -15,6 +15,9 @@ pub struct ServerConfig {
     // WebSocket 监听地址
     pub ws_listener: String,
 
+    // JSON-RPC 最大并发连接数，默认 100
+    pub jsonrpc_max_connections: Option<u32>,
+
     // 数据库配置
     pub database: DatabaseConfig,
 }

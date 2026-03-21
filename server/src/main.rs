@@ -136,6 +136,7 @@ async fn main() {
     let jsonrpc_service = jsonrpsee::server::Server::builder()
         .set_config(
             jsonrpsee::server::ServerConfig::builder()
+                .max_connections(config.jsonrpc_max_connections.unwrap_or(100))
                 .max_response_body_size(u32::MAX)
                 .max_request_body_size(u32::MAX)
                 .build(),
