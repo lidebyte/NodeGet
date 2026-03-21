@@ -45,11 +45,11 @@ pub async fn set_crontab_enable_by_name(
         .await?;
 
     match crontab_option {
-        Some(mut model) => {
-            model.enable = enable;
-            let active_model: crontab::ActiveModel = model.into();
-            active_model.update(db).await?;
-            Ok(Some(enable))
+        Some(model) => {
+            let mut active_model: crontab::ActiveModel = model.into();
+            active_model.enable = Set(enable);
+            let updated = active_model.update(db).await?;
+            Ok(Some(updated.enable))
         }
         None => Ok(None),
     }
