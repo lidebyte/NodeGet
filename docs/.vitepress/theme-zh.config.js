@@ -71,6 +71,14 @@ export const themeZhConfig = {
 				{
 					text: '列出所有 Agent UUID',
 					link: '/api/nodeget/list_all_agent_uuid.md'
+				},
+				{
+					text: '读取 Server 配置',
+					link: '/api/nodeget/read_config.md'
+				},
+				{
+					text: '编辑 Server 配置',
+					link: '/api/nodeget/edit_config.md'
 				}]
 			},
 
