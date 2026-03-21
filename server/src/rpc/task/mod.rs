@@ -8,7 +8,7 @@ use log::{error, info};
 use migration::async_trait::async_trait;
 use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
-use nodeget_lib::task::query::TaskDataQuery;
+use nodeget_lib::task::query::{TaskDataQuery, TaskQueryCondition};
 use nodeget_lib::task::{TaskEvent, TaskEventResponse, TaskEventType};
 use nodeget_lib::utils::JsonError;
 use serde_json::value::RawValue;
@@ -18,6 +18,7 @@ use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
 
 mod create_task;
+mod delete;
 mod query;
 mod upload_task_result;
 
@@ -46,6 +47,13 @@ pub trait Rpc {
         &self,
         token: String,
         task_data_query: TaskDataQuery,
+    ) -> RpcResult<Box<RawValue>>;
+
+    #[method(name = "delete")]
+    async fn delete(
+        &self,
+        token: String,
+        conditions: Vec<TaskQueryCondition>,
     ) -> RpcResult<Box<RawValue>>;
 }
 
@@ -80,6 +88,14 @@ impl RpcServer for TaskRpcImpl {
         task_data_query: TaskDataQuery,
     ) -> RpcResult<Box<RawValue>> {
         query::query(token, task_data_query).await
+    }
+
+    async fn delete(
+        &self,
+        token: String,
+        conditions: Vec<TaskQueryCondition>,
+    ) -> RpcResult<Box<RawValue>> {
+        delete::delete(token, conditions).await
     }
 
     async fn register_task(

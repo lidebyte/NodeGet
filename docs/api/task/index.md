@@ -13,7 +13,7 @@ Agent 事先向 Server 发送 Task 订阅请求，在长连接中处理
 
 调用者发送任务 / 定时任务 => Server => 储存到数据库 => Agent 获取执行 => 返回给 Server => 数据库保存
 
-调用者可用 JsonRpc API 获取任务执行情况
+调用者可用 JsonRpc API 获取或删除任务执行记录
 ```
 
 ## 任务主体

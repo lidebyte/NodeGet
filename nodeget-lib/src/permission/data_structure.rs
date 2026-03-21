@@ -103,6 +103,8 @@ pub enum Task {
     Read(String),
     // 写入权限，指定任务类型
     Write(String),
+    // 删除权限，指定任务类型
+    Delete(String),
     // 监听权限
     Listen,
 }

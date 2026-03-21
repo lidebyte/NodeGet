@@ -4,7 +4,7 @@ use jsonrpsee::proc_macros::rpc;
 use nodeget_lib::monitoring::data_structure::{DynamicMonitoringData, StaticMonitoringData};
 use nodeget_lib::monitoring::query::{
     DynamicDataAvgQuery, DynamicDataQuery, DynamicDataQueryField, StaticDataAvgQuery,
-    StaticDataQuery, StaticDataQueryField,
+    QueryCondition, StaticDataQuery, StaticDataQueryField,
 };
 use serde_json::value::RawValue;
 use uuid::Uuid;
@@ -84,16 +84,14 @@ pub trait Rpc {
     async fn delete_static(
         &self,
         token: String,
-        agent_uuid: Uuid,
-        before_timestamp: i64,
+        conditions: Vec<QueryCondition>,
     ) -> RpcResult<Box<RawValue>>;
 
     #[method(name = "delete_dynamic")]
     async fn delete_dynamic(
         &self,
         token: String,
-        agent_uuid: Uuid,
-        before_timestamp: i64,
+        conditions: Vec<QueryCondition>,
     ) -> RpcResult<Box<RawValue>>;
 }
 
@@ -172,18 +170,16 @@ impl RpcServer for AgentRpcImpl {
     async fn delete_static(
         &self,
         token: String,
-        agent_uuid: Uuid,
-        before_timestamp: i64,
+        conditions: Vec<QueryCondition>,
     ) -> RpcResult<Box<RawValue>> {
-        delete_static::delete_static(token, agent_uuid, before_timestamp).await
+        delete_static::delete_static(token, conditions).await
     }
 
     async fn delete_dynamic(
         &self,
         token: String,
-        agent_uuid: Uuid,
-        before_timestamp: i64,
+        conditions: Vec<QueryCondition>,
     ) -> RpcResult<Box<RawValue>> {
-        delete_dynamic::delete_dynamic(token, agent_uuid, before_timestamp).await
+        delete_dynamic::delete_dynamic(token, conditions).await
     }
 }

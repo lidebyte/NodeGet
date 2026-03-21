@@ -79,28 +79,35 @@
 - `agent_delete_static`
 - `agent_delete_dynamic`
 
-需要传入 `token` / `agent_uuid` / `before_timestamp`：
+需要传入 `token` / `conditions`：
 
 ```json
 {
     "token": "demo_token",
-    "agent_uuid": "830cec66-8fc9-5c21-9e2d-2da2b2f2d3b3",
-    "before_timestamp": 1769344168646
+    "conditions": [
+        {
+            "uuid": "830cec66-8fc9-5c21-9e2d-2da2b2f2d3b3"
+        },
+        {
+            "timestamp_to": 1769344168646
+        }
+    ]
 }
 ```
 
 语义说明：
 
-1. 仅删除 `timestamp < before_timestamp` 的数据。
-2. 删除范围限定在指定 `agent_uuid`。
-3. 返回值包含删除数量 `deleted`。
+1. `conditions` 使用与 `agent_query_static(dynamic)` 相同的 `QueryCondition` 结构。
+2. 删除语义与查询语义一致：查询能选中的数据，就是删除会影响的数据。
+3. 若包含 `last` / `limit`，会按时间倒序选中对应记录后删除。
+4. 返回值包含删除数量 `deleted`。
 
 权限要求：
 
 1. `agent_delete_static` 需要 `StaticMonitoring::Delete`。
 2. `agent_delete_dynamic` 需要 `DynamicMonitoring::Delete`。
 
-两者都要求 Token 在目标 `agent_uuid` Scope（或 Global Scope）下具备对应权限。
+两者都要求 Token 在 `conditions` 中涉及的 `agent_uuid` Scope（或 Global Scope）下具备对应权限。
 
 ## 批量获取多个 Agent 的最新数据
 
