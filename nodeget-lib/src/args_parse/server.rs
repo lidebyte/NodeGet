@@ -1,4 +1,4 @@
-use palc::Parser;
+use palc::{Parser, Subcommand};
 
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -7,8 +7,22 @@ use palc::Parser;
     after_long_help = "This Server is open-sourced on Github, powered by powerful Rust. Love from NodeGet"
 )]
 pub struct ServerArgs {
-    #[arg(long, short)]
-    pub config: String,
+    #[command(subcommand)]
+    pub command: ServerCommand,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ServerCommand {
+    /// Start server normally.
+    Serve {
+        #[arg(long, short)]
+        config: String,
+    },
+    /// Initialize database and super token, then exit.
+    Init {
+        #[arg(long, short)]
+        config: String,
+    },
 }
 
 impl ServerArgs {
@@ -26,5 +40,11 @@ impl ServerArgs {
         let args = Self::parse();
         // todo: add check
         args
+    }
+
+    pub fn config_path(&self) -> &str {
+        match &self.command {
+            ServerCommand::Serve { config } | ServerCommand::Init { config } => config.as_str(),
+        }
     }
 }

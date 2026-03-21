@@ -12,9 +12,8 @@
 use axum::routing::any;
 use log::info;
 use std::str::FromStr;
-use std::sync::OnceLock;
 use tower::Service;
-use nodeget_lib::args_parse::server::ServerArgs;
+use nodeget_lib::args_parse::server::{ServerArgs, ServerCommand};
 use crate::crontab::init_crontab_worker;
 use crate::rpc::get_modules;
 use crate::token::super_token::generate_super_token;
@@ -42,8 +41,6 @@ mod token;
 pub static DB: tokio::sync::OnceCell<sea_orm::DatabaseConnection> =
     tokio::sync::OnceCell::const_new();
 
-static SERVER_ARGS: OnceLock<ServerArgs> = OnceLock::new();
-
 // 全局服务器配置单例
 static SERVER_CONFIG: std::sync::OnceLock<nodeget_lib::config::server::ServerConfig> =
     std::sync::OnceLock::new();
@@ -57,12 +54,10 @@ async fn main() {
     println!("Starting nodeget-server");
 
     let args = ServerArgs::par();
-    SERVER_ARGS.set(args.clone()).unwrap();
+    let is_init = matches!(&args.command, ServerCommand::Init { .. });
 
     // Config Parse
-    let config = nodeget_lib::config::server::ServerConfig::get_and_parse_config(
-        SERVER_ARGS.get().unwrap().config.clone(),
-    )
+    let config = nodeget_lib::config::server::ServerConfig::get_and_parse_config(args.config_path())
         .await
         .unwrap();
 
@@ -71,31 +66,30 @@ async fn main() {
 
     // Jemalloc Mem Debug
     #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
-    tokio::spawn(async {
-        loop {
-            use tikv_jemalloc_ctl::{epoch, stats};
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            if epoch::advance().is_err() {
-                return;
+    if !is_init {
+        tokio::spawn(async {
+            loop {
+                use tikv_jemalloc_ctl::{epoch, stats};
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                if epoch::advance().is_err() {
+                    return;
+                }
+
+                let allocated = stats::allocated::read().unwrap();
+                let active = stats::active::read().unwrap();
+                let resident = stats::resident::read().unwrap();
+                let mapped = stats::mapped::read().unwrap();
+
+                info!(
+                    "MEM STATS (Jemalloc Only): App Logic: {:.2} MB | Allocator Active: {:.2} MB | RSS (Resident): {:.2} MB | Mapped: {:.2} MB",
+                    allocated as f64 / 1024.0 / 1024.0,
+                    active as f64 / 1024.0 / 1024.0,
+                    resident as f64 / 1024.0 / 1024.0,
+                    mapped as f64 / 1024.0 / 1024.0
+                );
             }
-
-            let allocated = stats::allocated::read().unwrap();
-            let active = stats::active::read().unwrap();
-            let resident = stats::resident::read().unwrap();
-            let mapped = stats::mapped::read().unwrap();
-
-            info!(
-                "MEM STATS (Jemalloc Only): App Logic: {:.2} MB | Allocator Active: {:.2} MB | RSS (Resident): {:.2} MB | Mapped: {:.2} MB",
-                allocated as f64 / 1024.0 / 1024.0,
-                active as f64 / 1024.0 / 1024.0,
-                resident as f64 / 1024.0 / 1024.0,
-                mapped as f64 / 1024.0 / 1024.0
-            );
-        }
-    });
-
-    // 对比 Uuid，发送警告
-    let _ = nodeget_lib::utils::uuid::compare_uuid(config.server_uuid);
+        });
+    }
 
     info!("Starting nodeget-server with config: {config:?}");
 
@@ -105,25 +99,15 @@ async fn main() {
     // 连接数据库
     db_connection::init_db_connection().await;
 
-    // Show Super Token
-    {
-        let token = match generate_super_token().await {
-            Ok(token) => token,
-            Err(e) => {
-                panic!("Failed to generate super token: {e}");
-            }
-        };
+    init_or_skip_super_token().await;
 
-        match token {
-            Some(token) => {
-                info!("Super Token: {}", token.0);
-                info!("Root Password: {}", token.1);
-            }
-            None => {
-                info!("Super Token has been generated.");
-            }
-        }
+    if is_init {
+        info!("Initialization completed, exiting.");
+        return;
     }
+
+    // 对比 Uuid，发送警告
+    let _ = nodeget_lib::utils::uuid::compare_uuid(config.server_uuid);
 
     let terminal_state = terminal::TerminalState {
         sessions: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
@@ -160,4 +144,23 @@ async fn main() {
             .unwrap();
 
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn init_or_skip_super_token() {
+    let token = match generate_super_token().await {
+        Ok(token) => token,
+        Err(e) => {
+            panic!("Failed to generate super token: {e}");
+        }
+    };
+
+    match token {
+        Some(token) => {
+            info!("Super Token: {}", token.0);
+            info!("Root Password: {}", token.1);
+        }
+        None => {
+            info!("Super Token already exists, skipped.");
+        }
+    }
 }
