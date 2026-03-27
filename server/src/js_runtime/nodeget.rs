@@ -1,9 +1,7 @@
-use std::{result::Result as StdResult};
-use rquickjs::Error;
-use serde_json::value::RawValue;
-use tokio::sync::mpsc::Receiver;
 use crate::js_runtime::js_error;
 use crate::rpc::get_modules;
+use rquickjs::Error;
+use std::result::Result as StdResult;
 
 pub async fn js_nodeget(json: String) -> StdResult<String, Error> {
     let rpc_module = get_modules();

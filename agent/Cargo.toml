@@ -34,7 +34,7 @@ base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
 surge-ping = "0.8.4"
 
 # Random Number Generation
-rand = { version = "0.10.0-rc.6", default-features = false, features = ["small_rng", "std", "thread_rng"] }
+rand = { version = "0.10.0", default-features = false, features = ["std", "thread_rng"] }
 
 # PTY
 portable-pty = "0.9.0"
