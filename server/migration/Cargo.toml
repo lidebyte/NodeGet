@@ -10,9 +10,10 @@ name = "migration"
 path = "src/lib.rs"
 
 [dependencies]
-tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
+tokio = { version = "1", default-features = false, features = ["macros", "rt", "rt-multi-thread"] }
 
 [dependencies.sea-orm-migration]
+default-features = false
 features = [
     "sqlx-sqlite", "sqlx-postgres", "runtime-tokio-rustls"
 ]
