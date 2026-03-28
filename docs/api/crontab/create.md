@@ -68,12 +68,35 @@ ping 任务。
 
 此示例表示执行数据库清理任务。
 
+触发已注册的 JsWorker 脚本:
+
+```json
+{
+    "server": {
+        "js_worker": [
+            "demo_nodeget_fetch",
+            {
+                "hello": "from_cron"
+            }
+        ]
+    }
+}
+```
+
+说明：
+
+- 第一个参数是脚本名（`js_worker.name`）
+- 第二个参数是传给脚本的 `params`（任意 JSON）
+- Cron 触发时不传 `env`，会使用脚本自身在数据库保存的 `env`
+- 触发成功后会生成 `js_result` 记录，`crontab_result.special_id` 即该 `js_result.id`
+
 ## 权限要求
 
 创建 Crontab 需要：
 
 - `Crontab::Write`
 - 若是 Agent 类型，还需要对应任务类型的 `Task::Create`
+- 若是 `server.js_worker` 类型，还需要 `JsWorker::RunDefinedJsWorker`（作用域需覆盖该脚本名）
 
 并且必须覆盖 `cron_type` 中声明的 **所有 Scope**（例如 Agent 列表中的每个 UUID）。
 
@@ -89,6 +112,21 @@ ping 任务。
         {"crontab": "write"},
         {"task": {"create": "ping"}},
         {"task": {"create": "tcp_ping"}}
+    ]
+}
+```
+
+`server.js_worker` 权限示例：
+
+```json
+{
+    "scopes": [
+        {"global": null},
+        {"js_worker": "demo_*"}
+    ],
+    "permissions": [
+        {"crontab": "write"},
+        {"js_worker": "run_defined_js_worker"}
     ]
 }
 ```

@@ -23,8 +23,29 @@
 
 - 必须对目标 Crontab **原有内容** 的所有 Scope 拥有 `Crontab::Write`
 - 必须对新提交的 `cron_type` 覆盖的所有 Scope 拥有写入权限（以及 Agent 类型所需的 `Task::Create`）
+- 若新类型为 `server.js_worker`，还必须拥有目标脚本的 `JsWorker::RunDefinedJsWorker` 权限
 
 也就是说，只有完整覆盖相关 Scope 的 Token 才能编辑。
+
+## `server.js_worker` 示例
+
+```json
+{
+    "token": "demo_token",
+    "name": "cron_js_demo",
+    "cron_expression": "*/5 * * * * * *",
+    "cron_type": {
+        "server": {
+            "js_worker": [
+                "demo_nodeget_fetch",
+                {
+                    "hello": "from_edit"
+                }
+            ]
+        }
+    }
+}
+```
 
 ## 返回值
 

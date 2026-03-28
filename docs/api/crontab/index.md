@@ -7,7 +7,7 @@ Crontab 是本项目的定时任务功能，允许用户创建定时任务在指
 Crontab 允许用户创建定时任务，支持以下类型的任务：
 
 - **Agent 任务**: 在特定 Agent 上执行的任务，如 ping、tcp_ping、http_ping、web_shell、execute、ip 等
-- **Server 任务**: 在服务器端执行的任务，如数据库清理等
+- **Server 任务**: 在服务器端执行的任务，如数据库清理、触发 JsWorker 脚本等
 
 ## 权限系统
 
@@ -59,8 +59,16 @@ pub enum AgentCronType {
 
 pub enum ServerCronType {
     CleanUpDatabase,  // 数据库清理任务
+    JsWorker(String, Value), // 触发已注册 JsWorker（脚本名 + 入参）
 }
 ```
+
+`ServerCronType::JsWorker` 的运行语义：
+
+- 每次触发会按 `run_type = cron` 调用脚本
+- `params` 来自 Crontab 配置中的 `Value`
+- 不从 Crontab 传 `env`，使用 `js_worker` 表内保存的 `env`
+- 执行记录会写入 `js_result`，并在 `crontab_result.special_id` 中记录对应 `js_result.id`
 
 ## Crontab 操作
 
@@ -79,3 +87,8 @@ Crontab 支持以下操作：
 - 服务端会先读取目标 Crontab 内容
 - 再按该 Crontab 的 `cron_type` 展开的全部 Scope 做权限校验
 - 必须完整覆盖所有 Scope 才允许操作
+
+对于 `ServerCronType::JsWorker` 的创建/编辑，还要求：
+
+- 具备 `Permission::JsWorker(JsWorker::RunDefinedJsWorker)`
+- 且作用域覆盖 `Scope::JsWorker(script_name)`

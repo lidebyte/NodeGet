@@ -21,6 +21,21 @@
 - **Global 权限**: 返回所有 Crontab（包括 Agent 和 Server 类型）
 - **AgentUuid 权限**: 只返回与指定 Agent UUID 相关的 Agent 类型 Crontab
 
+对于 `server.js_worker` 类型，返回的 `cron_type` 结构示例：
+
+```json
+{
+  "server": {
+    "js_worker": [
+      "demo_nodeget_fetch",
+      {
+        "hello": "from_cron"
+      }
+    ]
+  }
+}
+```
+
 ## 返回值
 
 读取成功后返回 Crontab 列表
