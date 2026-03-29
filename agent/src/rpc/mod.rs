@@ -3,8 +3,8 @@ pub mod monitoring_data_report;
 // 多服务器连接管理模块
 pub mod multi_server;
 
-use crate::AGENT_CONFIG;
 use crate::rpc::multi_server::subscribe_to;
+use crate::AGENT_CONFIG;
 use log::{error, warn};
 use nodeget_lib::task::TaskEvent;
 use nodeget_lib::utils::JsonError;

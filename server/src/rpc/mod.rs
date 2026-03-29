@@ -79,7 +79,9 @@ fn build_modules() -> RpcModule<NodegetServerRpcImpl> {
         .merge(crontab_result::CrontabResultRpcImpl.into_rpc())
         .unwrap();
 
-    rpc_module.merge(js_result::JsResultRpcImpl.into_rpc()).unwrap();
+    rpc_module
+        .merge(js_result::JsResultRpcImpl.into_rpc())
+        .unwrap();
 
     rpc_module
 }

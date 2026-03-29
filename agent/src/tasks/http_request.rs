@@ -1,5 +1,5 @@
-use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::task::{HttpRequestTask, HttpRequestTaskResult};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -60,7 +60,7 @@ fn decode_request_body(task: &HttpRequestTask) -> Result<Option<Vec<u8>>> {
         (Some(_), Some(_)) => Err(NodegetError::InvalidInput(
             "http_request.body and http_request.body_base64 are mutually exclusive".to_owned(),
         )
-        .into()),
+            .into()),
         (Some(body), None) => Ok(Some(body.as_bytes().to_vec())),
         (None, Some(body_base64)) => BASE64_STANDARD.decode(body_base64).map(Some).map_err(|e| {
             NodegetError::InvalidInput(format!("Invalid http_request.body_base64: {e}")).into()
@@ -89,11 +89,10 @@ fn build_request_headers(headers: &BTreeMap<String, String>) -> Result<HeaderMap
 }
 
 fn decode_response_body(bytes: &[u8]) -> (Option<String>, Option<String>) {
-    if let Ok(text) = std::str::from_utf8(bytes) {
-        (Some(text.to_owned()), None)
-    } else {
-        (None, Some(BASE64_STANDARD.encode(bytes)))
-    }
+    std::str::from_utf8(bytes).map_or_else(
+        |_| (None, Some(BASE64_STANDARD.encode(bytes))),
+        |text| (Some(text.to_owned()), None),
+    )
 }
 
 pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTaskResult> {

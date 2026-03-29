@@ -31,7 +31,7 @@ pub fn calc_connections() -> (u64, u64) {
 // 返回一个元组，包含 (UDP 连接数, TCP 连接数)
 #[cfg(target_os = "windows")]
 pub fn calc_connections() -> (u64, u64) {
-    use netstat2::{ProtocolFlags, ProtocolSocketInfo, iterate_sockets_info_without_pids};
+    use netstat2::{iterate_sockets_info_without_pids, ProtocolFlags, ProtocolSocketInfo};
 
     iterate_sockets_info_without_pids(ProtocolFlags::TCP | ProtocolFlags::UDP)
         .ok()

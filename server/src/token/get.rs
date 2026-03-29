@@ -23,10 +23,14 @@ pub async fn get_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<Token> {
                 .one(db)
                 .await
                 .map_err(|e| NodegetError::DatabaseError(format!("Database query error: {e}")))?
-                .ok_or_else(|| NodegetError::NotFound("Token key not found in database".to_owned()))?;
+                .ok_or_else(|| {
+                    NodegetError::NotFound("Token key not found in database".to_owned())
+                })?;
 
             if model.token_hash != hash_string(secret) {
-                return Err(NodegetError::PermissionDenied("Invalid token secret".to_owned()).into());
+                return Err(
+                    NodegetError::PermissionDenied("Invalid token secret".to_owned()).into(),
+                );
             }
 
             model
@@ -37,7 +41,9 @@ pub async fn get_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<Token> {
                 .one(db)
                 .await
                 .map_err(|e| NodegetError::DatabaseError(format!("Database query error: {e}")))?
-                .ok_or_else(|| NodegetError::NotFound("Username not found in database".to_owned()))?;
+                .ok_or_else(|| {
+                    NodegetError::NotFound("Username not found in database".to_owned())
+                })?;
 
             let p_hash = hash_string(password);
             if model.password_hash != Some(p_hash) {

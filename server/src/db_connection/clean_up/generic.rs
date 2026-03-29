@@ -21,26 +21,26 @@ pub async fn cleanup_expired_data_generic(db: &DatabaseConnection) -> Result<Cle
         // 清理 static_monitoring
         if let Some(limit) = config.static_monitoring_limit {
             let deleted = cleanup_static_monitoring_generic(db, &config.agent_uuid, limit).await?;
-            result.static_monitoring_deleted += deleted;
+            result.static_monitoring += deleted;
         }
 
         // 清理 dynamic_monitoring
         if let Some(limit) = config.dynamic_monitoring_limit {
             let deleted = cleanup_dynamic_monitoring_generic(db, &config.agent_uuid, limit).await?;
-            result.dynamic_monitoring_deleted += deleted;
+            result.dynamic_monitoring += deleted;
         }
 
         // 清理 task
         if let Some(limit) = config.task_limit {
             let deleted = cleanup_task_generic(db, &config.agent_uuid, limit).await?;
-            result.task_deleted += deleted;
+            result.task += deleted;
         }
     }
 
     // 清理 crontab_result（全局表，从 global 配置读取）
     if let Some(limit) = get_global_crontab_result_limit(db).await? {
         let deleted = cleanup_crontab_result_generic(db, limit).await?;
-        result.crontab_result_deleted = deleted;
+        result.crontab_result = deleted;
     }
 
     Ok(result)

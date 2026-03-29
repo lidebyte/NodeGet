@@ -127,27 +127,33 @@ impl JsRuntimePool {
         worker.execute(bytecode, run_type, params, env).await
     }
 
+    #[allow(clippy::significant_drop_tightening)]
     fn get_or_init_worker(&self, script_name: &str) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
-        if let Some(worker) = self
-            .workers
-            .read()
-            .map_err(|e| anyhow::anyhow!("{e}"))?
-            .get(script_name)
-            .cloned()
         {
-            return Ok(worker);
+            let workers = self.workers.read().map_err(|e| anyhow::anyhow!("{e}"))?;
+            if let Some(worker) = workers.get(script_name).cloned() {
+                return Ok(worker);
+            }
         }
 
-        let mut workers = self
-            .workers
-            .write()
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let worker = spawn_worker(script_name)?;
 
-        if let Some(worker) = workers.get(script_name).cloned() {
-            return Ok(worker);
+        {
+            let workers = self.workers.read().map_err(|e| anyhow::anyhow!("{e}"))?;
+            if let Some(existing) = workers.get(script_name).cloned() {
+                return Ok(existing);
+            }
         }
 
-        let worker = spawn_worker(script_name.to_owned())?;
+        let mut workers = match self.workers.write() {
+            Ok(guard) => guard,
+            Err(e) => return Err(anyhow::anyhow!("{e}")),
+        };
+
+        if let Some(existing) = workers.get(script_name).cloned() {
+            return Ok(existing);
+        }
+
         workers.insert(script_name.to_owned(), Arc::clone(&worker));
         Ok(worker)
     }
@@ -162,9 +168,7 @@ impl JsRuntimePool {
             Ok(workers) => workers
                 .iter()
                 .filter_map(|(name, worker)| {
-                    let Some(clean_ms) = worker.runtime_clean_time() else {
-                        return None;
-                    };
+                    let clean_ms = worker.runtime_clean_time()?;
 
                     if clean_ms <= 0 {
                         return None;
@@ -246,13 +250,11 @@ impl JsRuntimePool {
             }
         };
 
-        if let Some(worker) = removed {
+        removed.is_some_and(|worker| {
             debug!("Evicting JS runtime worker: {script_name}");
             let _ = worker.sender.send(WorkerCommand::Shutdown);
             true
-        } else {
-            false
-        }
+        })
     }
 
     #[must_use]
@@ -312,7 +314,8 @@ pub fn init_global_pool() -> &'static Arc<JsRuntimePool> {
     pool
 }
 
-fn spawn_worker(script_name: String) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
+fn spawn_worker(script_name: &str) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
+    let script_name = script_name.to_owned();
     let (tx, rx) = std::sync::mpsc::channel::<WorkerCommand>();
 
     let handle = Arc::new(RuntimeWorkerHandle {
@@ -343,8 +346,9 @@ fn worker_loop(receiver: std::sync::mpsc::Receiver<WorkerCommand>) {
         Err(e) => {
             for cmd in receiver {
                 if let WorkerCommand::Execute { response_tx, .. } = cmd {
-                    let _ = response_tx
-                        .send(Err(format!("Failed to create runtime host for JS worker: {e}")));
+                    let _ = response_tx.send(Err(format!(
+                        "Failed to create runtime host for JS worker: {e}"
+                    )));
                 }
             }
             return;
@@ -382,6 +386,7 @@ fn worker_loop(receiver: std::sync::mpsc::Receiver<WorkerCommand>) {
     }
 }
 
+#[allow(clippy::future_not_send)]
 async fn execute_on_worker(
     runtime_state: &mut Option<RuntimeState>,
     bytecode: Vec<u8>,
@@ -542,12 +547,13 @@ async fn execute_on_worker(
             )
         })
     })
-    .await;
+        .await;
 
     state.rt.idle().await;
     run_result
 }
 
+#[allow(clippy::future_not_send)]
 async fn create_runtime_state() -> Result<RuntimeState, Error> {
     let rt = AsyncRuntime::new()?;
     rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;

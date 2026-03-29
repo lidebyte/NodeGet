@@ -1,4 +1,3 @@
-#![feature(duration_millis_float)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(
     clippy::cast_sign_loss,
@@ -113,15 +112,17 @@ async fn main() {
             subcommands::roll_super_token::run().await;
         }
         ServerCommand::GetUuid { .. } => {
-            subcommands::get_uuid::run(&config).await;
+            subcommands::get_uuid::run(&config);
         }
     }
 }
 
 fn update_global_config(config: nodeget_lib::config::server::ServerConfig) -> anyhow::Result<()> {
     if let Some(lock) = SERVER_CONFIG.get() {
-        let mut guard = lock.write().map_err(|e| anyhow::anyhow!("{e}"))?;
-        *guard = config;
+        {
+            let mut guard = lock.write().map_err(|e| anyhow::anyhow!("{e}"))?;
+            *guard = config;
+        }
         return Ok(());
     }
 

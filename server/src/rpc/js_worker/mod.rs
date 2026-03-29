@@ -13,7 +13,7 @@ mod list_all_js_worker;
 mod read;
 mod route_name;
 mod run;
-pub(crate) mod service;
+pub mod service;
 mod update;
 
 #[rpc(server, namespace = "js-worker")]

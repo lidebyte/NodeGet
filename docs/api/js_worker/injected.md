@@ -13,8 +13,8 @@
 ## llrt_* 模块支持
 
 - `llrt_fetch::init`
-  - `fetch`、`Request`、`Response`、`Headers`、`FormData`
+    - `fetch`、`Request`、`Response`、`Headers`、`FormData`
 - `llrt_url::init`
-  - `URL`、`URLSearchParams`
+    - `URL`、`URLSearchParams`
 - `llrt_timers::init`
-  - `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`、`setImmediate`、`queueMicrotask`
+    - `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`、`setImmediate`、`queueMicrotask`

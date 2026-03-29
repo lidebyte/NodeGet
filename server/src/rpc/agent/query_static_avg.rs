@@ -11,6 +11,7 @@ use nodeget_lib::utils::error_message::anyhow_error_to_raw;
 use sea_orm::{DatabaseBackend, DatabaseConnection, FromQueryResult, Statement};
 use serde_json::Value;
 use serde_json::value::RawValue;
+use std::fmt::Write;
 
 #[derive(Debug, FromQueryResult)]
 struct JsonAggRow {
@@ -141,21 +142,23 @@ async fn query_static_avg_postgres(
 }
 
 fn build_postgres_static_avg_sql(fields: &[StaticDataQueryField]) -> String {
-    let select_columns = fields
-        .iter()
-        .map(|field| format!(", {}", field.column_name()))
-        .collect::<String>();
+    let select_columns = fields.iter().fold(String::new(), |mut output, field| {
+        write!(output, ", {}", field.column_name()).expect("writing to String should not fail");
+        output
+    });
 
     let aggregate_columns = fields
         .iter()
+        .copied()
         .map(build_postgres_static_field_aggregate_sql)
         .collect::<Vec<_>>()
         .join(",\n            ");
 
-    let final_json_fields = fields
-        .iter()
-        .map(|field| format!(", '{}', agg.{}", field.json_key(), field.json_key()))
-        .collect::<String>();
+    let final_json_fields = fields.iter().fold(String::new(), |mut output, field| {
+        write!(output, ", '{}', agg.{}", field.json_key(), field.json_key())
+            .expect("writing to String should not fail");
+        output
+    });
 
     let aggregate_columns = if aggregate_columns.is_empty() {
         String::new()
@@ -214,7 +217,7 @@ FROM agg
     )
 }
 
-fn build_postgres_static_field_aggregate_sql(field: &StaticDataQueryField) -> String {
+fn build_postgres_static_field_aggregate_sql(field: StaticDataQueryField) -> String {
     match field {
         StaticDataQueryField::Cpu => r"
 jsonb_build_object(

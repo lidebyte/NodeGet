@@ -33,5 +33,5 @@ pub enum AgentCronType {
 #[serde(rename_all = "snake_case")]
 pub enum ServerCronType {
     CleanUpDatabase,
-    JsWorker(String, Value) // 脚本名, 传入参数
+    JsWorker(String, Value), // 脚本名, 传入参数
 }

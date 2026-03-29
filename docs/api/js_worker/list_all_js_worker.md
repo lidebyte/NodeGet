@@ -23,8 +23,8 @@
 
 - SuperToken：可返回数据库中全部脚本。
 - 普通 Token：仅返回同时满足以下条件的脚本：
-  1. 数据库中存在
-  2. Token 在该脚本名作用域下拥有 `JsWorker::ListALlJsWorker` 权限
+    1. 数据库中存在
+    2. Token 在该脚本名作用域下拥有 `JsWorker::ListALlJsWorker` 权限
 
 ## 完整示例
 

@@ -10,10 +10,10 @@ use sea_orm::{DatabaseBackend, DatabaseConnection};
 /// 清理结果统计
 #[derive(Debug, Default)]
 pub struct CleanupResult {
-    pub static_monitoring_deleted: u64,
-    pub dynamic_monitoring_deleted: u64,
-    pub task_deleted: u64,
-    pub crontab_result_deleted: u64,
+    pub static_monitoring: u64,
+    pub dynamic_monitoring: u64,
+    pub task: u64,
+    pub crontab_result: u64,
 }
 
 /// 获取数据库连接

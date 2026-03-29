@@ -1,7 +1,7 @@
 use log::error;
 use nodeget_lib::error::NodegetError;
 use rand::random;
-use surge_ping::{Client, Config, ICMP, PingIdentifier, PingSequence, SurgeError};
+use surge_ping::{Client, Config, PingIdentifier, PingSequence, SurgeError, ICMP};
 use tokio::net::lookup_host;
 use tokio::sync::{Mutex, OnceCell};
 

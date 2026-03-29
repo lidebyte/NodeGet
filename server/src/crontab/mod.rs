@@ -179,10 +179,10 @@ async fn run_cleanup_database_job(cron_id: i64, cron_name: String) {
         Ok(result) => {
             let msg = format!(
                 "数据库清理完成。已删除：static_monitoring={}，dynamic_monitoring={}，task={}，crontab_result={}",
-                result.static_monitoring_deleted,
-                result.dynamic_monitoring_deleted,
-                result.task_deleted,
-                result.crontab_result_deleted
+                result.static_monitoring,
+                result.dynamic_monitoring,
+                result.task,
+                result.crontab_result
             );
             info!("{msg}");
             (true, msg)
@@ -211,12 +211,9 @@ async fn run_cleanup_database_job(cron_id: i64, cron_name: String) {
 }
 
 async fn run_js_worker_job(cron_id: i64, cron_name: String, js_script_name: String, params: Value) {
-    let db = match DB.get() {
-        Some(db) => db,
-        None => {
-            error!("DB 未初始化，无法执行 JsWorker Cron [{}]", cron_name);
-            return;
-        }
+    let Some(db) = DB.get() else {
+        error!("DB 未初始化，无法执行 JsWorker Cron [{cron_name}]");
+        return;
     };
 
     let run_result =
@@ -225,15 +222,12 @@ async fn run_js_worker_job(cron_id: i64, cron_name: String, js_script_name: Stri
     let (success, message, special_id) = match run_result {
         Ok(id) => (
             true,
-            format!(
-                "已触发 JsWorker 定时任务，脚本名：{}，special_id：{}",
-                js_script_name, id
-            ),
+            format!("已触发 JsWorker 定时任务，脚本名：{js_script_name}，special_id：{id}"),
             Some(id),
         ),
         Err(e) => (
             false,
-            format!("触发 JsWorker 定时任务失败，脚本名：{}，错误：{}", js_script_name, e),
+            format!("触发 JsWorker 定时任务失败，脚本名：{js_script_name}，错误：{e}"),
             None,
         ),
     };

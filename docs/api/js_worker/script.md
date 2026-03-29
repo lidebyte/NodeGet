@@ -39,9 +39,9 @@ async function handler(params, env, ctx) {}
 - `params`：来自 `js-worker_run` 的 `params`
 - `env`：来自 `js-worker_run.env` 或数据库保存的 `env`
 - `ctx`：运行时上下文，当前包含：
-  - `ctx.nodeget(rawJsonString)`：调用 Server 内部 JSON-RPC
-  - `ctx.uuid()`：生成随机 UUID v4 字符串
-  - `ctx.runType`：当前入口名（`onCall` / `onCron` / `onRoute`）
+    - `ctx.nodeget(rawJsonString)`：调用 Server 内部 JSON-RPC
+    - `ctx.uuid()`：生成随机 UUID v4 字符串
+    - `ctx.runType`：当前入口名（`onCall` / `onCron` / `onRoute`）
 
 `onRoute` 入口签名：
 

@@ -65,7 +65,6 @@ pub enum Permission {
     // Terminal 权限
     Terminal(Terminal),
 
-
     // NodeGet 权限
     NodeGet(NodeGet),
 
@@ -176,7 +175,7 @@ pub enum JsWorker {
     Write, // update
     Delete,
     RunDefinedJsWorker,
-    RunRawJsWorker
+    RunRawJsWorker,
 }
 
 

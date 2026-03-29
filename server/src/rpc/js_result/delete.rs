@@ -1,9 +1,9 @@
 use crate::entity::js_result;
 use crate::rpc::RpcHelper;
+use crate::rpc::js_result::JsResultRpcImpl;
 use crate::rpc::js_result::auth::{
     JsResultAction, ensure_js_result_permission, resolve_accessible_js_result_workers,
 };
-use crate::rpc::js_result::JsResultRpcImpl;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::js_result::query::JsResultDataQuery;
@@ -47,13 +47,17 @@ pub async fn delete(token: String, query: JsResultDataQuery) -> RpcResult<Box<Ra
                     "condition_count": condition_count,
                 });
                 let json_str = serde_json::to_string(&response).map_err(|e| {
-                    NodegetError::SerializationError(format!("Failed to serialize delete response: {e}"))
+                    NodegetError::SerializationError(format!(
+                        "Failed to serialize delete response: {e}"
+                    ))
                 })?;
                 return RawValue::from_string(json_str)
                     .map_err(|e| NodegetError::SerializationError(e.to_string()).into());
             }
-            select_query = select_query.filter(js_result::Column::JsWorkerName.is_in(allowed_workers.clone()));
-            delete_query = delete_query.filter(js_result::Column::JsWorkerName.is_in(allowed_workers));
+            select_query =
+                select_query.filter(js_result::Column::JsWorkerName.is_in(allowed_workers.clone()));
+            delete_query =
+                delete_query.filter(js_result::Column::JsWorkerName.is_in(allowed_workers));
         } else {
             for worker_name in &requested_worker_names {
                 ensure_js_result_permission(&token, worker_name, JsResultAction::Delete).await?;
@@ -69,12 +73,14 @@ pub async fn delete(token: String, query: JsResultDataQuery) -> RpcResult<Box<Ra
                 JsResultQueryCondition::JsWorkerId(js_worker_id) => {
                     select_query =
                         select_query.filter(js_result::Column::JsWorkerId.eq(js_worker_id));
-                    delete_query = delete_query.filter(js_result::Column::JsWorkerId.eq(js_worker_id));
+                    delete_query =
+                        delete_query.filter(js_result::Column::JsWorkerId.eq(js_worker_id));
                 }
                 JsResultQueryCondition::JsWorkerName(js_worker_name) => {
-                    select_query =
-                        select_query.filter(js_result::Column::JsWorkerName.eq(js_worker_name.clone()));
-                    delete_query = delete_query.filter(js_result::Column::JsWorkerName.eq(js_worker_name));
+                    select_query = select_query
+                        .filter(js_result::Column::JsWorkerName.eq(js_worker_name.clone()));
+                    delete_query =
+                        delete_query.filter(js_result::Column::JsWorkerName.eq(js_worker_name));
                 }
                 JsResultQueryCondition::StartTimeFromTo(start, end) => {
                     select_query = select_query.filter(
@@ -129,8 +135,10 @@ pub async fn delete(token: String, query: JsResultDataQuery) -> RpcResult<Box<Ra
                     );
                 }
                 JsResultQueryCondition::IsFailure => {
-                    select_query = select_query.filter(js_result::Column::ErrorMessage.is_not_null());
-                    delete_query = delete_query.filter(js_result::Column::ErrorMessage.is_not_null());
+                    select_query =
+                        select_query.filter(js_result::Column::ErrorMessage.is_not_null());
+                    delete_query =
+                        delete_query.filter(js_result::Column::ErrorMessage.is_not_null());
                 }
                 JsResultQueryCondition::IsRunning => {
                     select_query = select_query.filter(
@@ -163,7 +171,9 @@ pub async fn delete(token: String, query: JsResultDataQuery) -> RpcResult<Box<Ra
                 .all(db)
                 .await
                 .map_err(|e| {
-                    NodegetError::DatabaseError(format!("Failed to select js_result ids for delete: {e}"))
+                    NodegetError::DatabaseError(format!(
+                        "Failed to select js_result ids for delete: {e}"
+                    ))
                 })?;
 
             if ids.is_empty() {
@@ -182,7 +192,9 @@ pub async fn delete(token: String, query: JsResultDataQuery) -> RpcResult<Box<Ra
             delete_query
                 .exec(db)
                 .await
-                .map_err(|e| NodegetError::DatabaseError(format!("Failed to delete js_result: {e}")))?
+                .map_err(|e| {
+                    NodegetError::DatabaseError(format!("Failed to delete js_result: {e}"))
+                })?
                 .rows_affected
         };
 

@@ -1,9 +1,9 @@
 use crate::entity::js_result;
 use crate::rpc::RpcHelper;
+use crate::rpc::js_result::JsResultRpcImpl;
 use crate::rpc::js_result::auth::{
     JsResultAction, ensure_js_result_permission, resolve_accessible_js_result_workers,
 };
-use crate::rpc::js_result::JsResultRpcImpl;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::js_result::query::{JsResultDataQuery, JsResultQueryCondition};
@@ -95,7 +95,8 @@ pub async fn query(token: String, query: JsResultDataQuery) -> RpcResult<Box<Raw
         requested_worker_names.dedup();
 
         if requested_worker_names.is_empty() {
-            let allowed_workers = resolve_accessible_js_result_workers(&token, JsResultAction::Read).await?;
+            let allowed_workers =
+                resolve_accessible_js_result_workers(&token, JsResultAction::Read).await?;
             if allowed_workers.is_empty() {
                 let json_str = "[]".to_owned();
                 return RawValue::from_string(json_str)
@@ -138,9 +139,10 @@ pub async fn query(token: String, query: JsResultDataQuery) -> RpcResult<Box<Raw
                 .order_by_desc(js_result::Column::Id);
         }
 
-        let results = select.all(db).await.map_err(|e| {
-            NodegetError::DatabaseError(format!("Failed to query js_result: {e}"))
-        })?;
+        let results = select
+            .all(db)
+            .await
+            .map_err(|e| NodegetError::DatabaseError(format!("Failed to query js_result: {e}")))?;
 
         let json_str = serde_json::to_string(&results).map_err(|e| {
             NodegetError::SerializationError(format!("Failed to serialize results: {e}"))

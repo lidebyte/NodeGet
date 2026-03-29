@@ -20,7 +20,9 @@ pub async fn run(
         let script_name = js_script_name.trim().to_owned();
 
         if script_name.is_empty() {
-            return Err(NodegetError::InvalidInput("js_script_name cannot be empty".to_owned()).into());
+            return Err(
+                NodegetError::InvalidInput("js_script_name cannot be empty".to_owned()).into(),
+            );
         }
 
         check_js_worker_permission(

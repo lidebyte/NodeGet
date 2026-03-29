@@ -1,9 +1,9 @@
 use crate::entity::js_worker;
 use crate::js_runtime::compile_js_module_to_bytecode;
 use crate::rpc::RpcHelper;
+use crate::rpc::js_worker::JsWorkerRpcImpl;
 use crate::rpc::js_worker::auth::check_js_worker_permission;
 use crate::rpc::js_worker::route_name::normalize_route_name;
-use crate::rpc::js_worker::JsWorkerRpcImpl;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use jsonrpsee::core::RpcResult;
@@ -46,7 +46,9 @@ pub async fn create(
         })?;
 
         if js_script.trim().is_empty() {
-            return Err(NodegetError::InvalidInput("Decoded js_script cannot be empty".to_owned()).into());
+            return Err(
+                NodegetError::InvalidInput("Decoded js_script cannot be empty".to_owned()).into(),
+            );
         }
 
         let db = JsWorkerRpcImpl::get_db()?;
@@ -57,7 +59,9 @@ pub async fn create(
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
         if existing.is_some() {
-            return Err(NodegetError::InvalidInput(format!("js_worker already exists: {name}")).into());
+            return Err(
+                NodegetError::InvalidInput(format!("js_worker already exists: {name}")).into(),
+            );
         }
 
         if let Some(route_name) = route_name.as_deref() {

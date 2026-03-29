@@ -36,7 +36,8 @@ pub async fn enqueue_defined_js_worker_run(
         ))
     })?;
     let runtime_clean_time = model.runtime_clean_time;
-    let resolved_env = env_override.unwrap_or_else(|| model.env.unwrap_or_else(|| serde_json::json!({})));
+    let resolved_env =
+        env_override.unwrap_or_else(|| model.env.unwrap_or_else(|| serde_json::json!({})));
 
     let start_time = get_local_timestamp_ms_i64().unwrap_or(0);
     let insert_result = js_result::Entity::insert(js_result::ActiveModel {
@@ -91,10 +92,7 @@ pub async fn enqueue_defined_js_worker_run(
             .exec(&db)
             .await
         {
-            error!(
-                "Failed to update js_result {} for worker '{}': {}",
-                js_result_id, worker_name, e
-            );
+            error!("Failed to update js_result {js_result_id} for worker '{worker_name}': {e}");
         }
     });
 

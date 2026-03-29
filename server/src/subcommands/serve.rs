@@ -55,52 +55,56 @@ pub async fn run(
     let jsonrpc_service_for_root = jsonrpc_service.clone();
     let landing_html = render_root_html(&config.server_uuid.to_string(), env!("CARGO_PKG_VERSION"));
 
-    let app = axum::Router::new()
-        .route(
-            "/",
-            any(move |req: axum::extract::Request| {
-                let mut rpc_service = jsonrpc_service_for_root.clone();
-                let landing_html = landing_html.clone();
-                async move {
-                    if is_websocket_upgrade(req.headers()) {
-                        return rpc_service.call(req).await.unwrap();
-                    }
+    let app =
+        axum::Router::new()
+            .route(
+                "/",
+                any(move |req: axum::extract::Request| {
+                    let mut rpc_service = jsonrpc_service_for_root.clone();
+                    let landing_html = landing_html.clone();
+                    async move {
+                        if is_websocket_upgrade(req.headers()) {
+                            return rpc_service.call(req).await.unwrap();
+                        }
 
-                    if req.method() == axum::http::Method::GET {
-                        return axum::response::Response::builder()
-                            .status(axum::http::StatusCode::OK)
-                            .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
-                            .body(jsonrpsee::server::HttpBody::from(landing_html))
-                            .expect("Failed to build HTML response");
-                    }
+                        if req.method() == axum::http::Method::GET {
+                            return axum::response::Response::builder()
+                                .status(axum::http::StatusCode::OK)
+                                .header(
+                                    axum::http::header::CONTENT_TYPE,
+                                    "text/html; charset=utf-8",
+                                )
+                                .body(jsonrpsee::server::HttpBody::from(landing_html))
+                                .expect("Failed to build HTML response");
+                        }
 
-                    rpc_service.call(req).await.unwrap()
-                }
-            }),
-        )
-        .route(
-            "/worker-route/{route_name}",
-            any(
-                |Path(route_name): Path<String>, req: axum::extract::Request| async move {
-                    handle_js_worker_route(route_name, req).await
-                },
-            ),
-        )
-        .route(
-            "/worker-route/{route_name}/{*path}",
-            any(
-                |Path((route_name, _path)): Path<(String, String)>,
-                 req: axum::extract::Request| async move {
-                    handle_js_worker_route(route_name, req).await
-                },
-            ),
-        )
-        .route("/terminal", any(crate::terminal::terminal_ws_handler))
-        .with_state(terminal_state)
-        .fallback(any(move |req: axum::extract::Request| {
-            let mut rpc_service = jsonrpc_service.clone();
-            async move { rpc_service.call(req).await.unwrap() }
-        }));
+                        rpc_service.call(req).await.unwrap()
+                    }
+                }),
+            )
+            .route(
+                "/worker-route/{route_name}",
+                any(
+                    |Path(route_name): Path<String>, req: axum::extract::Request| async move {
+                        handle_js_worker_route(route_name, req).await
+                    },
+                ),
+            )
+            .route(
+                "/worker-route/{route_name}/{*path}",
+                any(
+                    |Path((route_name, _path)): Path<(String, String)>,
+                     req: axum::extract::Request| async move {
+                        handle_js_worker_route(route_name, req).await
+                    },
+                ),
+            )
+            .route("/terminal", any(crate::terminal::terminal_ws_handler))
+            .with_state(terminal_state)
+            .fallback(any(move |req: axum::extract::Request| {
+                let mut rpc_service = jsonrpc_service.clone();
+                async move { rpc_service.call(req).await.unwrap() }
+            }));
 
     init_crontab_worker();
 
@@ -256,7 +260,10 @@ async fn handle_js_worker_route(
     let db = match crate::DB.get() {
         Some(db) => db.clone(),
         None => {
-            return build_http_error(StatusCode::INTERNAL_SERVER_ERROR, "Database is not initialized");
+            return build_http_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Database is not initialized",
+            );
         }
     };
 
@@ -267,7 +274,10 @@ async fn handle_js_worker_route(
     {
         Ok(Some(model)) => model,
         Ok(None) => {
-            return build_http_error(StatusCode::NOT_FOUND, "No js_worker bound to this route_name");
+            return build_http_error(
+                StatusCode::NOT_FOUND,
+                "No js_worker bound to this route_name",
+            );
         }
         Err(e) => {
             return build_http_error(
@@ -354,12 +364,15 @@ async fn handle_js_worker_route(
 
 fn build_http_error(
     status: StatusCode,
-    message: impl ToString,
+    message: impl Into<String>,
 ) -> axum::http::Response<jsonrpsee::server::HttpBody> {
     axum::http::Response::builder()
         .status(status)
-        .header(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")
-        .body(jsonrpsee::server::HttpBody::from(message.to_string()))
+        .header(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; charset=utf-8",
+        )
+        .body(jsonrpsee::server::HttpBody::from(message.into()))
         .expect("Failed to build error response")
 }
 

@@ -1,8 +1,8 @@
 use crate::AGENT_CONFIG;
 use log::trace;
 use nodeget_lib::config::agent::IpProvider;
-use reqwest::Client;
 use reqwest::header::USER_AGENT;
+use reqwest::Client;
 use serde_json::Value;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
@@ -137,7 +137,7 @@ pub async fn ip_cloudflare() -> IPInfo {
             "https://www.cloudflare.com/cdn-cgi/trace",
             IpFamily::Ipv4Only,
         )
-        .await?;
+            .await?;
         let ip_str = parse_cloudflare_trace(&body)?;
         Ipv4Addr::from_str(&ip_str).ok()
     });
@@ -148,7 +148,7 @@ pub async fn ip_cloudflare() -> IPInfo {
             "https://www.cloudflare.com/cdn-cgi/trace",
             IpFamily::Ipv6Only,
         )
-        .await?;
+            .await?;
         let ip_str = parse_cloudflare_trace(&body)?;
         Ipv6Addr::from_str(&ip_str).ok()
     });

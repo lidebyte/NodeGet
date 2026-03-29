@@ -3,6 +3,24 @@ use super::config::CleanupConfig;
 use anyhow::Result;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, FromQueryResult, Statement};
 
+#[derive(FromQueryResult)]
+struct ConfigRow {
+    agent_uuid: String,
+    static_limit: Option<String>,
+    dynamic_limit: Option<String>,
+    task_limit: Option<String>,
+}
+
+#[derive(FromQueryResult)]
+struct LimitRow {
+    limit_value: Option<String>,
+}
+
+#[derive(FromQueryResult)]
+struct UuidResult {
+    name: String,
+}
+
 /// `PostgreSQL` 优化版本
 pub async fn cleanup_expired_data_postgres(db: &DatabaseConnection) -> Result<CleanupResult> {
     let mut result = CleanupResult::default();
@@ -15,27 +33,27 @@ pub async fn cleanup_expired_data_postgres(db: &DatabaseConnection) -> Result<Cl
         if let Some(limit) = config.static_monitoring_limit {
             let deleted =
                 cleanup_table_postgres(db, "static_monitoring", &config.agent_uuid, limit).await?;
-            result.static_monitoring_deleted += deleted;
+            result.static_monitoring += deleted;
         }
 
         // 清理 dynamic_monitoring
         if let Some(limit) = config.dynamic_monitoring_limit {
             let deleted =
                 cleanup_table_postgres(db, "dynamic_monitoring", &config.agent_uuid, limit).await?;
-            result.dynamic_monitoring_deleted += deleted;
+            result.dynamic_monitoring += deleted;
         }
 
         // 清理 task
         if let Some(limit) = config.task_limit {
             let deleted = cleanup_task_table_postgres(db, &config.agent_uuid, limit).await?;
-            result.task_deleted += deleted;
+            result.task += deleted;
         }
     }
 
     // 清理 crontab_result（全局表，从 global 配置读取）
     if let Some(limit) = get_global_crontab_result_limit_postgres(db).await? {
         let deleted = cleanup_crontab_result_table_postgres(db, limit).await?;
-        result.crontab_result_deleted = deleted;
+        result.crontab_result = deleted;
     }
 
     Ok(result)
@@ -58,14 +76,6 @@ async fn get_cleanup_configs_postgres(db: &DatabaseConnection) -> Result<Vec<Cle
         )
         GROUP BY namespace
     ";
-
-    #[derive(FromQueryResult)]
-    struct ConfigRow {
-        agent_uuid: String,
-        static_limit: Option<String>,
-        dynamic_limit: Option<String>,
-        task_limit: Option<String>,
-    }
 
     let rows = ConfigRow::find_by_statement(Statement::from_string(
         DatabaseBackend::Postgres,
@@ -185,11 +195,6 @@ async fn get_global_crontab_result_limit_postgres(db: &DatabaseConnection) -> Re
         LIMIT 1
     ";
 
-    #[derive(FromQueryResult)]
-    struct LimitRow {
-        limit_value: Option<String>,
-    }
-
     let result = LimitRow::find_by_statement(Statement::from_string(
         DatabaseBackend::Postgres,
         sql.to_string(),
@@ -210,11 +215,6 @@ pub async fn find_uuids_with_database_limit_postgres(
         AND key LIKE 'database_limit_%'
         ORDER BY name ASC
     ";
-
-    #[derive(FromQueryResult)]
-    struct UuidResult {
-        name: String,
-    }
 
     let results = UuidResult::find_by_statement(Statement::from_string(
         DatabaseBackend::Postgres,

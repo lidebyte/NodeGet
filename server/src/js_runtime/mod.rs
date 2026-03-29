@@ -1,8 +1,8 @@
+use nodeget_lib::js_runtime::{JsCodeInput, RunType};
 use rquickjs::prelude::{Async, Func};
 use rquickjs::{
     AsyncContext, AsyncRuntime, Ctx, Error, Module, Promise, Value as JsValue, WriteOptions,
 };
-use nodeget_lib::js_runtime::{JsCodeInput, RunType};
 use serde_json::Value;
 use std::ffi::CString;
 use uuid::Uuid;
@@ -12,8 +12,8 @@ pub mod runtime_pool;
 
 pub(crate) const JS_RT_MEMORY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
-pub fn js_error(stage: &'static str, message: impl ToString) -> Error {
-    Error::new_from_js_message(stage, "String", message.to_string())
+pub fn js_error(stage: &'static str, message: impl Into<String>) -> Error {
+    Error::new_from_js_message(stage, "String", message.into())
 }
 
 pub(crate) fn init_js_runtime_globals(ctx: &Ctx<'_>) -> Result<(), Error> {
@@ -40,7 +40,9 @@ fn format_js_exception(ctx: &Ctx<'_>) -> String {
         let name: Option<String> = obj.get("name").ok();
         let message: Option<String> = obj.get("message").ok();
         match (name, message) {
-            (Some(name), Some(message)) if !message.is_empty() => return format!("{name}: {message}"),
+            (Some(name), Some(message)) if !message.is_empty() => {
+                return format!("{name}: {message}");
+            }
             (_, Some(message)) if !message.is_empty() => return message,
             _ => {}
         }
@@ -56,7 +58,11 @@ fn format_js_exception(ctx: &Ctx<'_>) -> String {
     format!("{exception:?}")
 }
 
-fn enrich_exception<T>(ctx: &Ctx<'_>, stage: &'static str, result: Result<T, Error>) -> Result<T, Error> {
+fn enrich_exception<T>(
+    ctx: &Ctx<'_>,
+    stage: &'static str,
+    result: Result<T, Error>,
+) -> Result<T, Error> {
     match result {
         Ok(value) => Ok(value),
         Err(err) if err.is_exception() => Err(js_error(stage, format_js_exception(ctx))),
@@ -273,7 +279,7 @@ pub fn js_runner(
                 )
             })
         })
-        .await;
+            .await;
 
         rt.idle().await;
         js_result

@@ -9,11 +9,11 @@ use std::fs;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::{
-    sync::{RwLock, mpsc},
+    sync::{mpsc, RwLock},
     task,
 };
 use tokio_tungstenite::tungstenite::Bytes;
-use tokio_tungstenite::{WebSocketStream, connect_async, tungstenite::protocol::Message};
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, WebSocketStream};
 use url::Url;
 
 /// PTY result type
@@ -87,7 +87,7 @@ pub async fn handle_pty_url(
 
         handle_pty_session(ws_stream, cmd).await
     }
-    .await;
+        .await;
 
     release_terminal_id(&terminal_id).await;
 

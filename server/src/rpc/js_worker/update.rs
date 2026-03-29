@@ -2,9 +2,9 @@ use crate::entity::js_worker;
 use crate::js_runtime::compile_js_module_to_bytecode;
 use crate::js_runtime::runtime_pool;
 use crate::rpc::RpcHelper;
+use crate::rpc::js_worker::JsWorkerRpcImpl;
 use crate::rpc::js_worker::auth::check_js_worker_permission;
 use crate::rpc::js_worker::route_name::normalize_route_name;
-use crate::rpc::js_worker::JsWorkerRpcImpl;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use jsonrpsee::core::RpcResult;
@@ -47,7 +47,9 @@ pub async fn update(
         })?;
 
         if js_script.trim().is_empty() {
-            return Err(NodegetError::InvalidInput("Decoded js_script cannot be empty".to_owned()).into());
+            return Err(
+                NodegetError::InvalidInput("Decoded js_script cannot be empty".to_owned()).into(),
+            );
         }
 
         let db = JsWorkerRpcImpl::get_db()?;

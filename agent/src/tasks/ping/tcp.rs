@@ -1,7 +1,7 @@
 use log::error;
 use nodeget_lib::error::NodegetError;
 use std::hint::black_box;
-use tokio::net::{TcpStream, lookup_host};
+use tokio::net::{lookup_host, TcpStream};
 use tokio::time::timeout;
 
 // TCP 系统重传时间为 1 Sec 以上，请勿动本参数

@@ -1,7 +1,7 @@
 use crate::entity::js_worker;
 use crate::rpc::RpcHelper;
-use crate::rpc::js_worker::auth::check_js_worker_permission;
 use crate::rpc::js_worker::JsWorkerRpcImpl;
+use crate::rpc::js_worker::auth::check_js_worker_permission;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use jsonrpsee::core::RpcResult;

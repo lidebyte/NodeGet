@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::AGENT_CONFIG;
 use crate::rpc::wrap_json_into_rpc_with_id_1;
+use crate::AGENT_CONFIG;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
 use nodeget_lib::config::agent::Server;
@@ -11,7 +11,7 @@ use nodeget_lib::error::NodegetError;
 use serde::Deserialize;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::{OnceCell, RwLock, broadcast};
+use tokio::sync::{broadcast, OnceCell, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 use tokio_tungstenite::connect_async;
