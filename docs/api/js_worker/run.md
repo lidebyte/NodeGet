@@ -20,7 +20,7 @@
 
 参数说明：
 
-- `run_type` 可选：`call` / `cron`，默认 `call`。
+- `run_type` 可选：`call` / `inline_call` / `cron` / `route`，默认 `call`。
 - `params` 必填：任意 JSON，传给脚本入口函数第一个参数。
 - `env` 可选：
     - 传入时：使用请求里的 `env`

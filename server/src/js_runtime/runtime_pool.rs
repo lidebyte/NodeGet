@@ -455,10 +455,54 @@ async fn execute_on_worker(
                 const runHandler = globalThis.__nodeget_run_handler;
                 const input = globalThis.__nodeget_run_params;
                 const env = globalThis.__nodeget_env || {};
+                const inline_call = async (jsWorkerName, callParams, timeoutSec = null) => {
+                    const workerName = String(jsWorkerName ?? "").trim();
+                    if (!workerName) {
+                        throw new Error("inline_call js_worker_name cannot be empty");
+                    }
+
+                    const timeoutValue =
+                        timeoutSec === undefined || timeoutSec === null
+                            ? null
+                            : Number(timeoutSec);
+                    if (
+                        timeoutValue !== null &&
+                        (!Number.isFinite(timeoutValue) || timeoutValue <= 0)
+                    ) {
+                        throw new Error(
+                            "inline_call timeout_sec must be a positive finite number"
+                        );
+                    }
+
+                    let paramsJson = null;
+                    try {
+                        paramsJson = JSON.stringify(callParams);
+                    } catch (e) {
+                        throw new Error(
+                            `inline_call params is not JSON-serializable: ${e}`
+                        );
+                    }
+                    if (typeof paramsJson !== "string") {
+                        paramsJson = "null";
+                    }
+
+                    const raw = await globalThis.__nodeget_inline_call_raw(
+                        workerName,
+                        paramsJson,
+                        timeoutValue
+                    );
+                    try {
+                        return JSON.parse(raw);
+                    } catch (e) {
+                        throw new Error(`inline_call returned invalid JSON: ${e}`);
+                    }
+                };
+                globalThis.inline_call = inline_call;
                 const runtimeCtx = {
                     nodeget: globalThis.nodeget,
                     uuid: globalThis.uuid,
-                    runType: runHandler
+                    runType: runHandler,
+                    inline_call
                 };
 
                 if (!entry || typeof entry !== "object") {

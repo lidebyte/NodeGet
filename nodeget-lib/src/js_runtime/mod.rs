@@ -6,6 +6,7 @@ pub enum RunType {
     Call,
     Cron,
     Route,
+    InlineCall,
 }
 
 impl RunType {
@@ -15,6 +16,7 @@ impl RunType {
             Self::Call => "onCall",
             Self::Cron => "onCron",
             Self::Route => "onRoute",
+            Self::InlineCall => "onInlineCall",
         }
     }
 }

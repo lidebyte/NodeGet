@@ -5,8 +5,10 @@
 ## 我们自己实现的注入
 
 - `globalThis.nodeget(rawJsonString)`
+- `globalThis.inline_call(js_worker_name, params, timeout_sec?)`
 - `globalThis.uuid()`（生成随机 UUID v4 字符串）
 - `ctx.nodeget(rawJsonString)`（脚本入口第三参）
+- `ctx.inline_call(js_worker_name, params, timeout_sec?)`
 - `ctx.uuid()`（等价于全局 `uuid`）
 - `ctx.runType`（脚本入口第三参）
 

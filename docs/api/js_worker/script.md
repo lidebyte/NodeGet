@@ -12,6 +12,10 @@ export default {
     return { ok: true, from: "onCall", params, env };
   },
 
+  async onInlineCall(params, env, ctx) {
+    return { ok: true, from: "onInlineCall", params, env };
+  },
+
   async onCron(params, env, ctx) {
     return { ok: true, from: "onCron", params, env };
   },
@@ -25,12 +29,13 @@ export default {
 运行时根据 `run_type` 调用：
 
 - `call` -> `export default.onCall(...)`
+- `inline_call` -> `export default.onInlineCall(...)`
 - `cron` -> `export default.onCron(...)`
 - `route` -> `export default.onRoute(...)`
 
 ## 参数约定
 
-`onCall` / `onCron` 入口签名：
+`onCall` / `onInlineCall` / `onCron` 入口签名：
 
 ```js
 async function handler(params, env, ctx) {}
@@ -40,8 +45,9 @@ async function handler(params, env, ctx) {}
 - `env`：来自 `js-worker_run.env` 或数据库保存的 `env`
 - `ctx`：运行时上下文，当前包含：
     - `ctx.nodeget(rawJsonString)`：调用 Server 内部 JSON-RPC
+    - `ctx.inline_call(js_worker_name, params, timeout_sec?)`：同步调用另一个 JS Worker，返回 JSON 结果；会写入 `js_result`
     - `ctx.uuid()`：生成随机 UUID v4 字符串
-    - `ctx.runType`：当前入口名（`onCall` / `onCron` / `onRoute`）
+    - `ctx.runType`：当前入口名（`onCall` / `onInlineCall` / `onCron` / `onRoute`）
 
 `onRoute` 入口签名：
 
@@ -64,6 +70,7 @@ async function onRoute(request, env, ctx) {}
 
 - `fetch`：已注入，可直接发 HTTP 请求。
 - `ctx.nodeget`：已注入，参数是 JSON 字符串，返回也是 JSON 字符串。
+- `ctx.inline_call`：已注入，可 `await` 调用指定 `js_worker` 的 `onInlineCall`。
 - 更多注入函数/对象见 [injected](./injected.md)。
 
 ## 推荐示例（同时使用 nodeget + fetch）
