@@ -2,12 +2,13 @@
 
 调用者可以通过 `js-worker_update` 更新脚本。
 
-需要传入 `token` / `name` / `js_script_base64` / `route_name` / `runtime_clean_time` / `env`：
+需要传入 `token` / `name` / `description` / `js_script_base64` / `route_name` / `runtime_clean_time` / `env`：
 
 ```json
 {
   "token": "demo_token",
   "name": "demo_worker",
+  "description": "demo worker v2",
   "js_script_base64": "ZXhwb3J0IGRlZmF1bHQgeyBhc3luYyBvbkNhbGwocGFyYW1zLCBlbnYsIGN0eCkgeyByZXR1cm4geyBvazogdHJ1ZSwgdmVyc2lvbjogMiB9OyB9IH07",
   "route_name": "demo_route_v2",
   "runtime_clean_time": 120000,
@@ -23,6 +24,7 @@
 {
   "success": true,
   "name": "demo_worker",
+  "description": "demo worker v2",
   "route_name": "demo_route_v2",
   "update_at": 1774652666000
 }
@@ -32,6 +34,7 @@
 
 - 更新后会重新预编译字节码。
 - 已存在的 Runtime 实例会被立即驱逐，后续运行会使用新版本脚本。
+- `description` 可选；传 `null` 可清空描述。
 - `route_name = null` 可关闭该脚本的 HTTP 路由绑定。
 
 ## 完整示例
@@ -43,6 +46,7 @@
   "params": {
     "token": "demo_token",
     "name": "demo_worker",
+    "description": "demo worker v2",
     "js_script_base64": "ZXhwb3J0IGRlZmF1bHQgeyBhc3luYyBvbkNhbGwocGFyYW1zLCBlbnYsIGN0eCkgeyByZXR1cm4geyBvazogdHJ1ZSwgdmVyc2lvbjogMiB9OyB9IH07",
     "route_name": "demo_route_v2",
     "runtime_clean_time": 120000,

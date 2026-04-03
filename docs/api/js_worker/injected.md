@@ -14,6 +14,8 @@
 
 - `llrt_fetch::init`
     - `fetch`、`Request`、`Response`、`Headers`、`FormData`
+- `llrt_stream_web::init`
+    - `ReadableStream`、`WritableStream`、`TransformStream`
 - `llrt_url::init`
     - `URL`、`URLSearchParams`
 - `llrt_timers::init`
