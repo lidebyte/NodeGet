@@ -10,6 +10,7 @@ pub struct Model {
     pub id: i64,
     #[sea_orm(unique)]
     pub name: String,
+    pub description: Option<String>,
     pub js_script: String,
     pub js_byte_code: Option<Vec<u8>>,
     pub route_name: Option<String>,

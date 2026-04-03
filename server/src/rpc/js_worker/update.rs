@@ -18,6 +18,7 @@ use serde_json::value::RawValue;
 pub async fn update(
     token: String,
     name: String,
+    description: Option<String>,
     js_script_base64: String,
     route_name: Option<String>,
     runtime_clean_time: Option<i64>,
@@ -88,6 +89,7 @@ pub async fn update(
         let mut active_model: js_worker::ActiveModel = model.into();
         active_model.js_script = Set(js_script);
         active_model.js_byte_code = Set(Some(js_byte_code));
+        active_model.description = Set(description);
         active_model.route_name = Set(route_name);
         active_model.runtime_clean_time = Set(runtime_clean_time);
         active_model.env = Set(env);
@@ -102,6 +104,7 @@ pub async fn update(
         let response = serde_json::json!({
             "success": true,
             "name": updated.name,
+            "description": updated.description,
             "route_name": updated.route_name,
             "update_at": updated.update_at
         });

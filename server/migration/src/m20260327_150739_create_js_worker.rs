@@ -25,6 +25,11 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
+                        ColumnDef::new(JsWorkerInDatabase::Description)
+                            .string()
+                            .null(),
+                    )
+                    .col(
                         ColumnDef::new(JsWorkerInDatabase::JsScript)
                             .string()
                             .not_null(),
@@ -106,6 +111,7 @@ enum JsWorkerInDatabase {
 
     Id,
     Name,
+    Description,
     JsScript,
     JsByteCode,
     RouteName,

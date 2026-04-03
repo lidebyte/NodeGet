@@ -17,6 +17,7 @@ use serde_json::value::RawValue;
 pub async fn create(
     token: String,
     name: String,
+    description: Option<String>,
     js_script_base64: String,
     route_name: Option<String>,
     runtime_clean_time: Option<i64>,
@@ -90,6 +91,7 @@ pub async fn create(
         let new_model = js_worker::ActiveModel {
             id: ActiveValue::NotSet,
             name: Set(name.clone()),
+            description: Set(description),
             js_script: Set(js_script),
             js_byte_code: Set(Some(js_byte_code)),
             route_name: Set(route_name.clone()),
@@ -107,6 +109,7 @@ pub async fn create(
         let response = serde_json::json!({
             "id": inserted.id,
             "name": inserted.name,
+            "description": inserted.description,
             "route_name": inserted.route_name,
             "create_at": inserted.create_at,
             "update_at": inserted.update_at
