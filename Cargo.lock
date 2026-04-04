@@ -2094,6 +2094,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "llrt_logging"
+version = "0.8.1-beta"
+source = "git+https://github.com/awslabs/llrt.git#4740f25c886b111ba2c584a2372d938601096dab"
+dependencies = [
+ "itoa",
+ "llrt_context",
+ "llrt_encoding",
+ "llrt_json",
+ "llrt_numbers",
+ "llrt_utils",
+ "rquickjs",
+ "ryu",
+]
+
+[[package]]
+name = "llrt_numbers"
+version = "0.8.1-beta"
+source = "git+https://github.com/awslabs/llrt.git#4740f25c886b111ba2c584a2372d938601096dab"
+dependencies = [
+ "itoa",
+ "llrt_utils",
+ "rquickjs",
+ "ryu",
+]
+
+[[package]]
 name = "llrt_stream_web"
 version = "0.8.1-beta"
 source = "git+https://github.com/awslabs/llrt.git#4740f25c886b111ba2c584a2372d938601096dab"
@@ -2135,6 +2161,18 @@ dependencies = [
  "llrt_utils",
  "rquickjs",
  "url",
+]
+
+[[package]]
+name = "llrt_util"
+version = "0.8.1-beta"
+source = "git+https://github.com/awslabs/llrt.git#4740f25c886b111ba2c584a2372d938601096dab"
+dependencies = [
+ "llrt_context",
+ "llrt_encoding",
+ "llrt_logging",
+ "llrt_utils",
+ "rquickjs",
 ]
 
 [[package]]
@@ -2422,6 +2460,7 @@ dependencies = [
  "llrt_stream_web",
  "llrt_timers",
  "llrt_url",
+ "llrt_util",
  "log",
  "migration",
  "nodeget-lib",

@@ -21,5 +21,7 @@
     - `ReadableStream`、`WritableStream`、`TransformStream`
 - `llrt_url::init`
     - `URL`、`URLSearchParams`
+- `llrt_util::init`
+    - `TextEncoder`、`TextDecoder`
 - `llrt_timers::init`
     - `setTimeout`、`clearTimeout`、`setInterval`、`clearInterval`、`setImmediate`、`queueMicrotask`

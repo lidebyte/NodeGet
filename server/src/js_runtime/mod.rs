@@ -21,6 +21,7 @@ pub(crate) fn init_js_runtime_globals(ctx: &Ctx<'_>) -> Result<(), Error> {
     llrt_fetch::init(ctx)?;
     llrt_stream_web::init(ctx)?;
     llrt_url::init(ctx)?;
+    llrt_util::init(ctx)?;
     llrt_timers::init(ctx)?;
     let global = ctx.globals();
     global.set("nodeget", Func::from(Async(nodeget::js_nodeget)))?;

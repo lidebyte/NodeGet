@@ -35,6 +35,7 @@ llrt_fetch = { git = "https://github.com/awslabs/llrt.git", package = "llrt_fetc
 llrt_timers = { git = "https://github.com/awslabs/llrt.git", package = "llrt_timers", default-features = false }
 llrt_url = { git = "https://github.com/awslabs/llrt.git", package = "llrt_url", default-features = false }
 llrt_stream_web = { git = "https://github.com/awslabs/llrt.git", package = "llrt_stream_web", default-features = false }
+llrt_util = { git = "https://github.com/awslabs/llrt.git", package = "llrt_util", default-features = false }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 tikv-jemallocator = { version = "0.6.1", optional = true }
