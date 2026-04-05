@@ -22,11 +22,11 @@ outline: deep
 
 ## 基本亮点
 
-目前版本在前人的基础上实现下列功能:
-
-- Agent 多 Server 上报: 一个 Agent 可同时连接多个 Server 上报
-- Server 提供的令牌可细粒度权限控制，精确到每一个 Agent、每一个数据项 (即将实现)
-- Server 与 Server 互联，交换数据，目标是在 **细粒度权限** 下控制**每一个 Server** 下的**每一个 Agent** (TODO)
+- 细粒度权限支持，可以通过规范权限 Token 以便于第三方集成
+- Powered By Rust，server / agent 性能优秀，系统资源占用低
+- 活跃的开发团队
+- 前后端分离
+- ...
 
 ## 通信协议
 
@@ -44,7 +44,7 @@ Axum 主路由。
 
 目前兼容了 Sqlite 与 PostgreSQL，请根据需要选择
 
-- 内部测试或小型 (Agent 数目 <= 5) 可使用 Sqlite，性能问题不明显
+- 内部测试或小型 (Agent 数目 <= 10) 可使用 Sqlite，性能问题不明显
 - 大量 Agents 务必使用 PostgreSQL，表内压缩、JsonBinary 等特性比 Sqlite 更省空间，更高效
 
 ## 注意特点

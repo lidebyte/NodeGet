@@ -67,15 +67,15 @@ export const themeZhConfig = {
 				text: 'Monitoring',
 				collapsed: false,
 				items: [{
-					text: '介绍',
+					text: '总览',
 					link: '/api/monitoring/index.md'
 				},
 				{
-					text: 'Agent API',
+					text: 'Agent 上报',
 					link: '/api/monitoring/agent.md'
 				},
 				{
-					text: '查询 Monitoring API',
+					text: '查询与删除',
 					link: '/api/monitoring/query.md'
 				}]
 			},
