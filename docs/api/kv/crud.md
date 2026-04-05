@@ -26,7 +26,7 @@
 
 ### 返回值
 
-写入成功时返回 `null`。
+写入成功时返回 `{"success": true}`。
 
 ### 完整示例
 
@@ -54,7 +54,9 @@
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "result": null
+  "result": {
+    "success": true
+  }
 }
 ```
 
@@ -264,9 +266,9 @@
 
 ### 返回值
 
-删除成功时返回 `null`。
+删除成功时返回 `{"success": true}`。
 
-若 Key 不存在，同样返回 `null`（不报错）。
+若 Key 不存在，同样返回 `{"success": true}`（不报错）。
 
 ### 完整示例
 
@@ -291,7 +293,9 @@
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "result": null
+  "result": {
+    "success": true
+  }
 }
 ```
 
@@ -379,7 +383,15 @@
 
 ### 返回值
 
-创建成功时返回 `null`，表示命名空间已成功创建。
+创建成功时返回创建的命名空间信息：
+
+```json
+{
+  "id": 1,
+  "namespace": "kv_test",
+  "kv": {}
+}
+```
 
 若命名空间已存在，会返回错误。
 
@@ -405,7 +417,11 @@
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "result": null
+  "result": {
+    "id": 1,
+    "namespace": "kv_test",
+    "kv": {}
+  }
 }
 ```
 

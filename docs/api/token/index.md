@@ -183,7 +183,7 @@ pub enum NodeGet {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JsWorker {
-    ListALlJsWorker,    // 列出当前 Token 在权限范围内且数据库真实存在的脚本
+    ListAllJsWorker,    // 列出当前 Token 在权限范围内且数据库真实存在的脚本
     Create,              // 创建 JsWorker
     Read,                // 读取 JsWorker
     Write,               // 更新 JsWorker
@@ -398,7 +398,7 @@ Task、上报目前所有 Task 任务类型 的权限
   ],
   "permissions": [
     {
-      "js_worker": "list_a_ll_js_worker" // 列出匹配的 JsWorker
+      "js_worker": "list_all_js_worker" // 列出匹配的 JsWorker
     },
     {
       "js_worker": "create" // 创建 JsWorker

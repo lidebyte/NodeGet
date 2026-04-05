@@ -12,7 +12,7 @@
 {
   "token": "demo_token",           // Token
   "name": "task_name",             // 任务名称
-  "cron_expression": "0 * * * *",  // Cron 表达式
+  "cron_expression": "0 0 * * * *",  // Cron 表达式（秒 分 时 日 月 周）
   "cron_type": {
     // 任务类型，详情见下文
   }
@@ -536,7 +536,8 @@ Server 任务类型 — 触发已注册的 JsWorker 脚本:
 
 ```json
 {
-  "success": true // 操作结果
+  "success": true,  // 操作结果
+  "enabled": true   // 当前的启用状态
 }
 ```
 
@@ -564,7 +565,8 @@ Server 任务类型 — 触发已注册的 JsWorker 脚本:
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "success": true
+    "success": true,
+    "enabled": true
   }
 }
 ```
@@ -591,7 +593,8 @@ Server 任务类型 — 触发已注册的 JsWorker 脚本:
   "jsonrpc": "2.0",
   "id": 2,
   "result": {
-    "success": true
+    "success": true,
+    "enabled": false
   }
 }
 ```
