@@ -11,7 +11,7 @@ outline: deep
 若 Agent 需要获取 Server 下发的任务，需要在一个 WebSocket 长连接内订阅任务获取的方法。中途退出、WebSocket 断线、使用
 Http、或主动取消订阅 均不会再接收到来自 Server 的任务
 
-涉及到的方法名称为 `task_register_task`，这是一个 subscription 方法
+涉及到的方法名称为 `task_register_task`，这是一个 subscription 方法。对应的取消订阅方法为 `task_unregister_task`，由框架自动生成，调用后将停止接收任务
 
 需要构建如下的结构体以注册:
 

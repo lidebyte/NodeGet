@@ -40,12 +40,31 @@ WebSocket JsonRpc 无异
 在非 Windows 平台可选启用 Unix Socket 监听（`enable_unix_socket` / `unix_socket_path`），该入口复用与 TCP 完全一致的
 Axum 主路由。
 
+### HTTP 路由
+
+Server 在监听端口上同时暴露以下 HTTP 路由：
+
+| 路径 | 方法 | 说明 |
+|------|------|------|
+| `GET /` | GET | 返回一个包含 Server UUID 和版本信息的 HTML 页面，可用于快速确认服务是否运行 |
+| `POST /` | POST | JSON-RPC over HTTP 入口 |
+| `WS /` | WebSocket | JSON-RPC over WebSocket 入口 |
+| `/worker-route/{route_name}/**` | ANY | JsWorker HTTP 路由入口，详见 [HTTP Route 绑定](/api/js_worker/route.md) |
+| `/terminal` | WebSocket | Terminal WebSocket 代理，详见 [Terminal](/api/terminal/index.md) |
+| 其他路径 | ANY | **Fallback**: 所有未匹配的路径均转发到 JSON-RPC 服务处理 |
+
+Fallback 意味着你可以向任意路径发送 JSON-RPC 请求（如 `POST /api`），Server 都会正常处理。
+
 ## 数据库
 
 目前兼容了 Sqlite 与 PostgreSQL，请根据需要选择
 
 - 内部测试或小型 (Agent 数目 <= 10) 可使用 Sqlite，性能问题不明显
 - 大量 Agents 务必使用 PostgreSQL，表内压缩、JsonBinary 等特性比 Sqlite 更省空间，更高效
+
+Server 启动时会自动执行数据库迁移（`Migrator::up()`），无需手动建表或执行 SQL 脚本。版本升级后首次启动即可完成表结构变更。
+
+使用 SQLite 时，Server 会自动开启 WAL（Write-Ahead Logging）模式（`PRAGMA journal_mode=WAL`），以提升并发读写性能。无需手动配置。
 
 ## 注意特点
 
