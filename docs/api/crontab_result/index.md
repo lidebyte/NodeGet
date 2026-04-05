@@ -14,9 +14,9 @@ Crontab 触发 => 执行任务 => 记录执行结果 => 存储到数据库
 
 ## 方法列表
 
-| 方法名 | 描述 |
-|-------|------|
-| [crontab-result_query](./crud.md#query-crontabresult) | 查询执行结果记录 |
+| 方法名                                                     | 描述       |
+|---------------------------------------------------------|----------|
+| [crontab-result_query](./crud.md#query-crontabresult)   | 查询执行结果记录 |
 | [crontab-result_delete](./crud.md#delete-crontabresult) | 删除执行结果记录 |
 
 ## 数据结构

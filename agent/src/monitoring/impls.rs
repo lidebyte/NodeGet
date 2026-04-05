@@ -1,8 +1,8 @@
+use crate::AGENT_CONFIG;
 use crate::monitoring::gpu::{DynamicDataFromGpu, StaticDataFromGpu};
 use crate::monitoring::network_connections::calc_connections;
 use crate::monitoring::system_impls::{DynamicDataFromSystem, StaticDataFromSystem};
 use crate::monitoring::{refresh_global_disk, refresh_global_network};
-use crate::AGENT_CONFIG;
 use nodeget_lib::monitoring::data_structure::DiskKind::{Hdd, Ssd, Unknown};
 use nodeget_lib::monitoring::data_structure::{
     DynamicMonitoringData, DynamicNetworkData, DynamicPerDiskData, DynamicPerNetworkInterfaceData,

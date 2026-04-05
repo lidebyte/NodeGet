@@ -17,7 +17,7 @@ use sea_orm::{
 use serde_json::value::RawValue;
 
 /// 转义 SQL LIKE 特殊字符，防止注入攻击
-/// 
+///
 /// SQL LIKE 中 `%` 匹配任意字符序列，`_` 匹配单个字符
 /// 这些字符需要转义才能进行精确匹配
 fn escape_like_pattern(pattern: &str) -> String {

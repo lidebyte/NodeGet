@@ -4,7 +4,7 @@ use nodeget_lib::error::NodegetError;
 use nodeget_lib::task::ExecuteTask;
 use std::process::Stdio;
 use tokio::process::Command;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 // 命令执行超时时间，设定为 60 秒
 const EXECUTE_TIMEOUT: Duration = Duration::from_mins(1);

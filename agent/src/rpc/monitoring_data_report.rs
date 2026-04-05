@@ -1,11 +1,11 @@
+use crate::AGENT_CONFIG;
 use crate::monitoring::impls::Monitor;
 use crate::rpc::multi_server::send_to;
 use crate::rpc::wrap_json_into_rpc_with_id_1;
-use crate::AGENT_CONFIG;
 use log::{error, trace};
 use nodeget_lib::monitoring::data_structure::{DynamicMonitoringData, StaticMonitoringData};
 use std::time::Duration;
-use tokio::time::{interval, MissedTickBehavior};
+use tokio::time::{MissedTickBehavior, interval};
 use tokio_tungstenite::tungstenite::{Message, Utf8Bytes};
 
 // 处理静态监控数据上报
@@ -43,7 +43,7 @@ pub async fn handle_static_monitoring_data_report() {
                         ],
                     ))),
                 )
-                    .await
+                .await
                 {
                     error!("{e}");
                 }
@@ -89,7 +89,7 @@ pub async fn handle_dynamic_monitoring_data_report() {
                         ],
                     ))),
                 )
-                    .await
+                .await
                 {
                     error!("{e}");
                 }

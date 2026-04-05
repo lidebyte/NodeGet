@@ -44,11 +44,7 @@ impl MigrationTrait for Migration {
                             .string()
                             .null(),
                     )
-                    .col(
-                        ColumnDef::new(JsWorkerInDatabase::Env)
-                            .json_binary()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(JsWorkerInDatabase::Env).json_binary().null())
                     .col(
                         ColumnDef::new(JsWorkerInDatabase::RuntimeCleanTime)
                             .big_integer()
@@ -94,11 +90,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(
-                Table::drop()
-                    .table(JsWorkerInDatabase::Table)
-                    .to_owned(),
-            )
+            .drop_table(Table::drop().table(JsWorkerInDatabase::Table).to_owned())
             .await
     }
 }

@@ -17,7 +17,10 @@ const AUTH_FAILED_MESSAGE: &str = "Invalid credentials";
 
 /// 使用恒定时间比较验证哈希，防止时序攻击
 fn verify_hash_constant_time(computed_hash: &str, stored_hash: &str) -> bool {
-    computed_hash.as_bytes().ct_eq(stored_hash.as_bytes()).into()
+    computed_hash
+        .as_bytes()
+        .ct_eq(stored_hash.as_bytes())
+        .into()
 }
 
 pub async fn get_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<Token> {
@@ -138,11 +141,11 @@ pub fn parse_token_limit_with_compat(token_limit_value: Value) -> anyhow::Result
 }
 
 /// 通配符匹配函数 - 仅支持后缀通配符 `*`
-/// 
+///
 /// # 说明
 /// - `pattern` 以 `*` 结尾时，匹配以 `*` 前内容开头的任意字符串
 /// - `pattern` 不以 `*` 结尾时，进行精确匹配
-/// 
+///
 /// # 示例
 /// - `wildcard_matches_pattern("abc", "ab*")` -> true
 /// - `wildcard_matches_pattern("abc", "abc")` -> true  

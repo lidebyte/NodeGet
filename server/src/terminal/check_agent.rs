@@ -41,12 +41,15 @@ pub async fn check_agent(
 
     // 解析任务类型并验证是否为 WebShell
     let task_event_type: TaskEventType = serde_json::from_value(task_model.task_event_type)
-        .map_err(|e| NodegetError::SerializationError(format!("Failed to parse task_event_type: {e}")))?;
+        .map_err(|e| {
+            NodegetError::SerializationError(format!("Failed to parse task_event_type: {e}"))
+        })?;
 
     if !matches!(task_event_type, TaskEventType::WebShell(_)) {
         return Err(NodegetError::PermissionDenied(
-            "Terminal connection is only allowed for WebShell tasks".to_owned()
-        ).into());
+            "Terminal connection is only allowed for WebShell tasks".to_owned(),
+        )
+        .into());
     }
 
     Ok(true)

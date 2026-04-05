@@ -6,14 +6,14 @@
 
 ## 方法列表
 
-| 方法名 | 描述 |
-|-------|------|
-| [kv_set_value](./crud.md#set-key-value) | 写入键值对 |
-| [kv_get_value](./crud.md#get-key-value) | 读取单个键值 |
-| [kv_get_multi_value](./crud.md#get-multi-key-value) | 批量读取键值 |
-| [kv_delete_key](./crud.md#delete-key-value) | 删除键值对 |
-| [kv_get_all_keys](./crud.md#list-all-keys) | 列出所有键名 |
-| [kv_create_namespace](./crud.md#create-namespace) | 创建命名空间 |
+| 方法名                                                   | 描述       |
+|-------------------------------------------------------|----------|
+| [kv_set_value](./crud.md#set-key-value)               | 写入键值对    |
+| [kv_get_value](./crud.md#get-key-value)               | 读取单个键值   |
+| [kv_get_multi_value](./crud.md#get-multi-key-value)   | 批量读取键值   |
+| [kv_delete_key](./crud.md#delete-key-value)           | 删除键值对    |
+| [kv_get_all_keys](./crud.md#list-all-keys)            | 列出所有键名   |
+| [kv_create_namespace](./crud.md#create-namespace)     | 创建命名空间   |
 | [kv_list_all_namespace](./crud.md#list-all-namespace) | 列出所有命名空间 |
 
 特殊说明请参考 [special.md](./special.md)。
@@ -68,7 +68,8 @@ pub enum Kv {
 
 `ListAllKeys` 可以列出在这一 KvNamespace Scope 下的所有键 (但是不一定可以读取键对应的值)
 
-`Read` / `Write` / `Delete` 的 String，可以拥有通配符，比如 `metadata_*`，表达可以操作这一 KvNamespace Scope 下的所有以 `metadata_` 开头的键
+`Read` / `Write` / `Delete` 的 String，可以拥有通配符，比如 `metadata_*`，表达可以操作这一 KvNamespace Scope 下的所有以
+`metadata_` 开头的键
 
 `kv_get_multi_value` 支持批量读取，并支持在请求 key 中直接使用后缀通配符（如 `metadata_*`）
 

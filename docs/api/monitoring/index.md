@@ -1,6 +1,7 @@
 # Monitoring 总览
 
-Monitoring 是本项目的核心功能之一，负责系统监控数据的上报与查询。Agent 定期采集主机的静态/动态信息，通过 JSON-RPC 上报至 Server，调用者可按条件查询历史数据。
+Monitoring 是本项目的核心功能之一，负责系统监控数据的上报与查询。Agent 定期采集主机的静态/动态信息，通过 JSON-RPC 上报至
+Server，调用者可按条件查询历史数据。
 
 ## 数据类型
 
@@ -304,7 +305,8 @@ pub enum StaticDataQueryField { Cpu, System, Gpu }
 pub enum DynamicDataQueryField { Cpu, Ram, Load, System, Disk, Network, Gpu }
 ```
 
-当 `fields` 为空时，要求 Token 至少对一种字段有 `Read` 权限即可；当 `fields` 非空时，Token 必须对指定的每个字段都有 `Read` 权限。
+当 `fields` 为空时，要求 Token 至少对一种字段有 `Read` 权限即可；当 `fields` 非空时，Token 必须对指定的每个字段都有 `Read`
+权限。
 
 ### QueryCondition
 

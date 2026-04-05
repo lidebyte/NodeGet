@@ -10,14 +10,22 @@ pub async fn js_inline_call(
     timeout_sec: Option<f64>,
     inline_caller: Option<String>,
 ) -> StdResult<String, Error> {
-    let params: Value = serde_json::from_str(&params_json)
-        .map_err(|e| js_error("inline_call", format!("inline_call params is not valid JSON: {e}")))?;
+    let params: Value = serde_json::from_str(&params_json).map_err(|e| {
+        js_error(
+            "inline_call",
+            format!("inline_call params is not valid JSON: {e}"),
+        )
+    })?;
 
     let result_value =
         run_inline_call_and_record_result(js_worker_name, params, timeout_sec, inline_caller)
             .await
             .map_err(|e| js_error("inline_call", e.to_string()))?;
 
-    serde_json::to_string(&result_value)
-        .map_err(|e| js_error("inline_call", format!("Failed to serialize inline_call result: {e}")))
+    serde_json::to_string(&result_value).map_err(|e| {
+        js_error(
+            "inline_call",
+            format!("Failed to serialize inline_call result: {e}"),
+        )
+    })
 }

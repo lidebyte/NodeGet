@@ -79,7 +79,9 @@ pub async fn report_dynamic(
                 // 内部记录详细错误，向客户端返回通用错误
                 let error_id = generate_error_id();
                 log::error!("[ErrorID: {error_id}] Database insert error: {e}");
-                NodegetError::DatabaseError(format!("Database error occurred. Reference: {error_id}"))
+                NodegetError::DatabaseError(format!(
+                    "Database error occurred. Reference: {error_id}"
+                ))
             })?;
 
         debug!("Inserted dynamic data with id [{}]", result.last_insert_id);

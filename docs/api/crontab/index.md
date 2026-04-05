@@ -128,10 +128,10 @@ Crontab 权限遵循 Token 的作用域限制：
 
 ## 方法列表
 
-| 方法名 | 描述 |
-|-------|------|
-| [crontab_create](./crud.md#create-crontab) | 创建新的定时任务 |
-| [crontab_edit](./crud.md#edit-crontab) | 修改已存在的定时任务 |
-| [crontab_get](./crud.md#get-crontab) | 获取定时任务列表 |
-| [crontab_delete](./crud.md#delete-crontab) | 删除指定的定时任务 |
+| 方法名                                        | 描述          |
+|--------------------------------------------|-------------|
+| [crontab_create](./crud.md#create-crontab) | 创建新的定时任务    |
+| [crontab_edit](./crud.md#edit-crontab)     | 修改已存在的定时任务  |
+| [crontab_get](./crud.md#get-crontab)       | 获取定时任务列表    |
+| [crontab_delete](./crud.md#delete-crontab) | 删除指定的定时任务   |
 | [crontab_set_enable](./crud.md#set-enable) | 控制定时任务的启用状态 |

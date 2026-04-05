@@ -85,15 +85,19 @@ pub async fn run(
             )
             .route(
                 "/worker-route/{route_name}",
-                any(|Path(route_name): Path<String>, req: axum::extract::Request| async move {
-                    handle_js_worker_route(route_name, req).await
-                }),
+                any(
+                    |Path(route_name): Path<String>, req: axum::extract::Request| async move {
+                        handle_js_worker_route(route_name, req).await
+                    },
+                ),
             )
             .route(
                 "/worker-route/{route_name}/",
-                any(|Path(route_name): Path<String>, req: axum::extract::Request| async move {
-                    handle_js_worker_route(route_name, req).await
-                }),
+                any(
+                    |Path(route_name): Path<String>, req: axum::extract::Request| async move {
+                        handle_js_worker_route(route_name, req).await
+                    },
+                ),
             )
             .route(
                 "/worker-route/{route_name}/{*path}",
@@ -130,8 +134,7 @@ pub async fn run(
                 let unix_app = app.clone();
                 unix_socket_path = Some(socket_path.clone());
                 unix_server_task = Some(tokio::spawn(async move {
-                    if let Err(e) = axum::serve(unix_listener, unix_app.into_make_service()).await
-                    {
+                    if let Err(e) = axum::serve(unix_listener, unix_app.into_make_service()).await {
                         log::error!("Unix socket server stopped with error: {e}");
                     }
                 }));

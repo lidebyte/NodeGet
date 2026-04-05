@@ -57,8 +57,8 @@ pub async fn generate_super_token() -> anyhow::Result<Option<(String, String)>> 
         Err(e) => {
             // 检查是否是唯一约束冲突（记录已存在）
             let error_msg = format!("{e}");
-            if error_msg.contains("UNIQUE constraint failed") 
-                || error_msg.contains("duplicate key") {
+            if error_msg.contains("UNIQUE constraint failed") || error_msg.contains("duplicate key")
+            {
                 Ok(None)
             } else {
                 Err(e)
@@ -78,7 +78,7 @@ pub async fn roll_super_token() -> anyhow::Result<(String, String)> {
         Box::pin(async move {
             // 删除旧令牌
             token::Entity::delete_by_id(1).exec(txn).await?;
-            
+
             // 生成新令牌数据
             let token_key = generate_random_string(16);
             let token_secret = generate_random_string(32);
@@ -101,10 +101,12 @@ pub async fn roll_super_token() -> anyhow::Result<(String, String)> {
             };
 
             token::Entity::insert(super_token_model).exec(txn).await?;
-            
+
             Ok((format!("{token_key}:{token_secret}"), raw_password))
         })
-    }).await.map_err(|e| NodegetError::DatabaseError(format!("Transaction failed: {e}")).into())
+    })
+    .await
+    .map_err(|e| NodegetError::DatabaseError(format!("Transaction failed: {e}")).into())
 }
 
 // 检查给定的令牌或认证信息是否为超级令牌

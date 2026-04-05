@@ -126,7 +126,7 @@ async fn process_crontab() {
             .ok();
 
         let Some(cron_type) = cron_type else { continue };
-        
+
         // 克隆需要在闭包中使用的数据
         let job_id = job.id;
         let job_name = job.name.clone();

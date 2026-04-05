@@ -83,7 +83,8 @@ pub async fn delete(token: String, query: JsResultDataQuery) -> RpcResult<Box<Ra
                         delete_query.filter(js_result::Column::JsWorkerName.eq(js_worker_name));
                 }
                 JsResultQueryCondition::RunType(run_type) => {
-                    select_query = select_query.filter(js_result::Column::RunType.eq(run_type.clone()));
+                    select_query =
+                        select_query.filter(js_result::Column::RunType.eq(run_type.clone()));
                     delete_query = delete_query.filter(js_result::Column::RunType.eq(run_type));
                 }
                 JsResultQueryCondition::StartTimeFromTo(start, end) => {

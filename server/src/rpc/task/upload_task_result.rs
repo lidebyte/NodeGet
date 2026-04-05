@@ -26,30 +26,29 @@ pub async fn upload_task_result(
         // 解析原始任务类型以获取任务名称（用于权限检查）
         // 注意：这里使用响应中的任务ID来查找任务类型
         let db = <super::TaskRpcImpl as RpcHelper>::get_db()?;
-        
+
         // 首先仅获取任务类型以进行权限验证
-        let task_type_result: Option<(i64, Value)> = task::Entity::find_by_id(task_response.task_id.cast_signed())
-            .filter(task::Column::Uuid.eq(task_response.agent_uuid))
-            .filter(task::Column::Token.eq(task_response.task_token.clone()))
-            .select_only()
-            .column(task::Column::Id)
-            .column(task::Column::TaskEventType)
-            .into_tuple()
-            .one(db)
-            .await
-            .map_err(|e| {
-                error!("Database query error: {e}");
-                NodegetError::DatabaseError(format!("Database query error: {e}"))
-            })?;
+        let task_type_result: Option<(i64, Value)> =
+            task::Entity::find_by_id(task_response.task_id.cast_signed())
+                .filter(task::Column::Uuid.eq(task_response.agent_uuid))
+                .filter(task::Column::Token.eq(task_response.task_token.clone()))
+                .select_only()
+                .column(task::Column::Id)
+                .column(task::Column::TaskEventType)
+                .into_tuple()
+                .one(db)
+                .await
+                .map_err(|e| {
+                    error!("Database query error: {e}");
+                    NodegetError::DatabaseError(format!("Database query error: {e}"))
+                })?;
 
         let (_, task_event_type_value) = task_type_result.ok_or_else(|| {
-            NodegetError::NotFound(
-                "Task validation failed: Invalid ID, UUID, or Token".to_owned(),
-            )
+            NodegetError::NotFound("Task validation failed: Invalid ID, UUID, or Token".to_owned())
         })?;
 
-        let original_task_type: TaskEventType =
-            serde_json::from_value(task_event_type_value).map_err(|e| {
+        let original_task_type: TaskEventType = serde_json::from_value(task_event_type_value)
+            .map_err(|e| {
                 NodegetError::SerializationError(format!("Failed to parse original task type: {e}"))
             })?;
 

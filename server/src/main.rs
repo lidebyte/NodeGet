@@ -60,19 +60,23 @@ async fn main() {
     RELOAD_NOTIFY.get_or_init(tokio::sync::Notify::new);
 
     // Config Parse
-    let mut config = match nodeget_lib::config::server::ServerConfig::get_and_parse_config(&config_path).await {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            eprintln!("Failed to parse config: {e}");
-            std::process::exit(1);
-        }
-    };
+    let mut config =
+        match nodeget_lib::config::server::ServerConfig::get_and_parse_config(&config_path).await {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("Failed to parse config: {e}");
+                std::process::exit(1);
+            }
+        };
 
     // Log init
     let base_log_level = match log::LevelFilter::from_str(&config.log_level) {
         Ok(level) => level,
         Err(_) => {
-            eprintln!("Warning: Invalid log_level '{}', using INFO", config.log_level);
+            eprintln!(
+                "Warning: Invalid log_level '{}', using INFO",
+                config.log_level
+            );
             log::LevelFilter::Info
         }
     };
@@ -109,15 +113,24 @@ async fn main() {
             loop {
                 subcommands::serve::run(&config, rpc_timing_log_level).await;
 
-                let reloaded_config = match nodeget_lib::config::server::ServerConfig::get_and_parse_config(&config_path).await {
-                    Ok(cfg) => cfg,
-                    Err(e) => {
-                        log::error!("Failed to reload config after edit: {e}, keeping current config");
-                        continue;  // 保留当前配置，继续循环
-                    }
-                };
+                let reloaded_config =
+                    match nodeget_lib::config::server::ServerConfig::get_and_parse_config(
+                        &config_path,
+                    )
+                    .await
+                    {
+                        Ok(cfg) => cfg,
+                        Err(e) => {
+                            log::error!(
+                                "Failed to reload config after edit: {e}, keeping current config"
+                            );
+                            continue; // 保留当前配置，继续循环
+                        }
+                    };
                 if let Err(e) = update_global_config(reloaded_config.clone()) {
-                    log::error!("Failed to update global config after reload: {e}, keeping current config");
+                    log::error!(
+                        "Failed to update global config after reload: {e}, keeping current config"
+                    );
                     continue;
                 }
                 config = reloaded_config;

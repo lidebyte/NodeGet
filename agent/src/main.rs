@@ -14,7 +14,7 @@ use crate::rpc::monitoring_data_report::{
     handle_dynamic_monitoring_data_report, handle_static_monitoring_data_report,
 };
 use crate::tasks::handle_task;
-use log::{error, info, Level};
+use log::{Level, error, info};
 use nodeget_lib::args_parse::agent::AgentArgs;
 use nodeget_lib::config::agent::AgentConfig;
 use nodeget_lib::error::NodegetError;

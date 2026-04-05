@@ -42,7 +42,8 @@ pub struct StaticDataQuery {
 ### 权限要求
 
 - **Scope**: 若 `condition` 中包含 `uuid`，需覆盖对应的 `AgentUuid`；若不包含 `uuid`，需要 `Global` Scope
-- **Permission**: `StaticMonitoring::Read(field)` — 当 `fields` 非空时，Token 必须对每个指定字段有 Read 权限；当 `fields` 为空时，至少对一个字段有 Read 权限
+- **Permission**: `StaticMonitoring::Read(field)` — 当 `fields` 非空时，Token 必须对每个指定字段有 Read 权限；当 `fields`
+  为空时，至少对一个字段有 Read 权限
 
 权限配置示例：
 
@@ -165,13 +166,15 @@ pub struct DynamicDataQuery {
 }
 ```
 
-- `fields`: 指定返回哪些数据字段，可选值为 `cpu` / `ram` / `load` / `system` / `disk` / `network` / `gpu`。若为空，返回 Token 有权限读取的所有字段
+- `fields`: 指定返回哪些数据字段，可选值为 `cpu` / `ram` / `load` / `system` / `disk` / `network` / `gpu`。若为空，返回
+  Token 有权限读取的所有字段
 - `condition`: 查询条件列表，多个条件为 AND 关系
 
 ### 权限要求
 
 - **Scope**: 若 `condition` 中包含 `uuid`，需覆盖对应的 `AgentUuid`；若不包含 `uuid`，需要 `Global` Scope
-- **Permission**: `DynamicMonitoring::Read(field)` — 当 `fields` 非空时，Token 必须对每个指定字段有 Read 权限；当 `fields` 为空时，至少对一个字段有 Read 权限
+- **Permission**: `DynamicMonitoring::Read(field)` — 当 `fields` 非空时，Token 必须对每个指定字段有 Read 权限；当 `fields`
+  为空时，至少对一个字段有 Read 权限
 
 权限配置示例：
 
@@ -526,7 +529,8 @@ pub struct DynamicDataAvgQuery {
 ### 权限要求
 
 - **Scope**: `AgentUuid` — 必须覆盖 `uuids` 中的每一个 UUID
-- **Permission**: `StaticMonitoring::Read(field)` — 当 `fields` 非空时，Token 必须对每个指定字段有 Read 权限；当 `fields` 为空时，至少对一个字段有 Read 权限
+- **Permission**: `StaticMonitoring::Read(field)` — 当 `fields` 非空时，Token 必须对每个指定字段有 Read 权限；当 `fields`
+  为空时，至少对一个字段有 Read 权限
 
 ### 返回值
 
@@ -662,7 +666,8 @@ pub struct DynamicDataAvgQuery {
 ### 权限要求
 
 - **Scope**: `AgentUuid` — 必须覆盖 `uuids` 中的每一个 UUID
-- **Permission**: `DynamicMonitoring::Read(field)` — 当 `fields` 非空时，Token 必须对每个指定字段有 Read 权限；当 `fields` 为空时，至少对一个字段有 Read 权限
+- **Permission**: `DynamicMonitoring::Read(field)` — 当 `fields` 非空时，Token 必须对每个指定字段有 Read 权限；当 `fields`
+  为空时，至少对一个字段有 Read 权限
 
 ### 返回值
 

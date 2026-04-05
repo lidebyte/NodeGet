@@ -1,5 +1,5 @@
 use crate::rpc::multi_server::{send_to, subscribe_to};
-use crate::rpc::{wrap_json_into_rpc_with_id_1, JsonRpcTask};
+use crate::rpc::{JsonRpcTask, wrap_json_into_rpc_with_id_1};
 use crate::{AGENT_ARGS, AGENT_CONFIG, RELOAD_NOTIFY};
 use log::{error, info};
 use nodeget_lib::config::agent::AgentConfig;
@@ -90,7 +90,8 @@ async fn execute_task(
             .map_err(|e| NodegetError::Other(format!("{e}")).into()),
 
         TaskEventType::ReadConfig => {
-            let args = AGENT_ARGS.get()
+            let args = AGENT_ARGS
+                .get()
                 .ok_or_else(|| NodegetError::Other("Agent args not initialized".to_owned()))?;
             let file = fs::read_to_string(&args.config)
                 .await
@@ -106,7 +107,8 @@ async fn execute_task(
                 }
             };
 
-            let args = AGENT_ARGS.get()
+            let args = AGENT_ARGS
+                .get()
                 .ok_or_else(|| NodegetError::Other("Agent args not initialized".to_owned()))?;
             fs::write(&args.config, config_string)
                 .await
@@ -182,12 +184,12 @@ pub async fn handle_task() {
                                 json_rpc.params.result.task_id,
                                 &json_rpc.params.result.task_token,
                             )
-                                .await
+                            .await
                         } else {
                             Err(NodegetError::PermissionDenied(
                                 "Permission Denied: Task not allowed".to_owned(),
                             )
-                                .into())
+                            .into())
                         };
 
                     let should_restart = matches!(task_type, TaskEventType::EditConfig(_))

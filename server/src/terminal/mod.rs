@@ -170,7 +170,7 @@ async fn handle_agent(
     {
         use std::collections::hash_map::Entry;
         let mut sessions = state.sessions.write().await;
-        
+
         // Entry API 确保检查和插入是原子操作
         match sessions.entry(session_key.clone()) {
             Entry::Occupied(_) => {

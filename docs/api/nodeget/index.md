@@ -6,14 +6,14 @@ NodeGet 是本项目的基础服务接口模块，提供服务端状态查询、
 
 ## 方法列表
 
-| 方法名 | 描述 | 权限要求 |
-|-------|------|---------|
-| [hello](./crud.md#hello) | 测试服务是否正常运行 | 无 |
-| [version](./crud.md#version) | 获取服务端版本信息 | 无 |
-| [uuid](./crud.md#uuid) | 获取当前 Server UUID | 无 |
+| 方法名                                                  | 描述                 | 权限要求                        |
+|------------------------------------------------------|--------------------|-----------------------------|
+| [hello](./crud.md#hello)                             | 测试服务是否正常运行         | 无                           |
+| [version](./crud.md#version)                         | 获取服务端版本信息          | 无                           |
+| [uuid](./crud.md#uuid)                               | 获取当前 Server UUID   | 无                           |
 | [list_all_agent_uuid](./crud.md#list-all-agent-uuid) | 获取所有 Agent UUID 列表 | `NodeGet::ListAllAgentUuid` |
-| [read_config](./crud.md#read-config) | 读取服务端配置文件原文 | SuperToken |
-| [edit_config](./crud.md#edit-config) | 写入并触发服务端配置热重载 | SuperToken |
+| [read_config](./crud.md#read-config)                 | 读取服务端配置文件原文        | SuperToken                  |
+| [edit_config](./crud.md#edit-config)                 | 写入并触发服务端配置热重载      | SuperToken                  |
 
 ## 版本信息结构体
 
@@ -64,4 +64,5 @@ NodeGet 是本项目的基础服务接口模块，提供服务端状态查询、
 
 `list_all_agent_uuid` 需要 Token 拥有 `NodeGet::ListAllAgentUuid` 权限，返回结果受 Scope 限制
 
-`read_config` / `edit_config` 仅允许 **SuperToken** 调用，`token` 支持 `token_key:token_secret` 或 `username|password` 两种格式
+`read_config` / `edit_config` 仅允许 **SuperToken** 调用，`token` 支持 `token_key:token_secret` 或 `username|password`
+两种格式

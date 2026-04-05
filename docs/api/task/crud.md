@@ -24,7 +24,8 @@
 2. `task_type` 结构体参考 Task 总览中的 `TaskEventType`。
 3. 当 `task_type` 为 `web_shell` 时，必须携带 `terminal_id`（随机 UUID）。
 4. 当 `task_type` 为 `execute` 时，必须使用结构化参数（`cmd + args`），且 `cmd` 不能为空字符串。
-5. 当 `task_type` 为 `http_request` 时，`body` 与 `body_base64` 互斥，最多只能出现一个；`ip` 可传具体 IP，或 `"ipv4 auto"` / `"ipv6 auto"`。
+5. 当 `task_type` 为 `http_request` 时，`body` 与 `body_base64` 互斥，最多只能出现一个；`ip` 可传具体 IP，或 `"ipv4 auto"` /
+   `"ipv6 auto"`。
 
 ### 权限要求
 

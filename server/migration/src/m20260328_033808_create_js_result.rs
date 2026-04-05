@@ -55,7 +55,8 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(JsResultInDatabase::ErrorMessage)
-                            .string().null(),
+                            .string()
+                            .null(),
                     )
                     .to_owned(),
             )
@@ -76,11 +77,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(
-                Table::drop()
-                    .table(JsResultInDatabase::Table)
-                    .to_owned(),
-            )
+            .drop_table(Table::drop().table(JsResultInDatabase::Table).to_owned())
             .await
     }
 }

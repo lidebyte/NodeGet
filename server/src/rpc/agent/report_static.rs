@@ -71,7 +71,9 @@ pub async fn report_static(
                 // 内部记录详细错误，但向客户端返回通用错误
                 let error_id = generate_error_id();
                 log::error!("[ErrorID: {}] Database insert error: {e}", error_id);
-                NodegetError::DatabaseError(format!("Database error occurred. Reference: {error_id}"))
+                NodegetError::DatabaseError(format!(
+                    "Database error occurred. Reference: {error_id}"
+                ))
             })?;
 
         debug!("Inserted static data with id [{}]", result.last_insert_id);

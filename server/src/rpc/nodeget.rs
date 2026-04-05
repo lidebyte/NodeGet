@@ -79,29 +79,32 @@ mod config_ops {
     // 验证配置文件路径，防止路径遍历攻击
     fn validate_config_path(config_path: &str) -> anyhow::Result<&Path> {
         let path = Path::new(config_path);
-        
+
         // 获取当前工作目录作为允许的基础目录
         let current_dir = std::env::current_dir()
             .map_err(|e| NodegetError::Other(format!("Cannot determine working directory: {e}")))?;
-        
+
         // 获取规范化路径（解析符号链接和相对路径）
-        let canonical_path = path.canonicalize()
+        let canonical_path = path
+            .canonicalize()
             .map_err(|e| NodegetError::InvalidInput(format!("Invalid config path: {e}")))?;
-        
+
         // 验证路径在允许目录内
         if !canonical_path.starts_with(&current_dir) {
             return Err(NodegetError::PermissionDenied(
-                "Config path must be within working directory".to_owned()
-            ).into());
+                "Config path must be within working directory".to_owned(),
+            )
+            .into());
         }
-        
+
         // 验证是文件而非目录
         if !canonical_path.is_file() {
             return Err(NodegetError::InvalidInput(
-                "Config path must be a regular file".to_owned()
-            ).into());
+                "Config path must be a regular file".to_owned(),
+            )
+            .into());
         }
-        
+
         Ok(path)
     }
 
@@ -130,7 +133,7 @@ mod config_ops {
             let config_path = SERVER_CONFIG_PATH.get().ok_or_else(|| {
                 NodegetError::Other("Server config path not initialized".to_owned())
             })?;
-            
+
             // 验证路径安全性，防止路径遍历
             validate_config_path(config_path)?;
 
@@ -164,16 +167,18 @@ mod config_ops {
             let config_path = SERVER_CONFIG_PATH.get().ok_or_else(|| {
                 NodegetError::Other("Server config path not initialized".to_owned())
             })?;
-            
+
             // 验证路径安全性，防止路径遍历
             validate_config_path(config_path)?;
-            
+
             // 使用临时文件+原子重命名，确保写入完整性
             let temp_path = format!("{}.tmp", config_path);
             tokio::fs::write(&temp_path, config_string)
                 .await
-                .map_err(|e| NodegetError::Other(format!("Failed to write temp config file: {e}")))?;
-            
+                .map_err(|e| {
+                    NodegetError::Other(format!("Failed to write temp config file: {e}"))
+                })?;
+
             tokio::fs::rename(&temp_path, config_path)
                 .await
                 .map_err(|e| {

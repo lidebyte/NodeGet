@@ -168,18 +168,18 @@ pub async fn run_inline_call_and_record_result(
             Some(target_script_name),
             inline_caller,
         )
-        .map_err(|e| NodegetError::Other(format!("JavaScript runtime execution failed: {e}")).into())
+        .map_err(|e| {
+            NodegetError::Other(format!("JavaScript runtime execution failed: {e}")).into()
+        })
     });
 
     let run_outcome: anyhow::Result<Value> = if let Some(duration) = timeout_duration {
         match tokio::time::timeout(duration, run_task).await {
-            Ok(join_result) => {
-                join_result.map_err(|e| {
-                    anyhow::Error::from(NodegetError::Other(format!(
-                        "inline_call task join failed: {e}"
-                    )))
-                })?
-            }
+            Ok(join_result) => join_result.map_err(|e| {
+                anyhow::Error::from(NodegetError::Other(format!(
+                    "inline_call task join failed: {e}"
+                )))
+            })?,
             Err(_) => Err(NodegetError::Other(format!(
                 "inline_call timed out after {:.3} seconds",
                 duration.as_secs_f64()
@@ -187,13 +187,11 @@ pub async fn run_inline_call_and_record_result(
             .into()),
         }
     } else {
-        run_task
-            .await
-            .map_err(|e| {
-                anyhow::Error::from(NodegetError::Other(format!(
-                    "inline_call task join failed: {e}"
-                )))
-            })?
+        run_task.await.map_err(|e| {
+            anyhow::Error::from(NodegetError::Other(format!(
+                "inline_call task join failed: {e}"
+            )))
+        })?
     };
 
     let finish_time = get_local_timestamp_ms_i64().unwrap_or(start_time);
