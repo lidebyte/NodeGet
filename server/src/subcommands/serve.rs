@@ -411,6 +411,9 @@ async fn handle_js_worker_route(
         if let Ok(name) = axum::http::header::HeaderName::from_bytes(header.name.as_bytes())
             && let Ok(value) = axum::http::header::HeaderValue::from_str(header.value.as_str())
         {
+            if name == "content-encoding" || name == "transfer-encoding" {
+                continue;
+            }
             response = response.header(name, value);
         }
     }

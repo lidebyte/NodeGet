@@ -56,6 +56,7 @@ pub trait Rpc {
         run_type: Option<nodeget_lib::js_runtime::RunType>,
         params: Value,
         env: Option<Value>,
+        compile_mode: Option<nodeget_lib::js_runtime::CompileMode>,
     ) -> RpcResult<Box<RawValue>>;
 
     #[method(name = "get_rt_pool")]
@@ -130,8 +131,9 @@ impl RpcServer for JsWorkerRpcImpl {
         run_type: Option<nodeget_lib::js_runtime::RunType>,
         params: Value,
         env: Option<Value>,
+        compile_mode: Option<nodeget_lib::js_runtime::CompileMode>,
     ) -> RpcResult<Box<RawValue>> {
-        run::run(token, js_script_name, run_type, params, env).await
+        run::run(token, js_script_name, run_type, params, env, compile_mode).await
     }
 
     async fn get_rt_pool(&self, token: String) -> RpcResult<Box<RawValue>> {

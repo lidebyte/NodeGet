@@ -330,7 +330,8 @@
   },
   "env": {                        // 可选，传入时使用请求里的 env；不传时使用数据库中该脚本保存的 env
     "override": true
-  }
+  },
+  "compile_mode": "bytecode"      // 可选，bytecode / source，默认 bytecode
 }
 ```
 
@@ -342,8 +343,39 @@
 - `env`：可选：
     - 传入时：使用请求里的 `env`
     - 不传时：使用数据库中该脚本保存的 `env`，若为空则使用 `{}`
+- `compile_mode`：可选，执行模式：
+    - `bytecode`：使用预编译的字节码执行（默认，性能更好）
+    - `source`：使用原始源码实时编译执行（调试时使用，错误堆栈包含准确行号）
 
 `run` 不会等待脚本执行结束，返回的 `id` 可用于后续查询执行结果。
+
+**关于 `compile_mode`**：
+- `bytecode` 模式：使用脚本创建时预编译的字节码，执行效率高，但错误堆栈可能不显示准确的源码行号
+- `source` 模式：使用原始源码实时编译，执行效率略低，但错误堆栈会显示准确的源码行号（如 `photobed.js:23:5`），便于调试
+- 其他调用方式（WebRoute、inline_call）始终使用 `bytecode` 模式
+
+**关于 `run_type: "route"` 的注意事项**：
+- 当使用 `onRoute` 处理函数时，`params` 需要传入序列化的 HTTP Request 对象，格式如下：
+  ```json
+  {
+    "url": "https://example.com/worker-route/photobed/test.png",
+    "method": "GET",
+    "headers": [
+      {"name": "User-Agent", "value": "Mozilla/5.0"}
+    ],
+    "body_bytes": []
+  }
+  ```
+- 执行结果保存到数据库的是序列化的 HTTP Response 对象：
+  ```json
+  {
+    "status": 200,
+    "headers": [
+      {"name": "content-type", "value": "image/png"}
+    ],
+    "body_bytes": [137, 80, 78, 71, ...]
+  }
+  ```
 
 ### 权限要求
 
@@ -372,6 +404,25 @@
     "token": "demo_token",
     "js_script_name": "demo_worker",
     "run_type": "call",
+    "params": {
+      "hello": "world"
+    }
+  },
+  "id": 1
+}
+```
+
+使用 source 模式（便于调试）：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "js-worker_run",
+  "params": {
+    "token": "demo_token",
+    "js_script_name": "demo_worker",
+    "run_type": "call",
+    "compile_mode": "source",
     "params": {
       "hello": "world"
     }

@@ -9,6 +9,14 @@ pub enum RunType {
     InlineCall,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CompileMode {
+    #[default]
+    Bytecode,
+    Source,
+}
+
 impl RunType {
     #[must_use]
     pub const fn as_str(&self) -> &'static str {

@@ -178,38 +178,36 @@ fn build_postgres_dynamic_avg_sql(fields: &[DynamicDataQueryField]) -> String {
     format!(
         r"
 WITH filtered AS MATERIALIZED (
-    SELECT timestamp{select_columns}
+    SELECT 
+        timestamp{select_columns},
+        MIN(timestamp) OVER () AS min_ts,
+        MAX(timestamp) OVER () AS max_ts
     FROM dynamic_monitoring
     WHERE uuid = CAST($1 AS uuid)
       AND ($2::bigint IS NULL OR timestamp >= $2)
       AND ($3::bigint IS NULL OR timestamp <= $3)
 ),
-bounds AS MATERIALIZED (
-    SELECT MIN(timestamp) AS min_ts, MAX(timestamp) AS max_ts
-    FROM filtered
-),
-bucketed AS MATERIALIZED (
+bucketed AS (
     SELECT
         CASE
-            WHEN bounds.min_ts IS NULL THEN NULL
-            WHEN bounds.min_ts = bounds.max_ts OR $4::bigint <= 1 THEN 0
+            WHEN min_ts IS NULL THEN NULL
+            WHEN min_ts = max_ts OR $4::bigint <= 1 THEN 0
             ELSE LEAST(
                 $4::bigint - 1,
-                ((filtered.timestamp - bounds.min_ts) * $4::bigint) / ((bounds.max_ts - bounds.min_ts) + 1)
+                ((timestamp - min_ts) * $4::bigint) / NULLIF(max_ts - min_ts, 0)
             )
         END AS bucket,
-        filtered.timestamp{select_columns}
+        timestamp{select_columns}
     FROM filtered
-    CROSS JOIN bounds
 ),
 agg AS (
     SELECT
-        bucketed.bucket AS bucket,
-        AVG(bucketed.timestamp)::bigint AS timestamp{aggregate_columns}
+        bucket AS bucket,
+        AVG(timestamp)::bigint AS timestamp{aggregate_columns}
     FROM bucketed
-    WHERE bucketed.bucket IS NOT NULL
-    GROUP BY bucketed.bucket
-    ORDER BY bucketed.bucket
+    WHERE bucket IS NOT NULL
+    GROUP BY bucket
+    ORDER BY bucket
 )
 SELECT COALESCE(
     jsonb_agg(
