@@ -170,7 +170,11 @@ pub async fn run_inline_call_and_record_result(
             inline_caller,
         )
         .map_err(|e| {
-            NodegetError::Other(format!("JavaScript runtime execution failed: {e}")).into()
+            NodegetError::Other(format!(
+                "JavaScript runtime execution failed: {}",
+                crate::js_runtime::format_js_error(&e)
+            ))
+            .into()
         })
     });
 
@@ -286,7 +290,10 @@ pub async fn enqueue_source_js_worker_run(
         })
         .await {
             Ok(Ok(value)) => Ok(value),
-            Ok(Err(e)) => Err(format!("JavaScript execution error: {e}")),
+            Ok(Err(e)) => Err(format!(
+                "JavaScript execution error: {}",
+                crate::js_runtime::format_js_error(&e)
+            )),
             Err(e) => Err(format!("Source mode task join failed: {e}")),
         };
 

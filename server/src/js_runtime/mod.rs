@@ -17,6 +17,24 @@ pub fn js_error(stage: &'static str, message: impl Into<String>) -> Error {
     Error::new_from_js_message(stage, "String", message.into())
 }
 
+/// Format a `rquickjs::Error` for human-readable display.
+///
+/// The default `Display` impl for `Error::FromJs` produces misleading output like
+/// `"Error converting from js 'stage' into type 'String': actual message"`.
+/// This function extracts the meaningful portion instead.
+pub fn format_js_error(err: &Error) -> String {
+    match err {
+        Error::FromJs {
+            from,
+            message: Some(msg),
+            ..
+        } if !msg.is_empty() => {
+            format!("[{from}] {msg}")
+        }
+        other => other.to_string(),
+    }
+}
+
 pub(crate) fn init_js_runtime_globals(ctx: &Ctx<'_>) -> Result<(), Error> {
     llrt_fetch::init(ctx)?;
     llrt_buffer::init(ctx)?;
@@ -31,7 +49,7 @@ pub(crate) fn init_js_runtime_globals(ctx: &Ctx<'_>) -> Result<(), Error> {
         "__nodeget_inline_call_raw",
         Func::from(Async(inline_call::js_inline_call)),
     )?;
-    global.set("uuid", Func::from(|| Uuid::new_v4().to_string()))?;
+    global.set("randomUuid", Func::from(|| Uuid::new_v4().to_string()))?;
     // Wrap raw functions to return parsed JS objects instead of JSON strings
     ctx.eval::<(), _>(
         r#"
@@ -53,21 +71,33 @@ fn format_js_exception(ctx: &Ctx<'_>) -> String {
     let exception = ctx.catch();
 
     if let Some(obj) = exception.as_object() {
+        let name: Option<String> = obj.get("name").ok();
+        let message: Option<String> = obj.get("message").ok();
         let stack: Option<String> = obj.get("stack").ok();
+
+        // Build "Name: message" header when available
+        let header = match (&name, &message) {
+            (Some(name), Some(message)) if !message.is_empty() => {
+                Some(format!("{name}: {message}"))
+            }
+            (_, Some(message)) if !message.is_empty() => Some(message.clone()),
+            _ => None,
+        };
+
+        // QuickJS .stack only contains call frames without the error message,
+        // so we must prepend the header to get a useful trace.
         if let Some(stack) = stack
             && !stack.trim().is_empty()
         {
-            return stack;
+            return if let Some(header) = header {
+                format!("{header}\n{stack}")
+            } else {
+                stack
+            };
         }
 
-        let name: Option<String> = obj.get("name").ok();
-        let message: Option<String> = obj.get("message").ok();
-        match (name, message) {
-            (Some(name), Some(message)) if !message.is_empty() => {
-                return format!("{name}: {message}");
-            }
-            (_, Some(message)) if !message.is_empty() => return message,
-            _ => {}
+        if let Some(header) = header {
+            return header;
         }
     }
 
@@ -273,8 +303,6 @@ pub fn js_runner(
                     };
                     globalThis.inlineCall = inlineCall;
                     const runtimeCtx = {
-                        nodeget: globalThis.nodeget,
-                        uuid: globalThis.uuid,
                         runType: runHandler,
                         inlineCall,
                         inlineCaller: globalThis.__nodeget_inline_caller ?? null
@@ -492,8 +520,6 @@ pub fn js_runner_source_mode(
                     };
                     globalThis.inlineCall = inlineCall;
                     const runtimeCtx = {
-                        nodeget: globalThis.nodeget,
-                        uuid: globalThis.uuid,
                         runType: runHandler,
                         inlineCall,
                         inlineCaller: globalThis.__nodeget_inline_caller ?? null

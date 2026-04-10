@@ -378,7 +378,7 @@ fn worker_loop(script_name: String, receiver: std::sync::mpsc::Receiver<WorkerCo
                         env,
                     )
                     .await
-                    .map_err(|e| e.to_string())
+                    .map_err(|e| super::format_js_error(&e))
                 });
                 let _ = response_tx.send(exec_result);
             }
@@ -504,8 +504,6 @@ async fn execute_on_worker(
                 };
                 globalThis.inlineCall = inlineCall;
                 const runtimeCtx = {
-                    nodeget: globalThis.nodeget,
-                    uuid: globalThis.uuid,
                     runType: runHandler,
                     inlineCall,
                     inlineCaller: globalThis.__nodeget_inline_caller ?? null
