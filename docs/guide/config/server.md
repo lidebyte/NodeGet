@@ -49,6 +49,9 @@ memory_log_capacity = 500
 # 注意：如果未设置且设置了 RUST_LOG 环境变量，则 RUST_LOG 的值也会作为此项的默认值
 memory_log_filter = "info"
 
+# 注意：流式日志订阅（nodeget-server_stream_log）的过滤器不在此处配置，
+# 而是由客户端在订阅时通过 log_filter 参数指定，详见 API 文档
+
 # 数据库配置
 [database]
 

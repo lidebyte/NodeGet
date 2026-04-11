@@ -495,3 +495,148 @@
   "id": 1
 }
 ```
+
+## Stream Log
+
+实时订阅服务端日志流。该方法是 JSON-RPC **Subscription**（基于 WebSocket），建立订阅后服务端会持续推送匹配过滤条件的日志事件。
+
+### 方法
+
+订阅方法名为 `nodeget-server_stream_log`，取消订阅方法名为 `nodeget-server_unsubscribe_stream_log`。
+
+需要提供以下参数：
+
+```json
+{
+  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET", // SuperToken 字符串
+  "log_filter": "info,rpc=debug,db=trace"        // 日志过滤规则，语法同 RUST_LOG
+}
+```
+
+`log_filter` 参数说明:
+
+- 语法与 `RUST_LOG` 环境变量相同，支持 `target=level` 的逗号分隔组合
+- 支持虚拟 target `db`，会自动展开为 `sea_orm` / `sea_orm_migration` / `sqlx`
+- 可用的 target: `server`, `rpc`, `db`, `kv`, `monitoring`, `task`, `token`, `js_worker`, `js_result`, `crontab`, `crontab_result`, `js_runtime`, `terminal`
+- 示例: `"info"` 接收所有 INFO 及以上级别，`"debug,db=trace"` 接收 DEBUG 级别 + 数据库 TRACE 级别
+
+### 权限要求
+
+该方法仅允许 **SuperToken** 调用。
+
+`token` 支持以下格式之一:
+
+- `token_key:token_secret`
+- `username|password`
+
+认证失败时，服务端会拒绝订阅请求（reject），WebSocket 连接不会建立订阅通道。
+
+### 返回值
+
+订阅建立成功后，服务端通过 WebSocket 持续推送 JSON-RPC notification，每条 notification 的 `params.result` 为一个日志事件对象:
+
+- `timestamp`: ISO 8601 格式的时间戳（含时区）
+- `level`: 日志级别（`TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`）
+- `target`: 日志 target（数据库相关日志统一重映射为 `"db"`）
+- `message`: 日志消息文本
+- `fields`: 结构化字段对象（无额外字段时为空对象 `{}`）
+- `spans`: span 上下文数组（无 span 时为空数组 `[]`）
+
+### 行为说明
+
+- 订阅建立后，仅推送**新产生**的日志事件（不回放历史日志，历史日志请使用 `log` 方法查询）
+- 每个订阅者拥有独立的 512 容量 channel 缓冲区，当客户端消费速度过慢导致缓冲区满时，新日志会被丢弃
+- 客户端断开 WebSocket 连接或发送取消订阅请求后，服务端自动清理对应订阅
+- 支持多个客户端同时订阅，各订阅者的 `log_filter` 互相独立
+
+### 完整示例
+
+订阅请求:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "nodeget-server_stream_log",
+  "params": {
+    "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET",
+    "log_filter": "info,rpc=debug"
+  },
+  "id": 1
+}
+```
+
+订阅成功响应（返回 subscription ID）:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": "subscription_id_here",
+  "id": 1
+}
+```
+
+后续推送的日志事件（JSON-RPC notification）:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "nodeget-server_stream_log",
+  "params": {
+    "subscription": "subscription_id_here",
+    "result": {
+      "timestamp": "2026-04-11T12:00:05.678+08:00",
+      "level": "INFO",
+      "target": "server",
+      "message": "config reloaded successfully",
+      "fields": {},
+      "spans": []
+    }
+  }
+}
+```
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "nodeget-server_stream_log",
+  "params": {
+    "subscription": "subscription_id_here",
+    "result": {
+      "timestamp": "2026-04-11T12:00:06.123+08:00",
+      "level": "DEBUG",
+      "target": "rpc",
+      "message": "success",
+      "fields": {},
+      "spans": [
+        {
+          "name": "kv::set_value",
+          "fields": "token_key=demo namespace=config key=theme"
+        }
+      ]
+    }
+  }
+}
+```
+
+取消订阅请求:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "nodeget-server_unsubscribe_stream_log",
+  "params": {
+    "subscription": "subscription_id_here"
+  },
+  "id": 2
+}
+```
+
+取消订阅响应:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": true,
+  "id": 2
+}
+```

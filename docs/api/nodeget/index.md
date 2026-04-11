@@ -16,6 +16,7 @@ NodeGet 是本项目的基础服务接口模块，提供服务端状态查询、
 | [edit_config](./crud.md#edit-config)                 | 写入并触发服务端配置热重载      | SuperToken                  |
 | [database_storage](./crud.md#database-storage)       | 查询数据库各表存储占用        | SuperToken                  |
 | [log](./crud.md#log)                                 | 查询内存日志缓冲区          | SuperToken                  |
+| [stream_log](./crud.md#stream-log)                   | 实时流式日志订阅（WebSocket） | SuperToken                  |
 
 ## 版本信息结构体
 
@@ -128,12 +129,42 @@ NodeGet 是本项目的基础服务接口模块，提供服务端状态查询、
 内存日志缓冲区为固定容量的环形缓冲区，满时自动淘汰最旧的条目。容量和过滤级别可在 `[logging]` 配置段中通过
 `memory_log_capacity` 和 `memory_log_filter` 设置，详见 [Server 配置](../../guide/config/server.md)
 
+## 流式日志事件结构体
+
+`stream_log` 订阅推送的每条日志事件结构与内存日志格式一致:
+
+```json
+{
+    "timestamp": "2026-04-11T12:00:01.234+08:00", // ISO 8601 时间戳（含时区）
+    "level": "DEBUG",                              // 日志级别: TRACE / DEBUG / INFO / WARN / ERROR
+    "target": "rpc",                               // 日志 target（数据库相关统一为 "db"）
+    "message": "success",                          // 日志消息
+    "fields": {                                    // 结构化字段（可为空对象）
+        "token_key": "abc123"
+    },
+    "spans": [                                     // span 上下文（可为空数组）
+        {
+            "name": "kv::get_value",
+            "fields": "namespace=test key=foo"
+        }
+    ]
+}
+```
+
+与 `log` 方法的区别:
+
+- `log` 返回内存缓冲区中的历史日志快照（一次性返回数组）
+- `stream_log` 是 WebSocket 订阅，建立连接后实时推送新产生的日志事件，每次推送一条
+
+订阅者可通过 `log_filter` 参数指定过滤规则（语法同 `RUST_LOG`），仅接收匹配的日志。
+`log_filter` 同样支持虚拟 target `db`（自动展开为 `sea_orm` / `sea_orm_migration` / `sqlx`）
+
 ## 注意事项
 
 `hello` / `version` / `uuid` 三个方法不需要任何鉴权，可直接调用
 
 `list_all_agent_uuid` 需要 Token 拥有 `NodeGet::ListAllAgentUuid` 权限，返回结果受 Scope 限制
 
-`read_config` / `edit_config` / `database_storage` / `log` 仅允许 **SuperToken** 调用，`token` 支持
+`read_config` / `edit_config` / `database_storage` / `log` / `stream_log` 仅允许 **SuperToken** 调用，`token` 支持
 `token_key:token_secret` 或 `username|password`
 两种格式

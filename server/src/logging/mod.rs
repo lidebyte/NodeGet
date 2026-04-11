@@ -1,10 +1,11 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fmt as stdfmt;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use nodeget_lib::config::server::LoggingConfig;
 use tracing::field::{Field, Visit};
-use tracing::{Event, Subscriber};
+use tracing::{Event, Metadata, Subscriber};
 use tracing_subscriber::{
     fmt::{
         self,
@@ -17,6 +18,7 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
     EnvFilter, Layer,
 };
+use uuid::Uuid;
 
 /// Default capacity for the in-memory log ring buffer.
 const DEFAULT_MEMORY_LOG_CAPACITY: usize = 500;
@@ -129,11 +131,21 @@ pub fn init(config: Option<&LoggingConfig>) {
         None
     };
 
+    // ── Stream log layer (real-time subscription) ─────────────────
+    let stream_manager = get_stream_log_manager().clone();
+    let stream_layer = StreamLogLayer {
+        manager: Arc::clone(&stream_manager),
+    }
+    .with_filter(StreamLogFilter {
+        manager: stream_manager,
+    });
+
     // ── Assemble subscriber ─────────────────────────────────────────
     tracing_subscriber::registry()
         .with(console_layer)
         .with(json_layer)
         .with(memory_layer)
+        .with(stream_layer)
         .init();
 }
 
@@ -496,4 +508,273 @@ fn strip_ansi(s: &str) -> String {
         }
     }
     result
+}
+
+// ===========================================================================
+//  Stream log – real-time log subscription via RPC
+// ===========================================================================
+
+/// Global singleton managing all active stream log subscribers.
+static STREAM_LOG_MANAGER: OnceLock<Arc<StreamLogManager>> = OnceLock::new();
+
+/// Returns the global [`StreamLogManager`] singleton (created on first call).
+pub fn get_stream_log_manager() -> &'static Arc<StreamLogManager> {
+    STREAM_LOG_MANAGER.get_or_init(|| Arc::new(StreamLogManager::new()))
+}
+
+/// Manages all active stream log subscribers.
+///
+/// Uses `std::sync::RwLock` because it is accessed from the synchronous
+/// `on_event` callback in the tracing layer. The `subscriber_count` atomic
+/// provides a fast path to skip lock acquisition when there are no subscribers.
+pub struct StreamLogManager {
+    subscribers: RwLock<HashMap<Uuid, StreamLogSubscriber>>,
+    /// Fast-path optimisation: avoids acquiring the read lock when zero.
+    subscriber_count: AtomicUsize,
+}
+
+impl StreamLogManager {
+    fn new() -> Self {
+        Self {
+            subscribers: RwLock::new(HashMap::new()),
+            subscriber_count: AtomicUsize::new(0),
+        }
+    }
+
+    /// Register a new subscriber.
+    ///
+    /// **WARNING**: Do NOT emit any tracing events while calling this method –
+    /// it holds the write lock, and `on_event` acquires the read lock, which
+    /// would deadlock on non-reentrant `std::sync::RwLock`.
+    pub fn add_subscriber(
+        &self,
+        id: Uuid,
+        tx: tokio::sync::mpsc::Sender<serde_json::Value>,
+        filter_str: &str,
+    ) {
+        let expanded = expand_virtual_targets(filter_str);
+        let filter = StreamFilter::parse(&expanded);
+        let subscriber = StreamLogSubscriber { tx, filter };
+        let mut guard = self.subscribers.write().unwrap_or_else(|e| e.into_inner());
+        guard.insert(id, subscriber);
+        self.subscriber_count.store(guard.len(), Ordering::Release);
+    }
+
+    /// Remove a subscriber by id.
+    ///
+    /// **WARNING**: Same deadlock caveat as [`add_subscriber`].
+    pub fn remove_subscriber(&self, id: &Uuid) {
+        let mut guard = self.subscribers.write().unwrap_or_else(|e| e.into_inner());
+        guard.remove(id);
+        self.subscriber_count.store(guard.len(), Ordering::Release);
+    }
+
+    /// Returns `true` if there is at least one active subscriber.
+    #[inline]
+    fn has_subscribers(&self) -> bool {
+        self.subscriber_count.load(Ordering::Acquire) > 0
+    }
+}
+
+/// A single stream log subscriber with its own filter and channel.
+struct StreamLogSubscriber {
+    tx: tokio::sync::mpsc::Sender<serde_json::Value>,
+    filter: StreamFilter,
+}
+
+// ---------------------------------------------------------------------------
+//  StreamFilter – lightweight target+level matcher
+// ---------------------------------------------------------------------------
+
+/// A lightweight filter that matches events by target prefix and level.
+///
+/// Supports the same `target=level` directive format as `RUST_LOG` / `EnvFilter`,
+/// but only handles target+level matching (no span-based filtering).
+struct StreamFilter {
+    /// Default level when no target directive matches.
+    default_level: tracing::level_filters::LevelFilter,
+    /// Per-target level overrides, sorted by decreasing length for longest-prefix match.
+    targets: Vec<(String, tracing::level_filters::LevelFilter)>,
+}
+
+impl StreamFilter {
+    /// Parses an `EnvFilter`-compatible filter string into a [`StreamFilter`].
+    ///
+    /// Accepts directives like `"info"`, `"server=debug,rpc=trace"`,
+    /// `"warn,server=info"`, etc. Unknown level strings are silently ignored.
+    fn parse(filter_str: &str) -> Self {
+        let mut default_level = tracing::level_filters::LevelFilter::OFF;
+        let mut targets = Vec::new();
+
+        for directive in filter_str.split(',') {
+            let directive = directive.trim();
+            if directive.is_empty() {
+                continue;
+            }
+
+            if let Some((target, level_str)) = directive.split_once('=') {
+                let target = target.trim();
+                let level_str = level_str.trim();
+                if let Some(level) = parse_level_filter(level_str) {
+                    targets.push((target.to_string(), level));
+                }
+            } else if let Some(level) = parse_level_filter(directive) {
+                // Bare level like "info" sets the default
+                default_level = level;
+            }
+        }
+
+        // Sort by target length descending for longest-prefix match
+        targets.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+
+        Self {
+            default_level,
+            targets,
+        }
+    }
+
+    /// Returns `true` if the given metadata passes this filter.
+    fn is_enabled(&self, meta: &Metadata<'_>) -> bool {
+        let target = meta.target();
+        let level = meta.level();
+
+        // Longest prefix match
+        for (prefix, filter_level) in &self.targets {
+            if target.starts_with(prefix.as_str()) {
+                return level <= filter_level;
+            }
+        }
+
+        // Fall back to default
+        level <= &self.default_level
+    }
+}
+
+/// Parses a level string (case-insensitive) into a [`LevelFilter`].
+fn parse_level_filter(s: &str) -> Option<tracing::level_filters::LevelFilter> {
+    match s.to_lowercase().as_str() {
+        "off" => Some(tracing::level_filters::LevelFilter::OFF),
+        "error" => Some(tracing::level_filters::LevelFilter::ERROR),
+        "warn" => Some(tracing::level_filters::LevelFilter::WARN),
+        "info" => Some(tracing::level_filters::LevelFilter::INFO),
+        "debug" => Some(tracing::level_filters::LevelFilter::DEBUG),
+        "trace" => Some(tracing::level_filters::LevelFilter::TRACE),
+        _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  StreamLogFilter – per-layer filter (Filter<S> trait)
+// ---------------------------------------------------------------------------
+
+/// Per-layer filter for [`StreamLogLayer`].
+///
+/// This **must** be used as a per-layer filter (via `.with_filter()`), not as a
+/// global filter. Without per-layer filtering, a `Layer` whose `enabled()`
+/// returns `false` would block **all other layers** from receiving the event
+/// due to the `Layered` subscriber's AND logic.
+///
+/// The filter checks only whether any subscribers exist (`subscriber_count > 0`).
+/// Per-subscriber filtering is done inside `StreamLogLayer::on_event`.
+struct StreamLogFilter {
+    manager: Arc<StreamLogManager>,
+}
+
+impl<S> tracing_subscriber::layer::Filter<S> for StreamLogFilter
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    fn enabled(
+        &self,
+        _meta: &Metadata<'_>,
+        _cx: &tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
+        // Fast path: single atomic load
+        self.manager.has_subscribers()
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  StreamLogLayer – broadcasts events to subscribers
+// ---------------------------------------------------------------------------
+
+/// A [`Layer`] that broadcasts events to all active stream log subscribers.
+///
+/// Serialises events in the same JSON format as [`MemoryLogLayer`] and uses
+/// `try_send` (non-blocking) to avoid back-pressure from slow subscribers.
+struct StreamLogLayer {
+    manager: Arc<StreamLogManager>,
+}
+
+impl<S> Layer<S> for StreamLogLayer
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    fn on_event(&self, event: &Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // Fast path: no subscribers
+        if !self.manager.has_subscribers() {
+            return;
+        }
+
+        let meta = event.metadata();
+
+        // Acquire read lock and find which subscribers are interested
+        let guard = self
+            .manager
+            .subscribers
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+
+        if guard.is_empty() {
+            return;
+        }
+
+        // Pre-filter: collect subscribers interested in this event
+        let interested: Vec<&StreamLogSubscriber> = guard
+            .values()
+            .filter(|sub| sub.filter.is_enabled(meta))
+            .collect();
+
+        if interested.is_empty() {
+            return;
+        }
+
+        // Serialise the event (same format as MemoryLogLayer)
+        let mut visitor = JsonFieldVisitor::default();
+        event.record(&mut visitor);
+        let message = visitor.message.take().unwrap_or_default();
+
+        let spans: Vec<serde_json::Value> = ctx
+            .event_scope(event)
+            .into_iter()
+            .flatten()
+            .map(|span| {
+                let mut obj = serde_json::json!({ "name": span.name() });
+                let ext = span.extensions();
+                if let Some(fields) = ext
+                    .get::<FormattedFields<format::DefaultFields>>()
+                    .filter(|f| !f.is_empty())
+                {
+                    obj["fields"] = serde_json::Value::String(strip_ansi(&fields.to_string()));
+                }
+                obj
+            })
+            .collect();
+
+        let target = remap_target(meta.target());
+
+        let entry = serde_json::json!({
+            "timestamp": chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%.3f%:z").to_string(),
+            "level": meta.level().as_str(),
+            "target": target,
+            "message": message,
+            "fields": visitor.fields,
+            "spans": spans,
+        });
+
+        // Broadcast to all interested subscribers (non-blocking)
+        for sub in interested {
+            let _ = sub.tx.try_send(entry.clone());
+        }
+    }
 }
