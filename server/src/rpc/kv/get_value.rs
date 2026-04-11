@@ -1,13 +1,13 @@
 use crate::kv::get_v_from_kv;
 use crate::rpc::kv::auth::check_kv_read_permission;
 use jsonrpsee::core::RpcResult;
-use log::debug;
+use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use serde_json::value::RawValue;
 
 pub async fn get_value(token: String, namespace: String, key: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        debug!("KV RPC: Processing get_value request for namespace '{namespace}', key '{key}'");
+        debug!(target: "rpc", namespace = %namespace, key = %key, "Processing get_value request");
 
         // 检查读权限
         check_kv_read_permission(&token, &namespace, &key).await?;

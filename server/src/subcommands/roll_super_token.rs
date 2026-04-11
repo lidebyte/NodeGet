@@ -1,4 +1,4 @@
-use log::info;
+use tracing::info;
 use std::io::{self, Write};
 
 use crate::token::super_token::roll_super_token;
@@ -8,15 +8,15 @@ pub async fn run() {
         "This action will delete the current super token (id=1) and generate a new one. Continue? [y/n]: ",
     );
     if !should_continue {
-        info!("Super token rotation cancelled by user.");
+        info!(target: "server", "Super token rotation cancelled by user");
         return;
     }
 
     match roll_super_token().await {
         Ok((token, root_password)) => {
-            info!("Super token rotated successfully.");
-            info!("Super Token: {token}");
-            info!("Root Password: {root_password}");
+            info!(target: "server", "Super token rotated successfully");
+            info!(target: "server", "Super Token: {token}");
+            info!(target: "server", "Root Password: {root_password}");
         }
         Err(e) => {
             panic!("Failed to rotate super token: {e}");

@@ -1,4 +1,5 @@
 use crate::rpc::RpcHelper;
+use crate::rpc::{rpc_exec, token_identity};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::core::async_trait;
 use jsonrpsee::proc_macros::rpc;
@@ -6,6 +7,7 @@ use nodeget_lib::crontab_result::query::CrontabResultDataQuery;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::value::RawValue;
+use tracing::Instrument;
 
 mod auth;
 mod delete;
@@ -45,7 +47,9 @@ impl RpcServer for CrontabResultRpcImpl {
         token: String,
         query: CrontabResultDataQuery,
     ) -> RpcResult<Box<RawValue>> {
-        query::query(token, query).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "crontab-result::query", token_key = tk, username = un, query = ?query);
+        async { rpc_exec!(query::query(token, query).await) }.instrument(span).await
     }
 
     async fn delete(
@@ -53,6 +57,8 @@ impl RpcServer for CrontabResultRpcImpl {
         token: String,
         delete_params: CrontabResultDelete,
     ) -> RpcResult<Box<RawValue>> {
-        delete::delete(token, delete_params).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "crontab-result::delete", token_key = tk, username = un, delete_params = ?delete_params);
+        async { rpc_exec!(delete::delete(token, delete_params).await) }.instrument(span).await
     }
 }

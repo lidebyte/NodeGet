@@ -2,7 +2,7 @@ use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
-use log::error;
+use tracing::error;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::query::{DynamicDataAvgQuery, DynamicDataQueryField};
 use nodeget_lib::permission::data_structure::{DynamicMonitoring, Permission, Scope};
@@ -137,7 +137,7 @@ async fn query_dynamic_avg_postgres(
         .map_err(|e| {
             // 内部记录详细错误，向客户端返回通用错误
             let error_id = generate_error_id();
-            error!("[ErrorID: {error_id}] Failed to query dynamic avg in postgres: {e}");
+            tracing::error!(target: "rpc", error_id = error_id, error = %e, "Failed to query dynamic avg in postgres");
             NodegetError::DatabaseError(format!("Database error occurred. Reference: {error_id}"))
         })?;
 

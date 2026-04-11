@@ -9,28 +9,41 @@ repository = "https://github.com/NodeSeekDev/NodeGet"
 categories = ["asynchronous", "command-line-utilities", "network-programming", "os"]
 
 [dependencies]
-tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
+# 本地
 nodeget-lib = { path = "../nodeget-lib", features = ["for-server"] }
 migration = { path = "migration" }
 
+# 基础运行时
+tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
 chrono = { version = "0.4.43", default-features = false, features = ["now", "std"] }
 uuid = { version = "1.19.0", default-features = false, features = ["v4"] }
 futures = "0.3.31"
 sha2 = "0.11.0-rc.3"
 subtle = "2.6.1"
-sea-orm = { version = "2.0.0-rc.28", default-features = false, features = ["runtime-tokio-rustls", "sqlx-sqlite", "sqlx-postgres", "macros", "with-json", "with-uuid"] }
-serde = "1.0.228"
-serde_json = "1.0.149"
-toml = { version = "0.9.11", default-features = false, features = ["std", "serde", "parse"] }
-jsonrpsee = { version = "0.26.0", default-features = false, features = ["server", "macros"] }
-axum = { version = "0.8.8", default-features = false, features = ["tokio", "ws", "http1", "query"] }
-tower = { version = "0.5.3", default-features = false }
-log = { version = "0.4.29", default-features = false, features = ["std", "serde"] }
-simple_logger = { version = "5.1.0", default-features = false, features = ["threads", "time", "timestamps", "colored", "colors"] }
 hex = "0.4.3"
 base64 = "0.22.1"
 cron = "0.15.0"
 anyhow = "1.0.100"
+
+# 数据库
+sea-orm = { version = "2.0.0-rc.28", default-features = false, features = ["runtime-tokio-rustls", "sqlx-sqlite", "sqlx-postgres", "macros", "with-json", "with-uuid"] }
+
+# Server
+jsonrpsee = { version = "0.26.0", default-features = false, features = ["server", "macros"] }
+axum = { version = "0.8.8", default-features = false, features = ["tokio", "ws", "http1", "query"] }
+tower = { version = "0.5.3", default-features = false }
+
+# 解析
+serde = "1.0.228"
+serde_json = "1.0.149"
+toml = { version = "0.9.11", default-features = false, features = ["std", "serde", "parse"] }
+
+# 日志
+log = { version = "0.4.29", default-features = false, features = ["std", "serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt", "chrono", "tracing-log"] }
+
+# JS Runtime
 rquickjs = { version = "0.11.0", default-features = false, features = ["futures"] }
 llrt_fetch = { git = "https://github.com/awslabs/llrt.git", package = "llrt_fetch", default-features = false, features = ["http1", "compression-rust", "webpki-roots", "tls-ring"] }
 llrt_buffer = { git = "https://github.com/awslabs/llrt.git", package = "llrt_buffer", default-features = false }

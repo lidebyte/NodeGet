@@ -1,5 +1,5 @@
 use super::{JS_RT_MEMORY_LIMIT_BYTES, enrich_exception, init_js_runtime_globals, js_error};
-use log::{debug, warn};
+use tracing::{debug, warn};
 use nodeget_lib::js_runtime::{RunType, RuntimePoolInfo, RuntimePoolWorkerInfo};
 use nodeget_lib::utils::get_local_timestamp_ms_i64;
 use rquickjs::{AsyncContext, AsyncRuntime, Error, Module, Promise, Value as JsValue};
@@ -89,7 +89,7 @@ impl RuntimeWorkerHandle {
 
         match get_local_timestamp_ms_i64() {
             Ok(now) => self.last_used_ms.store(now, Ordering::Relaxed),
-            Err(e) => warn!("Failed to read local timestamp for runtime worker: {e}"),
+            Err(e) => warn!(target: "js_runtime", error = %e, "Failed to read local timestamp for runtime worker"),
         }
         self.active_requests.fetch_sub(1, Ordering::SeqCst);
 
@@ -160,7 +160,7 @@ impl JsRuntimePool {
 
     pub fn cleanup_idle_workers(&self) {
         let now = get_local_timestamp_ms_i64().unwrap_or_else(|e| {
-            warn!("Failed to read local timestamp during runtime cleanup: {e}");
+            warn!(target: "js_runtime", error = %e, "Failed to read local timestamp during runtime cleanup");
             0
         });
 
@@ -191,7 +191,7 @@ impl JsRuntimePool {
                 })
                 .collect(),
             Err(e) => {
-                warn!("Runtime pool read lock poisoned during cleanup: {e}");
+                warn!(target: "js_runtime", error = %e, "Runtime pool read lock poisoned during cleanup");
                 return;
             }
         };
@@ -203,7 +203,7 @@ impl JsRuntimePool {
         let mut workers = match self.workers.write() {
             Ok(guard) => guard,
             Err(e) => {
-                warn!("Runtime pool write lock poisoned during cleanup: {e}");
+                warn!(target: "js_runtime", error = %e, "Runtime pool write lock poisoned during cleanup");
                 return;
             }
         };
@@ -235,7 +235,7 @@ impl JsRuntimePool {
             }
 
             if let Some(worker) = workers.remove(&name) {
-                debug!("Cleaning idle JS runtime worker: {name}");
+                debug!(target: "js_runtime", worker_name = %name, "Cleaning idle JS runtime worker");
                 let _ = worker.sender.send(WorkerCommand::Shutdown);
             }
         }
@@ -245,13 +245,13 @@ impl JsRuntimePool {
         let removed = match self.workers.write() {
             Ok(mut workers) => workers.remove(script_name),
             Err(e) => {
-                warn!("Runtime pool write lock poisoned during evict: {e}");
+                warn!(target: "js_runtime", error = %e, "Runtime pool write lock poisoned during evict");
                 return false;
             }
         };
 
         removed.is_some_and(|worker| {
-            debug!("Evicting JS runtime worker: {script_name}");
+            debug!(target: "js_runtime", worker_name = %script_name, "Evicting JS runtime worker");
             let _ = worker.sender.send(WorkerCommand::Shutdown);
             true
         })
@@ -260,7 +260,7 @@ impl JsRuntimePool {
     #[must_use]
     pub fn snapshot(&self) -> RuntimePoolInfo {
         let now = get_local_timestamp_ms_i64().unwrap_or_else(|e| {
-            warn!("Failed to read local timestamp during runtime snapshot: {e}");
+            warn!(target: "js_runtime", error = %e, "Failed to read local timestamp during runtime snapshot");
             0
         });
         let workers = self
@@ -323,7 +323,7 @@ fn spawn_worker(script_name: &str) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
         sender: tx,
         active_requests: AtomicUsize::new(0),
         last_used_ms: AtomicI64::new(get_local_timestamp_ms_i64().unwrap_or_else(|e| {
-            warn!("Failed to read local timestamp when spawning runtime worker: {e}");
+            warn!(target: "js_runtime", error = %e, "Failed to read local timestamp when spawning runtime worker");
             0
         })),
         runtime_clean_time_ms: AtomicI64::new(RUNTIME_CLEAN_TIME_NONE),

@@ -1,7 +1,7 @@
 use crate::kv::set_v_to_kv;
 use crate::rpc::kv::auth::check_kv_write_permission;
 use jsonrpsee::core::RpcResult;
-use log::debug;
+use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use serde_json::Value;
 use serde_json::value::RawValue;
@@ -13,7 +13,7 @@ pub async fn set_value(
     value: Value,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        debug!("KV RPC: Processing set_value request for namespace '{namespace}', key '{key}'");
+        debug!(target: "rpc", namespace = %namespace, key = %key, "Processing set_value request");
 
         // 检查写权限
         check_kv_write_permission(&token, &namespace, &key).await?;

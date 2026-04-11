@@ -7,10 +7,8 @@
     dead_code
 )]
 
-use crate::rpc_timing::parse_rpc_timing_log_level;
-use log::info;
+use tracing::info;
 use nodeget_lib::args_parse::server::{ServerArgs, ServerCommand};
-use std::str::FromStr;
 #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
 use tikv_jemallocator::Jemalloc;
 
@@ -30,6 +28,7 @@ mod terminal;
 mod crontab;
 pub mod js_runtime;
 mod kv;
+mod logging;
 mod rpc_timing;
 mod subcommands;
 mod token;
@@ -70,40 +69,13 @@ async fn main() {
         };
 
     // Log init
-    let base_log_level = match log::LevelFilter::from_str(&config.log_level) {
-        Ok(level) => level,
-        Err(_) => {
-            eprintln!(
-                "Warning: Invalid log_level '{}', using INFO",
-                config.log_level
-            );
-            log::LevelFilter::Info
-        }
-    };
-    let (rpc_timing_log_level, invalid_rpc_timing_log_level) =
-        parse_rpc_timing_log_level(config.jsonrpc_timing_log_level.as_deref());
+    logging::init();
 
-    if let Err(e) = simple_logger::SimpleLogger::new()
-        .with_level(base_log_level)
-        .with_module_level(
-            "nodeget_server::rpc_timing",
-            rpc_timing_log_level.to_level_filter(),
-        )
-        .init()
-    {
-        eprintln!("Failed to initialize logger: {e}");
-        std::process::exit(1);
-    }
-
-    if let Some(invalid_level) = invalid_rpc_timing_log_level {
-        log::warn!("Invalid jsonrpc_timing_log_level '{invalid_level}', fallback to 'trace'");
-    }
-
-    info!("Starting nodeget-server with config: {config:?}");
+    info!(target: "server", config = ?config, "Starting nodeget-server");
 
     // 初始化全局 Config
     if let Err(e) = update_global_config(config.clone()) {
-        log::error!("Failed to update global config: {e}");
+        tracing::error!(target: "server", error = %e, "Failed to update global config");
         std::process::exit(1);
     }
 
@@ -111,7 +83,7 @@ async fn main() {
         ServerCommand::Serve { .. } => {
             db_connection::init_db_connection().await;
             loop {
-                subcommands::serve::run(&config, rpc_timing_log_level).await;
+                subcommands::serve::run(&config).await;
 
                 let reloaded_config =
                     match nodeget_lib::config::server::ServerConfig::get_and_parse_config(
@@ -121,20 +93,24 @@ async fn main() {
                     {
                         Ok(cfg) => cfg,
                         Err(e) => {
-                            log::error!(
-                                "Failed to reload config after edit: {e}, keeping current config"
+                            tracing::error!(
+                                target: "server",
+                                error = %e,
+                                "Failed to reload config after edit, keeping current config"
                             );
                             continue; // 保留当前配置，继续循环
                         }
                     };
                 if let Err(e) = update_global_config(reloaded_config.clone()) {
-                    log::error!(
-                        "Failed to update global config after reload: {e}, keeping current config"
+                    tracing::error!(
+                        target: "server",
+                        error = %e,
+                        "Failed to update global config after reload, keeping current config"
                     );
                     continue;
                 }
                 config = reloaded_config;
-                info!("Config hot reload applied.");
+                info!(target: "server", "Config hot reload applied");
             }
         }
         ServerCommand::Init { .. } => {

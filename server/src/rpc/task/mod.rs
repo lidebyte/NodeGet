@@ -1,10 +1,10 @@
 use crate::rpc::RpcHelper;
+use crate::rpc::{rpc_exec, token_identity};
 use crate::token::get::check_token_limit;
 use jsonrpsee::PendingSubscriptionSink;
 use jsonrpsee::SubscriptionMessage;
 use jsonrpsee::core::{JsonRawValue, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
-use log::{error, info};
 use migration::async_trait::async_trait;
 use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
@@ -15,6 +15,7 @@ use serde_json::value::RawValue;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::{RwLock, mpsc};
+use tracing::Instrument;
 use uuid::Uuid;
 
 mod create_task;
@@ -71,7 +72,9 @@ impl RpcServer for TaskRpcImpl {
         target_uuid: Uuid,
         task_type: TaskEventType,
     ) -> RpcResult<Box<RawValue>> {
-        create_task::create_task(&self.manager, token, target_uuid, task_type).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "task::create_task", token_key = tk, username = un, target_uuid = %target_uuid, task_type = ?task_type);
+        async { rpc_exec!(create_task::create_task(&self.manager, token, target_uuid, task_type).await) }.instrument(span).await
     }
 
     async fn upload_task_result(
@@ -79,7 +82,9 @@ impl RpcServer for TaskRpcImpl {
         token: String,
         task_response: TaskEventResponse,
     ) -> RpcResult<Box<RawValue>> {
-        upload_task_result::upload_task_result(token, task_response).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "task::upload_task_result", token_key = tk, username = un, task_id = %task_response.task_id, agent_uuid = %task_response.agent_uuid);
+        async { rpc_exec!(upload_task_result::upload_task_result(token, task_response).await) }.instrument(span).await
     }
 
     async fn query(
@@ -87,7 +92,9 @@ impl RpcServer for TaskRpcImpl {
         token: String,
         task_data_query: TaskDataQuery,
     ) -> RpcResult<Box<RawValue>> {
-        query::query(token, task_data_query).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "task::query", token_key = tk, username = un, query = ?task_data_query);
+        async { rpc_exec!(query::query(token, task_data_query).await) }.instrument(span).await
     }
 
     async fn delete(
@@ -95,7 +102,9 @@ impl RpcServer for TaskRpcImpl {
         token: String,
         conditions: Vec<TaskQueryCondition>,
     ) -> RpcResult<Box<RawValue>> {
-        delete::delete(token, conditions).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "task::delete", token_key = tk, username = un, conditions = ?conditions);
+        async { rpc_exec!(delete::delete(token, conditions).await) }.instrument(span).await
     }
 
     async fn register_task(
@@ -104,7 +113,14 @@ impl RpcServer for TaskRpcImpl {
         token: String,
         uuid: Uuid,
     ) -> SubscriptionResult {
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "task::register_task", token_key = tk, username = un, uuid = %uuid);
+        let _guard = span.enter();
+
+        tracing::info!(target: "rpc", "subscription requested");
+
         let Ok(token_or_auth) = TokenOrAuth::from_full_token(&token) else {
+            tracing::error!(target: "rpc", "token parse error, rejecting subscription");
             subscription_sink
                 .reject(jsonrpsee::types::ErrorObject::borrowed(
                     101,
@@ -125,6 +141,7 @@ impl RpcServer for TaskRpcImpl {
         match is_allowed_result {
             Ok(true) => {}
             Ok(false) => {
+                tracing::error!(target: "rpc", "permission denied, rejecting subscription");
                 subscription_sink
                     .reject(jsonrpsee::types::ErrorObject::borrowed(
                         102,
@@ -136,6 +153,7 @@ impl RpcServer for TaskRpcImpl {
             }
             Err(e) => {
                 let nodeget_err = nodeget_lib::error::anyhow_to_nodeget_error(&e);
+                tracing::error!(target: "rpc", error = %nodeget_err, "permission check failed, rejecting subscription");
                 let () = subscription_sink
                     .reject(jsonrpsee::types::ErrorObject::owned(
                         nodeget_err.error_code() as i32,
@@ -152,23 +170,28 @@ impl RpcServer for TaskRpcImpl {
         let reg_id = Uuid::new_v4();
 
         self.manager.add_session(uuid, reg_id, tx).await;
+        tracing::info!(target: "rpc", reg_id = %reg_id, "subscription accepted");
 
         let manager_clone = self.manager.clone();
         let uuid_clone = uuid;
         let reg_id_clone = reg_id;
+
+        // Drop the span guard before spawning so the spawned task doesn't inherit it
+        drop(_guard);
+        let forward_span = span.clone();
 
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
                 let json_str = match serde_json::to_string(&msg) {
                     Ok(s) => s,
                     Err(e) => {
-                        error!("Failed to serialize task event: {e}");
+                        tracing::error!(target: "rpc", error = %e, "failed to serialize task event");
                         break;
                     }
                 };
 
                 let Ok(raw_value) = JsonRawValue::from_string(json_str) else {
-                    error!("Failed to create JsonRawValue");
+                    tracing::error!(target: "rpc", "failed to create JsonRawValue");
                     break;
                 };
 
@@ -182,8 +205,8 @@ impl RpcServer for TaskRpcImpl {
             manager_clone
                 .remove_session(&uuid_clone, &reg_id_clone)
                 .await;
-            info!("Client {uuid_clone} (RegID: {reg_id_clone}) disconnected, logic handled.");
-        });
+            tracing::info!(target: "rpc", uuid = %uuid_clone, reg_id = %reg_id_clone, "client disconnected, session removed");
+        }.instrument(forward_span));
 
         Ok(())
     }

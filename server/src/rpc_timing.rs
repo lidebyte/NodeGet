@@ -1,7 +1,7 @@
 use jsonrpsee::server::middleware::rpc::{Batch, Notification, Request, RpcServiceT};
-use log::{Level, debug, error, info, trace, warn};
 use std::future::Future;
 use std::time::Instant;
+use tracing::Level;
 
 #[derive(Clone)]
 pub struct RpcTimingMiddleware<S> {
@@ -9,33 +9,13 @@ pub struct RpcTimingMiddleware<S> {
     pub level: Level,
 }
 
-pub fn parse_rpc_timing_log_level(raw: Option<&str>) -> (Level, Option<String>) {
-    let Some(level_str) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
-        return (Level::Trace, None);
-    };
-
-    if level_str.eq_ignore_ascii_case("error") {
-        (Level::Error, None)
-    } else if level_str.eq_ignore_ascii_case("warn") {
-        (Level::Warn, None)
-    } else if level_str.eq_ignore_ascii_case("info") {
-        (Level::Info, None)
-    } else if level_str.eq_ignore_ascii_case("debug") {
-        (Level::Debug, None)
-    } else if level_str.eq_ignore_ascii_case("trace") {
-        (Level::Trace, None)
-    } else {
-        (Level::Trace, Some(level_str.to_owned()))
-    }
-}
-
-fn log_with_level(level: Level, message: &str) {
+fn log_with_level(level: Level, method: &str, kind: &str, elapsed_us: u128, extra: &str) {
     match level {
-        Level::Error => error!("{message}"),
-        Level::Warn => warn!("{message}"),
-        Level::Info => info!("{message}"),
-        Level::Debug => debug!("{message}"),
-        Level::Trace => trace!("{message}"),
+        Level::ERROR => tracing::error!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
+        Level::WARN => tracing::warn!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
+        Level::INFO => tracing::info!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
+        Level::DEBUG => tracing::debug!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
+        Level::TRACE => tracing::trace!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
     }
 }
 
@@ -62,9 +42,10 @@ where
             let elapsed_us = started_at.elapsed().as_micros();
             log_with_level(
                 level,
-                &format!(
-                    "rpc.call completed method={method_name} id={request_id} elapsed_us={elapsed_us}"
-                ),
+                &method_name,
+                "call",
+                elapsed_us,
+                &format!("rpc.call completed id={request_id}"),
             );
             response
         }
@@ -94,9 +75,10 @@ where
             let elapsed_us = started_at.elapsed().as_micros();
             log_with_level(
                 level,
-                &format!(
-                    "rpc.batch completed size={batch_size} methods={methods} elapsed_us={elapsed_us}"
-                ),
+                &methods,
+                "batch",
+                elapsed_us,
+                &format!("rpc.batch completed size={batch_size}"),
             );
             response
         }
@@ -116,7 +98,10 @@ where
             let elapsed_us = started_at.elapsed().as_micros();
             log_with_level(
                 level,
-                &format!("rpc.notification completed method={method_name} elapsed_us={elapsed_us}"),
+                &method_name,
+                "notification",
+                elapsed_us,
+                "rpc.notification completed",
             );
             response
         }

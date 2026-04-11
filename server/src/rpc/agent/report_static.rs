@@ -3,7 +3,7 @@ use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
-use log::debug;
+use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::data_structure::StaticMonitoringData;
 use nodeget_lib::permission::data_structure::{Permission, Scope, StaticMonitoring};
@@ -59,10 +59,7 @@ pub async fn report_static(
                 .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
         };
 
-        debug!(
-            "Received static data from [{}]",
-            static_monitoring_data.uuid
-        );
+        debug!(target: "rpc", agent_uuid = %static_monitoring_data.uuid, "Received static data");
 
         let result = static_monitoring::Entity::insert(in_data)
             .exec(db)
@@ -70,13 +67,13 @@ pub async fn report_static(
             .map_err(|e| {
                 // 内部记录详细错误，但向客户端返回通用错误
                 let error_id = generate_error_id();
-                log::error!("[ErrorID: {}] Database insert error: {e}", error_id);
+                tracing::error!(target: "rpc", error_id = error_id, error = %e, "Database insert error");
                 NodegetError::DatabaseError(format!(
                     "Database error occurred. Reference: {error_id}"
                 ))
             })?;
 
-        debug!("Inserted static data with id [{}]", result.last_insert_id);
+        debug!(target: "rpc", id = result.last_insert_id, "Inserted static data");
 
         let json_str = format!("{{\"id\":{}}}", result.last_insert_id);
         RawValue::from_string(json_str)

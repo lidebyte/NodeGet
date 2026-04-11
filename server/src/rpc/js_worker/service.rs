@@ -3,7 +3,7 @@ use crate::js_runtime::runtime_pool;
 use crate::js_runtime::js_runner_source_mode;
 use crate::rpc::RpcHelper;
 use crate::rpc::js_worker::JsWorkerRpcImpl;
-use log::error;
+use tracing::error;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::js_runtime::{JsCodeInput, RunType};
 use nodeget_lib::utils::get_local_timestamp_ms_i64;
@@ -96,7 +96,7 @@ pub async fn enqueue_defined_js_worker_run(
             .exec(&db)
             .await
         {
-            error!("Failed to update js_result {js_result_id} for worker '{worker_name}': {e}");
+            error!(target: "rpc", js_result_id = js_result_id, worker = %worker_name, error = %e, "Failed to update js_result");
         }
     });
 
@@ -224,9 +224,7 @@ pub async fn run_inline_call_and_record_result(
         .exec(&db)
         .await
     {
-        error!(
-            "Failed to update js_result {js_result_id} for inline_call worker '{worker_name}': {e}"
-        );
+        error!(target: "rpc", js_result_id = js_result_id, worker = %worker_name, error = %e, "Failed to update js_result for inline_call");
     }
 
     return_value
@@ -321,7 +319,7 @@ pub async fn enqueue_source_js_worker_run(
             .exec(&db)
             .await
         {
-            error!("Failed to update js_result {js_result_id} for source mode worker '{worker_name_in_spawn}': {e}");
+            error!(target: "rpc", js_result_id = js_result_id, worker = %worker_name_in_spawn, error = %e, "Failed to update js_result for source mode worker");
         }
     });
 

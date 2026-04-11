@@ -8,7 +8,7 @@ use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use axum::extract::{Query, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures::{SinkExt, StreamExt};
-use log::{error, info, warn};
+use tracing::{error, info, warn};
 use nodeget_lib::utils::error_message::generate_error_message;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -135,7 +135,7 @@ async fn handle_agent(
                 .send(Message::Text(Utf8Bytes::from(error_json.to_string())))
                 .await
             {
-                error!("Failed to send error message to agent: {e}");
+                error!(target: "terminal", error = %e, "Failed to send error message to agent");
             }
             return;
         }
@@ -148,7 +148,7 @@ async fn handle_agent(
                 .send(Message::Text(Utf8Bytes::from(error_json.to_string())))
                 .await
             {
-                error!("Failed to send error message to agent: {e}");
+                error!(target: "terminal", error = %e, "Failed to send error message to agent");
             }
             return;
         }
@@ -159,7 +159,7 @@ async fn handle_agent(
         terminal_id,
     };
 
-    info!("Agent connecting terminal: agent_uuid={agent_uuid}, terminal_id={terminal_id}");
+    info!(target: "terminal", agent_uuid = %agent_uuid, terminal_id = %terminal_id, "Agent connecting terminal");
 
     // User -> Agent - 使用有界通道防止内存耗尽
     let (tx_to_agent, mut rx_from_user) = mpsc::channel::<Message>(TERMINAL_CHANNEL_BUFFER_SIZE);
@@ -185,7 +185,7 @@ async fn handle_agent(
                     .send(Message::Text(Utf8Bytes::from(error_json.to_string())))
                     .await
                 {
-                    error!("Failed to send error message to agent: {e}");
+                    error!(target: "terminal", error = %e, "Failed to send error message to agent");
                 }
                 return;
             }
@@ -229,7 +229,7 @@ async fn handle_agent(
         let mut sessions = state.sessions.write().await;
         sessions.remove(&session_key);
     }
-    info!("Agent terminal disconnected: agent_uuid={agent_uuid}, terminal_id={terminal_id}");
+    info!(target: "terminal", agent_uuid = %agent_uuid, terminal_id = %terminal_id, "Agent terminal disconnected");
 }
 
 // 处理 User 连接
@@ -247,7 +247,7 @@ async fn handle_user(
     state: TerminalState,
 ) {
     let Some(terminal_id) = terminal_id else {
-        warn!("User connection rejected: missing terminal_id");
+        warn!(target: "terminal", "User connection rejected: missing terminal_id");
         let error_json = generate_error_message(
             108,
             "Invalid Input: Missing terminal_id for user terminal connection",
@@ -258,17 +258,17 @@ async fn handle_user(
         return;
     };
 
-    info!("User connecting terminal to: agent_uuid={agent_uuid}, terminal_id={terminal_id}");
+    info!(target: "terminal", agent_uuid = %agent_uuid, terminal_id = %terminal_id, "User connecting terminal");
 
     // 检查 token 是否存在
     let Some(token) = token else {
-        warn!("User connection rejected: missing token");
+        warn!(target: "terminal", "User connection rejected: missing token");
         return;
     };
 
     // 检查 Terminal Connect 权限
     if let Err(e) = check_terminal_connect_permission(&token, &agent_uuid).await {
-        warn!("User connection rejected: {e}");
+        warn!(target: "terminal", error = %e, "User connection rejected");
         return;
     }
 
@@ -284,12 +284,15 @@ async fn handle_user(
                 (slots.tx_to_agent.clone(), rx)
             } else {
                 warn!(
-                    "Terminal session already has an attached user: agent_uuid={agent_uuid}, terminal_id={terminal_id}"
+                    target: "terminal",
+                    agent_uuid = %agent_uuid,
+                    terminal_id = %terminal_id,
+                    "Terminal session already has an attached user"
                 );
                 return;
             }
         } else {
-            warn!("Terminal session not found: agent_uuid={agent_uuid}, terminal_id={terminal_id}");
+            warn!(target: "terminal", agent_uuid = %agent_uuid, terminal_id = %terminal_id, "Terminal session not found");
             return;
         }
     };
@@ -318,7 +321,7 @@ async fn handle_user(
         _ = send_task => {},
     }
 
-    info!("User terminal disconnected: agent_uuid={agent_uuid}, terminal_id={terminal_id}");
+    info!(target: "terminal", agent_uuid = %agent_uuid, terminal_id = %terminal_id, "User terminal disconnected");
 }
 
 async fn reject_with_error(mut socket: WebSocket, error_id: i32, message: &str) {
@@ -327,6 +330,6 @@ async fn reject_with_error(mut socket: WebSocket, error_id: i32, message: &str) 
         .send(Message::Text(Utf8Bytes::from(error_json.to_string())))
         .await
     {
-        error!("Failed to send terminal error message: {e}");
+        error!(target: "terminal", error = %e, "Failed to send terminal error message");
     }
 }

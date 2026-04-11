@@ -2,7 +2,7 @@ use crate::entity::task;
 use crate::rpc::RpcHelper;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
-use log::{debug, error};
+use tracing::{debug, error};
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
@@ -39,7 +39,7 @@ pub async fn upload_task_result(
                 .one(db)
                 .await
                 .map_err(|e| {
-                    error!("Database query error: {e}");
+                    error!(target: "rpc", error = %e, "Database query error");
                     NodegetError::DatabaseError(format!("Database query error: {e}"))
                 })?;
 
@@ -76,7 +76,7 @@ pub async fn upload_task_result(
             .one(db)
             .await
             .map_err(|e| {
-                error!("Database query error: {e}");
+                error!(target: "rpc", error = %e, "Database query error");
                 NodegetError::DatabaseError(format!("Database query error: {e}"))
             })?
             .ok_or_else(|| {
@@ -127,7 +127,7 @@ pub async fn upload_task_result(
             .exec(db)
             .await
             .map_err(|e| {
-                error!("Database update error: {e}");
+                error!(target: "rpc", error = %e, "Database update error");
                 NodegetError::DatabaseError(format!("Database update error: {e}"))
             })?;
 
@@ -139,13 +139,10 @@ pub async fn upload_task_result(
         }
 
         debug!(
-            "Task [{}] result uploaded successfully by auth identifying as {:?}",
-            task_response.task_id,
-            if token_or_auth.is_auth() {
-                "Auth"
-            } else {
-                "Token"
-            }
+            target: "rpc",
+            task_id = task_response.task_id,
+            auth_type = if token_or_auth.is_auth() { "Auth" } else { "Token" },
+            "Task result uploaded"
         );
 
         let json_str = format!("{{\"id\":{}}}", task_response.task_id);

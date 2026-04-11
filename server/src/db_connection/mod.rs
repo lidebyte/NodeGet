@@ -1,12 +1,12 @@
 pub mod clean_up;
 
 use crate::{DB, SERVER_CONFIG};
-use log::{LevelFilter, error, info};
+use log::LevelFilter;
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, ConnectionTrait, Database};
 use std::process;
-use std::str::FromStr;
 use std::time::Duration;
+use tracing::{error, info};
 
 // 初始化数据库连接并应用迁移
 //
@@ -21,18 +21,8 @@ pub async fn init_db_connection() {
         .clone();
 
     DB.get_or_init(|| async {
-        let log_level_str = config
-            .database
-            .sqlx_log_level
-            .clone()
-            .unwrap_or_else(|| "info".to_string());
-        let log_level = LevelFilter::from_str(&log_level_str).unwrap_or_else(|_| {
-            error!("Configuration error: Invalid sqlx_log_level '{log_level_str}'");
-            process::exit(1);
-        });
-
         let mut opt = ConnectOptions::new(&config.database.database_url);
-        opt.sqlx_logging_level(log_level)
+        opt.sqlx_logging_level(LevelFilter::Trace)
             .connect_timeout(Duration::from_millis(
                 config.database.connect_timeout_ms.unwrap_or(3000),
             ))
@@ -48,24 +38,24 @@ pub async fn init_db_connection() {
             .max_connections(config.database.max_connections.unwrap_or(10));
 
         let db = Database::connect(opt).await.unwrap_or_else(|e| {
-            error!("Unable to connect to the database: {e}");
+            error!(target: "db", error = %e, "Unable to connect to the database");
             process::exit(1);
         });
 
-        info!("Database connected successfully.");
+        info!(target: "db", "Database connected successfully");
 
         Migrator::up(&db, None).await.unwrap_or_else(|e| {
-            error!("Unable to apply migrations: {e}");
+            error!(target: "db", error = %e, "Unable to apply migrations");
             process::exit(1);
         });
 
-        info!("Migrations applied successfully.");
+        info!(target: "db", "Migrations applied successfully");
 
         if db.get_database_backend() == sea_orm::DatabaseBackend::Sqlite {
             let _ = db
                 .execute_unprepared("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
                 .await;
-            info!("SQLite WAL mode enabled.");
+            info!(target: "db", "SQLite WAL mode enabled");
         }
 
         db

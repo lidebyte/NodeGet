@@ -3,7 +3,7 @@ use crate::rpc::RpcHelper;
 use crate::rpc::task::TaskManager;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
-use log::{debug, error};
+use tracing::{debug, error};
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
@@ -68,15 +68,15 @@ pub async fn create_task(
             task_event_result: Set(None),
         };
 
-        debug!("Received task for [{target_uuid}]");
+        debug!(target: "rpc", uuid = %target_uuid, "Received task");
 
         let result = task::Entity::insert(in_data).exec(db).await.map_err(|e| {
-            error!("Database insert error: {e}");
+            error!(target: "rpc", error = %e, "Database insert error");
             NodegetError::DatabaseError(format!("Database insert error: {e}"))
         })?;
 
         let task_id = result.last_insert_id;
-        debug!("Inserted task with id [{task_id}]");
+        debug!(target: "rpc", id = task_id, "Task created");
 
         let task = TaskEvent {
             task_id: task_id.cast_unsigned(),
@@ -95,10 +95,10 @@ pub async fn create_task(
                     .exec(db)
                     .await
                     .map_err(|del_err| {
-                        error!("Database delete error during rollback: {del_err}");
+                        error!(target: "rpc", error = %del_err, "Database delete error during rollback");
                         NodegetError::DatabaseError(format!("Database delete error: {del_err}"))
                     });
-                error!("Error sending task event: {}", e.1);
+                error!(target: "rpc", error = %e.1, "Error sending task event");
                 Err(NodegetError::AgentConnectionError(format!(
                     "Error sending task event: {}",
                     e.1

@@ -1,6 +1,6 @@
 use crate::token::generate_token::generate_and_store_token;
 use jsonrpsee::core::RpcResult;
-use log::debug;
+use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::create::TokenCreationRequest;
 use nodeget_lib::permission::token_auth::TokenOrAuth;
@@ -14,7 +14,7 @@ pub async fn create(
         let father_token_or_auth = TokenOrAuth::from_full_token(&father_token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
-        debug!("Token RPC: Processing token creation request");
+        debug!(target: "rpc", "Processing token creation request");
 
         let (key, secret) = generate_and_store_token(
             &father_token_or_auth,

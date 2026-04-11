@@ -1,4 +1,4 @@
-use log::info;
+use tracing::info;
 
 use crate::token::super_token::generate_super_token;
 
@@ -17,11 +17,11 @@ async fn init_or_skip_super_token() {
 
     match token {
         Some(token) => {
-            info!("Super Token: {}", token.0);
-            info!("Root Password: {}", token.1);
+            info!(target: "server", "Super Token: {}", token.0);
+            info!(target: "server", "Root Password: {}", token.1);
         }
         None => {
-            info!("Super Token already exists, skipped.");
+            info!(target: "server", "Super Token already exists, skipped");
         }
     }
 }

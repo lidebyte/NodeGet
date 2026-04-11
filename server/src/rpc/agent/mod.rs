@@ -1,4 +1,5 @@
 use crate::rpc::RpcHelper;
+use crate::rpc::{rpc_exec, token_identity};
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
 use nodeget_lib::monitoring::data_structure::{DynamicMonitoringData, StaticMonitoringData};
@@ -7,6 +8,7 @@ use nodeget_lib::monitoring::query::{
     StaticDataAvgQuery, StaticDataQuery, StaticDataQueryField,
 };
 use serde_json::value::RawValue;
+use tracing::Instrument;
 use uuid::Uuid;
 
 mod delete_dynamic;
@@ -106,7 +108,9 @@ impl RpcServer for AgentRpcImpl {
         token: String,
         static_monitoring_data: StaticMonitoringData,
     ) -> RpcResult<Box<RawValue>> {
-        report_static::report_static(token, static_monitoring_data).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::report_static", token_key = tk, username = un, uuid = %static_monitoring_data.uuid);
+        async { rpc_exec!(report_static::report_static(token, static_monitoring_data).await) }.instrument(span).await
     }
 
     async fn report_dynamic(
@@ -114,7 +118,9 @@ impl RpcServer for AgentRpcImpl {
         token: String,
         dynamic_monitoring_data: DynamicMonitoringData,
     ) -> RpcResult<Box<RawValue>> {
-        report_dynamic::report_dynamic(token, dynamic_monitoring_data).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::report_dynamic", token_key = tk, username = un, uuid = %dynamic_monitoring_data.uuid);
+        async { rpc_exec!(report_dynamic::report_dynamic(token, dynamic_monitoring_data).await) }.instrument(span).await
     }
 
     async fn query_static(
@@ -122,7 +128,9 @@ impl RpcServer for AgentRpcImpl {
         token: String,
         static_data_query: StaticDataQuery,
     ) -> RpcResult<Box<RawValue>> {
-        query_static::query_static(token, static_data_query).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::query_static", token_key = tk, username = un, query = ?static_data_query);
+        async { rpc_exec!(query_static::query_static(token, static_data_query).await) }.instrument(span).await
     }
 
     async fn query_dynamic(
@@ -130,7 +138,9 @@ impl RpcServer for AgentRpcImpl {
         token: String,
         dynamic_data_query: DynamicDataQuery,
     ) -> RpcResult<Box<RawValue>> {
-        query_dynamic::query_dynamic(token, dynamic_data_query).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::query_dynamic", token_key = tk, username = un, query = ?dynamic_data_query);
+        async { rpc_exec!(query_dynamic::query_dynamic(token, dynamic_data_query).await) }.instrument(span).await
     }
 
     async fn query_static_avg(
@@ -138,7 +148,9 @@ impl RpcServer for AgentRpcImpl {
         token: String,
         static_data_avg_query: StaticDataAvgQuery,
     ) -> RpcResult<Box<RawValue>> {
-        query_static_avg::query_static_avg(token, static_data_avg_query).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::query_static_avg", token_key = tk, username = un, query = ?static_data_avg_query);
+        async { rpc_exec!(query_static_avg::query_static_avg(token, static_data_avg_query).await) }.instrument(span).await
     }
 
     async fn query_dynamic_avg(
@@ -146,7 +158,9 @@ impl RpcServer for AgentRpcImpl {
         token: String,
         dynamic_data_avg_query: DynamicDataAvgQuery,
     ) -> RpcResult<Box<RawValue>> {
-        query_dynamic_avg::query_dynamic_avg(token, dynamic_data_avg_query).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::query_dynamic_avg", token_key = tk, username = un, query = ?dynamic_data_avg_query);
+        async { rpc_exec!(query_dynamic_avg::query_dynamic_avg(token, dynamic_data_avg_query).await) }.instrument(span).await
     }
 
     async fn static_data_multi_last_query(
@@ -155,7 +169,9 @@ impl RpcServer for AgentRpcImpl {
         uuids: Vec<Uuid>,
         fields: Vec<StaticDataQueryField>,
     ) -> RpcResult<Box<RawValue>> {
-        query_static_multi_last::static_data_multi_last_query(token, uuids, fields).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::static_data_multi_last_query", token_key = tk, username = un, uuids = ?uuids, fields = ?fields);
+        async { rpc_exec!(query_static_multi_last::static_data_multi_last_query(token, uuids, fields).await) }.instrument(span).await
     }
 
     async fn dynamic_data_multi_last_query(
@@ -164,7 +180,9 @@ impl RpcServer for AgentRpcImpl {
         uuids: Vec<Uuid>,
         fields: Vec<DynamicDataQueryField>,
     ) -> RpcResult<Box<RawValue>> {
-        query_dynamic_multi_last::dynamic_data_multi_last_query(token, uuids, fields).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::dynamic_data_multi_last_query", token_key = tk, username = un, uuids = ?uuids, fields = ?fields);
+        async { rpc_exec!(query_dynamic_multi_last::dynamic_data_multi_last_query(token, uuids, fields).await) }.instrument(span).await
     }
 
     async fn delete_static(
@@ -172,7 +190,9 @@ impl RpcServer for AgentRpcImpl {
         token: String,
         conditions: Vec<QueryCondition>,
     ) -> RpcResult<Box<RawValue>> {
-        delete_static::delete_static(token, conditions).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::delete_static", token_key = tk, username = un, conditions = ?conditions);
+        async { rpc_exec!(delete_static::delete_static(token, conditions).await) }.instrument(span).await
     }
 
     async fn delete_dynamic(
@@ -180,6 +200,8 @@ impl RpcServer for AgentRpcImpl {
         token: String,
         conditions: Vec<QueryCondition>,
     ) -> RpcResult<Box<RawValue>> {
-        delete_dynamic::delete_dynamic(token, conditions).await
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "rpc", "agent::delete_dynamic", token_key = tk, username = un, conditions = ?conditions);
+        async { rpc_exec!(delete_dynamic::delete_dynamic(token, conditions).await) }.instrument(span).await
     }
 }

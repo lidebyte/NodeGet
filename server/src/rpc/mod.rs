@@ -5,6 +5,8 @@ use nodeget_lib::error::NodegetError;
 use sea_orm::{ActiveValue, DatabaseConnection, Set};
 use serde::Serialize;
 use serde_json::{Value, to_value};
+use serde_json::value::RawValue;
+use std::fmt;
 use std::sync::OnceLock;
 
 pub mod agent;
@@ -16,6 +18,67 @@ pub mod kv;
 pub mod nodeget;
 pub mod task;
 pub mod token;
+
+// ── RPC tracing utilities ───────────────────────────────────────────
+
+/// Lightweight extraction of `(token_key, username)` from a raw token string.
+///
+/// - Token mode (`key:secret`): returns `(key, "")`
+/// - Auth mode (`username|password`): returns `("", username)`
+/// - Fallback: returns `("???", "")`
+///
+/// Zero-allocation: returns borrowed slices into the original string.
+pub fn token_identity(token: &str) -> (&str, &str) {
+    if let Some(colon) = token.find(':') {
+        (&token[..colon], "")
+    } else if let Some(pipe) = token.find('|') {
+        ("", &token[..pipe])
+    } else {
+        ("???", "")
+    }
+}
+
+/// A wrapper around `&RawValue` that truncates its `Display` output to 1024 bytes.
+pub struct TruncatedRaw<'a>(pub &'a RawValue);
+
+impl fmt::Display for TruncatedRaw<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const MAX: usize = 1024;
+        let s = self.0.get();
+        if s.len() <= MAX {
+            f.write_str(s)
+        } else {
+            f.write_str(&s[..MAX])?;
+            write!(f, "…({} bytes total)", s.len())
+        }
+    }
+}
+
+/// Common log pattern for RPC methods returning `RpcResult<Box<RawValue>>`.
+///
+/// Usage: `rpc_exec!(some_inner_call(args).await)`
+///
+/// Emits:
+/// - `info "request received"` on entry
+/// - `info response=<truncated> "request completed"` on success
+/// - `error error=<e> "request failed"` on failure
+macro_rules! rpc_exec {
+    ($expr:expr) => {{
+        tracing::info!(target: "rpc", "request received");
+        match $expr {
+            Ok(raw) => {
+                tracing::info!(target: "rpc", response = %$crate::rpc::TruncatedRaw(&raw), "request completed");
+                Ok(raw)
+            }
+            Err(e) => {
+                tracing::error!(target: "rpc", error = %e, "request failed");
+                Err(e)
+            }
+        }
+    }};
+}
+
+pub(crate) use rpc_exec;
 
 pub trait RpcHelper {
     fn try_set_json<T: Serialize>(val: T) -> anyhow::Result<ActiveValue<Value>> {

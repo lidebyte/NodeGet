@@ -3,7 +3,7 @@ use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
-use log::error;
+use tracing::error;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::query::QueryCondition;
 use nodeget_lib::permission::data_structure::{DynamicMonitoring, Permission, Scope};
@@ -73,7 +73,7 @@ pub async fn delete_dynamic(
                 .all(db)
                 .await
                 .map_err(|e| {
-                    error!("Database query error: {e}");
+                    error!(target: "rpc", error = %e, "Database query error");
                     NodegetError::DatabaseError(format!("Database query error: {e}"))
                 })?;
 
@@ -85,7 +85,7 @@ pub async fn delete_dynamic(
                     .exec(db)
                     .await
                     .map_err(|e| {
-                        error!("Database delete error: {e}");
+                        error!(target: "rpc", error = %e, "Database delete error");
                         NodegetError::DatabaseError(format!("Database delete error: {e}"))
                     })?
                     .rows_affected
@@ -117,7 +117,7 @@ pub async fn delete_dynamic(
                 .exec(db)
                 .await
                 .map_err(|e| {
-                    error!("Database delete error: {e}");
+                    error!(target: "rpc", error = %e, "Database delete error");
                     NodegetError::DatabaseError(format!("Database delete error: {e}"))
                 })?
                 .rows_affected

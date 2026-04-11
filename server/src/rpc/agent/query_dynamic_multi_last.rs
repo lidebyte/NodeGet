@@ -4,7 +4,7 @@ use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
 use futures::StreamExt;
 use jsonrpsee::core::RpcResult;
-use log::error;
+use tracing::error;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::query::DynamicDataQueryField;
 use nodeget_lib::permission::data_structure::{DynamicMonitoring, Permission, Scope};
@@ -209,7 +209,7 @@ async fn execute_statement_query(
         .stream(db)
         .await
         .map_err(|e| {
-            error!("Database query error: {e}");
+            error!(target: "rpc", error = %e, "Database query error");
             NodegetError::DatabaseError(format!("Database query error: {e}"))
         })?;
 
@@ -235,7 +235,7 @@ async fn execute_statement_query(
                 }
 
                 if let Err(e) = serde_json::to_writer(&mut output_buffer, &value) {
-                    error!("Serialization failed: {e}");
+                    error!(target: "rpc", error = %e, "Serialization failed");
                     return Err(NodegetError::SerializationError(format!(
                         "Serialization failed: {e}"
                     ))
@@ -243,7 +243,7 @@ async fn execute_statement_query(
                 }
             }
             Err(e) => {
-                error!("Stream read error: {e}");
+                error!(target: "rpc", error = %e, "Stream read error");
                 return Err(NodegetError::DatabaseError(format!("Stream read error: {e}")).into());
             }
         }
@@ -252,12 +252,12 @@ async fn execute_statement_query(
     output_buffer.push(b']');
 
     let json_string = String::from_utf8(output_buffer).map_err(|e| {
-        error!("UTF8 conversion error: {e}");
+        error!(target: "rpc", error = %e, "UTF8 conversion error");
         NodegetError::SerializationError("UTF8 conversion error (internal)".to_string())
     })?;
 
     let raw_value = RawValue::from_string(json_string).map_err(|e| {
-        error!("RawValue creation error: {e}");
+        error!(target: "rpc", error = %e, "RawValue creation error");
         NodegetError::SerializationError("RawValue creation error".to_string())
     })?;
 

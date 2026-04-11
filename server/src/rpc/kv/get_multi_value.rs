@@ -2,7 +2,7 @@ use crate::kv::get_kv_store;
 use crate::rpc::kv::auth::check_kv_read_permission_with_pattern;
 use crate::rpc::kv::{KvValueItem, NamespaceKeyItem};
 use jsonrpsee::core::RpcResult;
-use log::debug;
+use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use serde_json::Value;
 use serde_json::value::RawValue;
@@ -22,8 +22,9 @@ pub async fn get_multi_value(
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
         debug!(
-            "KV RPC: Processing get_multi_value request, requested count={}",
-            namespace_key.len()
+            target: "rpc",
+            count = namespace_key.len(),
+            "Processing get_multi_value request"
         );
 
         if namespace_key.is_empty() {

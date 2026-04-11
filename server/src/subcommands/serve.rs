@@ -1,7 +1,7 @@
 use crate::entity::js_worker;
 use axum::routing::any;
 use axum::{extract::Path, http::StatusCode};
-use log::info;
+use tracing::info;
 use nodeget_lib::js_runtime::RunType;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,6 @@ use crate::rpc_timing::RpcTimingMiddleware;
 
 pub async fn run(
     config: &nodeget_lib::config::server::ServerConfig,
-    rpc_timing_log_level: log::Level,
 ) {
     #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
     spawn_jemalloc_mem_debug_task();
@@ -38,7 +37,7 @@ pub async fn run(
         jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new().layer_fn(move |service| {
             RpcTimingMiddleware {
                 service,
-                level: rpc_timing_log_level,
+                level: tracing::Level::TRACE,
             }
         });
 
@@ -135,13 +134,13 @@ pub async fn run(
                 unix_socket_path = Some(socket_path.clone());
                 unix_server_task = Some(tokio::spawn(async move {
                     if let Err(e) = axum::serve(unix_listener, unix_app.into_make_service()).await {
-                        log::error!("Unix socket server stopped with error: {e}");
+                        tracing::error!(target: "server", error = %e, "Unix socket server stopped with error");
                     }
                 }));
-                info!("Unix socket listener started: {socket_path}");
+                info!(target: "server", socket_path = %socket_path, "Unix socket listener started");
             }
             Err(e) => {
-                log::error!("Failed to bind unix socket listener: {e}");
+                tracing::error!(target: "server", error = %e, "Failed to bind unix socket listener");
             }
         }
     }
@@ -171,7 +170,7 @@ pub async fn run(
             .get()
             .expect("Reload notify not initialized")
             .notified() => {
-            info!("Config reload requested, stopping server for restart...");
+            info!(target: "server", "Config reload requested, stopping server for restart...");
             let stop_handle = stop_handle.clone();
             tokio::spawn(async move {
                 let _ = tokio::time::timeout(std::time::Duration::from_secs(5), stop_handle.shutdown()).await;
@@ -468,7 +467,7 @@ async fn cleanup_unix_socket_file(path: Option<&str>) {
     match tokio::fs::remove_file(path).await {
         Ok(()) => {}
         Err(e) if e.kind() == ErrorKind::NotFound => {}
-        Err(e) => log::warn!("Failed to remove unix socket file '{path}': {e}"),
+        Err(e) => tracing::warn!(target: "server", path = %path, error = %e, "Failed to remove unix socket file"),
     }
 }
 
@@ -492,12 +491,13 @@ fn spawn_jemalloc_mem_debug_task() {
             let resident = stats::resident::read().unwrap();
             let mapped = stats::mapped::read().unwrap();
 
-            log::info!(
-                "MEM STATS (Jemalloc Only): App Logic: {:.2} MB | Allocator Active: {:.2} MB | RSS (Resident): {:.2} MB | Mapped: {:.2} MB",
-                allocated as f64 / 1024.0 / 1024.0,
-                active as f64 / 1024.0 / 1024.0,
-                resident as f64 / 1024.0 / 1024.0,
-                mapped as f64 / 1024.0 / 1024.0
+            tracing::info!(
+                target: "server",
+                allocated_mb = format_args!("{:.2}", allocated as f64 / 1024.0 / 1024.0),
+                active_mb = format_args!("{:.2}", active as f64 / 1024.0 / 1024.0),
+                resident_mb = format_args!("{:.2}", resident as f64 / 1024.0 / 1024.0),
+                mapped_mb = format_args!("{:.2}", mapped as f64 / 1024.0 / 1024.0),
+                "Jemalloc memory stats"
             );
         }
     });

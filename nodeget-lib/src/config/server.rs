@@ -6,8 +6,6 @@ use tokio::fs;
 // 服务器配置结构体
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ServerConfig {
-    // 日志级别
-    pub log_level: String,
     // Server UUID，默认自动生成
     #[serde(deserialize_with = "deserialize_uuid_or_auto")]
     pub server_uuid: uuid::Uuid,
@@ -17,9 +15,6 @@ pub struct ServerConfig {
 
     // JSON-RPC 最大并发连接数，默认 100
     pub jsonrpc_max_connections: Option<u32>,
-
-    // JSON-RPC 耗时日志级别，默认 trace
-    pub jsonrpc_timing_log_level: Option<String>,
 
     // 是否启用 Unix Socket（仅非 Windows 平台）
     pub enable_unix_socket: Option<bool>,
@@ -36,8 +31,6 @@ pub struct ServerConfig {
 pub struct DatabaseConfig {
     // 数据库连接 URL
     pub database_url: String,
-    // SQLx 日志级别
-    pub sqlx_log_level: Option<String>,
     // 数据库连接超时时间（毫秒）
     pub connect_timeout_ms: Option<u64>,
     // 获取连接超时时间（毫秒）

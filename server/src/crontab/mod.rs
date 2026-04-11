@@ -7,8 +7,6 @@ use crate::entity::{crontab, crontab_result};
 use crate::rpc::js_worker::service::enqueue_defined_js_worker_run;
 use chrono::{TimeZone, Utc};
 use cron::Schedule;
-use log::info;
-use log::{debug, error, warn};
 use nodeget_lib::crontab::{AgentCronType, Cron, CronType, ServerCronType};
 use nodeget_lib::js_runtime::RunType;
 use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, Set};
@@ -17,6 +15,7 @@ use serde_json::Value;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::time::sleep;
+use tracing::{Instrument, debug, error, info, info_span, warn};
 
 pub async fn delete_crontab_by_name(name: String) -> Result<bool, sea_orm::DbErr> {
     let db = DB.get().ok_or_else(|| {
@@ -25,11 +24,18 @@ pub async fn delete_crontab_by_name(name: String) -> Result<bool, sea_orm::DbErr
         ))
     })?;
 
-    crontab::Entity::delete_many()
-        .filter(crontab::Column::Name.eq(name))
+    let result = crontab::Entity::delete_many()
+        .filter(crontab::Column::Name.eq(&name))
         .exec(db)
-        .await
-        .map(|result| result.rows_affected > 0)
+        .await?;
+
+    let deleted = result.rows_affected > 0;
+    if deleted {
+        info!(target: "crontab", name = %name, "crontab deleted");
+    } else {
+        warn!(target: "crontab", name = %name, "crontab not found for deletion");
+    }
+    Ok(deleted)
 }
 
 pub async fn set_crontab_enable_by_name(
@@ -52,9 +58,13 @@ pub async fn set_crontab_enable_by_name(
             let mut active_model: crontab::ActiveModel = model.into();
             active_model.enable = Set(enable);
             let updated = active_model.update(db).await?;
+            info!(target: "crontab", name = %name, enable = updated.enable, "crontab enable updated");
             Ok(Some(updated.enable))
         }
-        None => Ok(None),
+        None => {
+            warn!(target: "crontab", name = %name, enable, "crontab not found for set_enable");
+            Ok(None)
+        }
     }
 }
 
@@ -65,7 +75,7 @@ pub fn init_crontab_worker() {
     }
 
     tokio::spawn(async move {
-        info!("Crontab scheduler started.");
+        info!(target: "crontab", "scheduler started");
         loop {
             sleep(Duration::from_secs(1)).await;
 
@@ -78,7 +88,7 @@ pub fn init_crontab_worker() {
 
 async fn process_crontab() {
     let Some(db) = DB.get() else {
-        error!("DB not initialized");
+        error!(target: "crontab", "DB not initialized");
         return;
     };
 
@@ -89,7 +99,7 @@ async fn process_crontab() {
     {
         Ok(jobs) => jobs,
         Err(err) => {
-            error!("{err}");
+            error!(target: "crontab", error = %err, "failed to query enabled crontab jobs");
             return;
         }
     };
@@ -100,7 +110,14 @@ async fn process_crontab() {
         let schedule = match Schedule::from_str(&job.cron_expression) {
             Ok(s) => s,
             Err(e) => {
-                warn!("Invalid cron expression for job {}: {}", job.id, e);
+                warn!(
+                    target: "crontab",
+                    job_id = job.id,
+                    job_name = %job.name,
+                    cron_expression = %job.cron_expression,
+                    error = %e,
+                    "invalid cron expression, skipping"
+                );
                 continue;
             }
         };
@@ -119,10 +136,24 @@ async fn process_crontab() {
             continue;
         }
 
-        info!("Triggering cron job: {} ({})", job.name, job.id);
+        info!(
+            target: "crontab",
+            job_id = job.id,
+            job_name = %job.name,
+            cron_expression = %job.cron_expression,
+            "triggering cron job"
+        );
 
         let cron_type = serde_json::from_str(&format!("{}", job.cron_type))
-            .map_err(|e| warn!("Invalid cron type for job {}: {}", job.id, e))
+            .map_err(|e| {
+                warn!(
+                    target: "crontab",
+                    job_id = job.id,
+                    job_name = %job.name,
+                    error = %e,
+                    "invalid cron type, skipping"
+                );
+            })
             .ok();
 
         let Some(cron_type) = cron_type else { continue };
@@ -148,27 +179,55 @@ async fn process_crontab() {
             ..Default::default()
         };
         if let Err(e) = active_model.update(db).await {
-            error!("Failed to update last_run_time for job {}: {}", job.id, e);
+            error!(
+                target: "crontab",
+                job_id = job.id,
+                job_name = %job_name,
+                error = %e,
+                "failed to update last_run_time"
+            );
             // 继续执行，不要因为记录失败而跳过任务
         }
 
-        tokio::spawn(async move {
-            run_job_logic(job_parsed).await;
-            debug!("Cron job {} ({}) completed", job_name, job_id);
-        });
+        let span = info_span!(
+            target: "crontab",
+            "crontab::run_job",
+            job_id,
+            job_name = %job_name,
+        );
+        tokio::spawn(
+            async move {
+                run_job_logic(job_parsed).await;
+                debug!(target: "crontab", "cron job completed");
+            }
+            .instrument(span),
+        );
     }
 }
 
 async fn run_job_logic(job: Cron) {
     match job.cron_type {
         CronType::Agent(uuids, AgentCronType::Task(task_event_type)) => {
+            let agent_count = uuids.len();
+            info!(
+                target: "crontab",
+                agent_count,
+                task_type = ?task_event_type,
+                "dispatching agent task"
+            );
             task::crontab_task(job.id, job.name, uuids, task_event_type).await;
         }
 
         CronType::Server(ServerCronType::CleanUpDatabase) => {
+            info!(target: "crontab", "running cleanup_database job");
             run_cleanup_database_job(job.id, job.name).await;
         }
         CronType::Server(ServerCronType::JsWorker(js_script_name, params)) => {
+            info!(
+                target: "crontab",
+                js_script_name = %js_script_name,
+                "running js_worker job"
+            );
             run_js_worker_job(job.id, job.name, js_script_name, params).await;
         }
     }
@@ -177,13 +236,23 @@ async fn run_job_logic(job: Cron) {
 /// 运行数据库清理任务并记录结果
 async fn run_cleanup_database_job(cron_id: i64, cron_name: String) {
     let Some(db) = DB.get() else {
-        error!("DB not initialized for cleanup job [{cron_name}]");
+        error!(target: "crontab", cron_id, cron_name = %cron_name, "DB not initialized for cleanup job");
         return;
     };
 
     // 执行清理
     let (success, message) = match cleanup_expired_data().await {
         Ok(result) => {
+            info!(
+                target: "crontab",
+                cron_id,
+                cron_name = %cron_name,
+                static_monitoring = result.static_monitoring,
+                dynamic_monitoring = result.dynamic_monitoring,
+                task = result.task,
+                crontab_result = result.crontab_result,
+                "database cleanup completed"
+            );
             let msg = format!(
                 "数据库清理完成。已删除：static_monitoring={}，dynamic_monitoring={}，task={}，crontab_result={}",
                 result.static_monitoring,
@@ -191,12 +260,17 @@ async fn run_cleanup_database_job(cron_id: i64, cron_name: String) {
                 result.task,
                 result.crontab_result
             );
-            info!("{msg}");
             (true, msg)
         }
         Err(e) => {
+            error!(
+                target: "crontab",
+                cron_id,
+                cron_name = %cron_name,
+                error = %e,
+                "database cleanup failed"
+            );
             let msg = format!("数据库清理失败：{e}");
-            error!("{msg}");
             (false, msg)
         }
     };
@@ -213,13 +287,25 @@ async fn run_cleanup_database_job(cron_id: i64, cron_name: String) {
     };
 
     if let Err(e) = crontab_result::Entity::insert(crontab_log).exec(db).await {
-        error!("Failed to save CrontabResult for cleanup job [{cron_name}]: {e}");
+        error!(
+            target: "crontab",
+            cron_id,
+            cron_name = %cron_name,
+            error = %e,
+            "failed to save crontab_result for cleanup job"
+        );
     }
 }
 
 async fn run_js_worker_job(cron_id: i64, cron_name: String, js_script_name: String, params: Value) {
     let Some(db) = DB.get() else {
-        error!("DB 未初始化，无法执行 JsWorker Cron [{cron_name}]");
+        error!(
+            target: "crontab",
+            cron_id,
+            cron_name = %cron_name,
+            js_script_name = %js_script_name,
+            "DB not initialized for js_worker job"
+        );
         return;
     };
 
@@ -227,16 +313,36 @@ async fn run_js_worker_job(cron_id: i64, cron_name: String, js_script_name: Stri
         enqueue_defined_js_worker_run(js_script_name.clone(), RunType::Cron, params, None).await;
 
     let (success, message, special_id) = match run_result {
-        Ok(id) => (
-            true,
-            format!("已触发 JsWorker 定时任务，脚本名：{js_script_name}，special_id：{id}"),
-            Some(id),
-        ),
-        Err(e) => (
-            false,
-            format!("触发 JsWorker 定时任务失败，脚本名：{js_script_name}，错误：{e}"),
-            None,
-        ),
+        Ok(id) => {
+            info!(
+                target: "crontab",
+                cron_id,
+                cron_name = %cron_name,
+                js_script_name = %js_script_name,
+                special_id = id,
+                "js_worker cron job triggered"
+            );
+            (
+                true,
+                format!("已触发 JsWorker 定时任务，脚本名：{js_script_name}，special_id：{id}"),
+                Some(id),
+            )
+        }
+        Err(e) => {
+            error!(
+                target: "crontab",
+                cron_id,
+                cron_name = %cron_name,
+                js_script_name = %js_script_name,
+                error = %e,
+                "js_worker cron job trigger failed"
+            );
+            (
+                false,
+                format!("触发 JsWorker 定时任务失败，脚本名：{js_script_name}，错误：{e}"),
+                None,
+            )
+        }
     };
 
     let crontab_log = crontab_result::ActiveModel {
@@ -250,6 +356,12 @@ async fn run_js_worker_job(cron_id: i64, cron_name: String, js_script_name: Stri
     };
 
     if let Err(e) = crontab_result::Entity::insert(crontab_log).exec(db).await {
-        error!("Failed to save CrontabResult for js_worker job [{cron_name}]: {e}");
+        error!(
+            target: "crontab",
+            cron_id,
+            cron_name = %cron_name,
+            error = %e,
+            "failed to save crontab_result for js_worker job"
+        );
     }
 }
