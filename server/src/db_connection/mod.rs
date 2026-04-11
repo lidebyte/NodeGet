@@ -1,7 +1,7 @@
 pub mod clean_up;
 
 use crate::{DB, SERVER_CONFIG};
-use log::LevelFilter;
+use tracing::log::LevelFilter;
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, ConnectionTrait, Database};
 use std::process;
