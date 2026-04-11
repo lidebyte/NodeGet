@@ -52,7 +52,9 @@ impl RpcServer for NodegetServerRpcImpl {
             let response = "NodeGet Server Is Running!".to_string();
             tracing::info!(target: "rpc", response = %response, "request completed");
             response
-        }.instrument(span).await
+        }
+        .instrument(span)
+        .await
     }
 
     async fn version(&self) -> Value {
@@ -62,7 +64,9 @@ impl RpcServer for NodegetServerRpcImpl {
             let response = serde_json::to_value(NodeGetVersion::get()).unwrap();
             tracing::info!(target: "rpc", response = %response, "request completed");
             response
-        }.instrument(span).await
+        }
+        .instrument(span)
+        .await
     }
 
     async fn uuid(&self) -> String {
@@ -75,13 +79,17 @@ impl RpcServer for NodegetServerRpcImpl {
                 .unwrap_or_default();
             tracing::info!(target: "rpc", response = %response, "request completed");
             response
-        }.instrument(span).await
+        }
+        .instrument(span)
+        .await
     }
 
     async fn list_all_agent_uuid(&self, token: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "nodeget-server::list_all_agent_uuid", token_key = tk, username = un);
-        async { rpc_exec!(list_all_agent_uuid::list_all_agent_uuid(token).await) }.instrument(span).await
+        async { rpc_exec!(list_all_agent_uuid::list_all_agent_uuid(token).await) }
+            .instrument(span)
+            .await
     }
 
     async fn read_config(&self, token: String) -> RpcResult<String> {
@@ -99,7 +107,9 @@ impl RpcServer for NodegetServerRpcImpl {
                     Err(e)
                 }
             }
-        }.instrument(span).await
+        }
+        .instrument(span)
+        .await
     }
 
     async fn edit_config(&self, token: String, config_string: String) -> RpcResult<bool> {
@@ -117,19 +127,25 @@ impl RpcServer for NodegetServerRpcImpl {
                     Err(e)
                 }
             }
-        }.instrument(span).await
+        }
+        .instrument(span)
+        .await
     }
 
     async fn database_storage(&self, token: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "nodeget-server::database_storage", token_key = tk, username = un);
-        async { rpc_exec!(database_storage::database_storage(token).await) }.instrument(span).await
+        async { rpc_exec!(database_storage::database_storage(token).await) }
+            .instrument(span)
+            .await
     }
 
     async fn log(&self, token: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "nodeget-server::log", token_key = tk, username = un);
-        async { rpc_exec!(log_query::query_logs(token).await) }.instrument(span).await
+        async { rpc_exec!(log_query::query_logs(token).await) }
+            .instrument(span)
+            .await
     }
 }
 
@@ -236,7 +252,7 @@ mod config_ops {
             validate_config_path(config_path)?;
 
             // 使用临时文件+原子重命名，确保写入完整性
-            let temp_path = format!("{}.tmp", config_path);
+            let temp_path = format!("{config_path}.tmp");
             tokio::fs::write(&temp_path, config_string)
                 .await
                 .map_err(|e| {
@@ -462,7 +478,7 @@ mod database_storage {
     use serde_json::value::RawValue;
     use std::collections::BTreeMap;
 
-    /// 需要查询的表名列表（排除 seaql_migrations）
+    /// 需要查询的表名列表（排除 `seaql_migrations`）
     const TABLE_NAMES: &[&str] = &[
         "static_monitoring",
         "dynamic_monitoring",
@@ -514,7 +530,7 @@ mod database_storage {
                     return Err(NodegetError::Other(format!(
                         "Unsupported database backend: {backend:?}"
                     ))
-                    .into())
+                    .into());
                 }
             };
 
@@ -541,18 +557,21 @@ mod database_storage {
         }
     }
 
-    /// PostgreSQL: 使用 pg_total_relation_size() 查询各表总大小（含索引和 TOAST）
+    /// `PostgreSQL`: 使用 `pg_total_relation_size()` 查询各表总大小（含索引和 TOAST）
     async fn query_postgres(db: &DatabaseConnection) -> anyhow::Result<BTreeMap<String, i64>> {
         // 使用 unnest 将表名数组展开，一次查询获取所有表的大小
-        let sql = r#"
+        let sql = r"
             SELECT
                 t.name AS table_name,
                 COALESCE(pg_total_relation_size(t.name::regclass), 0) AS table_size
             FROM unnest($1::text[]) AS t(name)
             ORDER BY t.name
-        "#;
+        ";
 
-        let table_names: Vec<String> = TABLE_NAMES.iter().map(|s| s.to_string()).collect();
+        let table_names: Vec<String> = TABLE_NAMES
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
 
         let rows = TableSizeRow::find_by_statement(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
@@ -571,7 +590,7 @@ mod database_storage {
         Ok(result)
     }
 
-    /// SQLite: 使用 dbstat 虚拟表查询各表占用的页面总大小
+    /// `SQLite`: 使用 dbstat 虚拟表查询各表占用的页面总大小
     async fn query_sqlite(db: &DatabaseConnection) -> anyhow::Result<BTreeMap<String, i64>> {
         let mut result = BTreeMap::new();
 
@@ -594,7 +613,7 @@ mod database_storage {
             .await
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
-            let size = row.map(|r| r.table_size).unwrap_or(0);
+            let size = row.map_or(0, |r| r.table_size);
             result.insert(table_name.to_string(), size);
         }
 

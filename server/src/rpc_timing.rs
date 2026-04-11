@@ -11,11 +11,21 @@ pub struct RpcTimingMiddleware<S> {
 
 fn log_with_level(level: Level, method: &str, kind: &str, elapsed_us: u128, extra: &str) {
     match level {
-        Level::ERROR => tracing::error!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
-        Level::WARN => tracing::warn!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
-        Level::INFO => tracing::info!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
-        Level::DEBUG => tracing::debug!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
-        Level::TRACE => tracing::trace!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}"),
+        Level::ERROR => {
+            tracing::error!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}")
+        }
+        Level::WARN => {
+            tracing::warn!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}")
+        }
+        Level::INFO => {
+            tracing::info!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}")
+        }
+        Level::DEBUG => {
+            tracing::debug!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}")
+        }
+        Level::TRACE => {
+            tracing::trace!(target: "rpc", rpc_kind = kind, method = method, elapsed_us = elapsed_us, "{extra}")
+        }
     }
 }
 

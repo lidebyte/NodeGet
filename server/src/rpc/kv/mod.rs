@@ -82,7 +82,9 @@ impl RpcServer for KvRpcImpl {
     async fn create(&self, token: String, namespace: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "kv::create", token_key = tk, username = un, namespace = %namespace);
-        async { rpc_exec!(create::create(token, namespace).await) }.instrument(span).await
+        async { rpc_exec!(create::create(token, namespace).await) }
+            .instrument(span)
+            .await
     }
 
     async fn get_value(
@@ -93,7 +95,9 @@ impl RpcServer for KvRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "kv::get_value", token_key = tk, username = un, namespace = %namespace, key = %key);
-        async { rpc_exec!(get_value::get_value(token, namespace, key).await) }.instrument(span).await
+        async { rpc_exec!(get_value::get_value(token, namespace, key).await) }
+            .instrument(span)
+            .await
     }
 
     async fn get_multi_value(
@@ -103,7 +107,9 @@ impl RpcServer for KvRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "kv::get_multi_value", token_key = tk, username = un, items_count = namespace_key.len());
-        async { rpc_exec!(get_multi_value::get_multi_value(token, namespace_key).await) }.instrument(span).await
+        async { rpc_exec!(get_multi_value::get_multi_value(token, namespace_key).await) }
+            .instrument(span)
+            .await
     }
 
     async fn set_value(
@@ -115,7 +121,9 @@ impl RpcServer for KvRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "kv::set_value", token_key = tk, username = un, namespace = %namespace, key = %key);
-        async { rpc_exec!(set_value::set_value(token, namespace, key, value).await) }.instrument(span).await
+        async { rpc_exec!(set_value::set_value(token, namespace, key, value).await) }
+            .instrument(span)
+            .await
     }
 
     async fn delete_key(
@@ -126,18 +134,24 @@ impl RpcServer for KvRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "kv::delete_key", token_key = tk, username = un, namespace = %namespace, key = %key);
-        async { rpc_exec!(delete_key::delete_key(token, namespace, key).await) }.instrument(span).await
+        async { rpc_exec!(delete_key::delete_key(token, namespace, key).await) }
+            .instrument(span)
+            .await
     }
 
     async fn get_all_keys(&self, token: String, namespace: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "kv::get_all_keys", token_key = tk, username = un, namespace = %namespace);
-        async { rpc_exec!(get_all_keys::get_all_keys(token, namespace).await) }.instrument(span).await
+        async { rpc_exec!(get_all_keys::get_all_keys(token, namespace).await) }
+            .instrument(span)
+            .await
     }
 
     async fn list_all_namespace(&self, token: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "kv::list_all_namespace", token_key = tk, username = un);
-        async { rpc_exec!(list_all_namespace::list_all_namespace(token).await) }.instrument(span).await
+        async { rpc_exec!(list_all_namespace::list_all_namespace(token).await) }
+            .instrument(span)
+            .await
     }
 }

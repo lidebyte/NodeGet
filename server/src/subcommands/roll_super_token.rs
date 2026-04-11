@@ -1,5 +1,5 @@
-use tracing::info;
 use std::io::{self, Write};
+use tracing::info;
 
 use crate::token::super_token::roll_super_token;
 

@@ -3,7 +3,6 @@ use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
-use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::data_structure::StaticMonitoringData;
 use nodeget_lib::permission::data_structure::{Permission, Scope, StaticMonitoring};
@@ -12,6 +11,7 @@ use sea_orm::{ActiveValue, EntityTrait, Set};
 use serde_json::value::RawValue;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tracing::debug;
 
 // 生成唯一错误ID用于内部追踪
 static ERROR_COUNTER: AtomicU64 = AtomicU64::new(0);

@@ -7,10 +7,10 @@
     dead_code
 )]
 
-use tracing::info;
 use nodeget_lib::args_parse::server::{ServerArgs, ServerCommand};
 #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
 use tikv_jemallocator::Jemalloc;
+use tracing::info;
 
 #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
 #[global_allocator]

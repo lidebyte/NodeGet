@@ -1,9 +1,9 @@
 use crate::kv::create_kv;
 use crate::rpc::kv::auth::check_kv_create_permission;
 use jsonrpsee::core::RpcResult;
-use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use serde_json::value::RawValue;
+use tracing::debug;
 
 pub async fn create(token: String, name: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {

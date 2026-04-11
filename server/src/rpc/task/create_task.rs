@@ -3,7 +3,6 @@ use crate::rpc::RpcHelper;
 use crate::rpc::task::TaskManager;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
-use tracing::{debug, error};
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
@@ -12,6 +11,7 @@ use nodeget_lib::utils::generate_random_string;
 use sea_orm::{ActiveValue, EntityTrait, Set};
 use serde_json::value::RawValue;
 use std::sync::Arc;
+use tracing::{debug, error};
 use uuid::Uuid;
 
 fn validate_task_type(task_type: &TaskEventType) -> anyhow::Result<()> {

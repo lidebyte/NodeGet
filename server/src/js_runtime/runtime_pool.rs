@@ -1,5 +1,4 @@
 use super::{JS_RT_MEMORY_LIMIT_BYTES, enrich_exception, init_js_runtime_globals, js_error};
-use tracing::{debug, warn};
 use nodeget_lib::js_runtime::{RunType, RuntimePoolInfo, RuntimePoolWorkerInfo};
 use nodeget_lib::utils::get_local_timestamp_ms_i64;
 use rquickjs::{AsyncContext, AsyncRuntime, Error, Module, Promise, Value as JsValue};
@@ -10,6 +9,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use tokio::sync::oneshot;
+use tracing::{debug, warn};
 
 const RUNTIME_CLEAN_TIME_NONE: i64 = -1;
 const CLEANUP_INTERVAL_MS: u64 = 1_000;
@@ -89,7 +89,9 @@ impl RuntimeWorkerHandle {
 
         match get_local_timestamp_ms_i64() {
             Ok(now) => self.last_used_ms.store(now, Ordering::Relaxed),
-            Err(e) => warn!(target: "js_runtime", error = %e, "Failed to read local timestamp for runtime worker"),
+            Err(e) => {
+                warn!(target: "js_runtime", error = %e, "Failed to read local timestamp for runtime worker")
+            }
         }
         self.active_requests.fetch_sub(1, Ordering::SeqCst);
 

@@ -4,7 +4,6 @@ use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
 use futures::StreamExt;
 use jsonrpsee::core::RpcResult;
-use tracing::error;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::query::{DynamicDataQuery, DynamicDataQueryField, QueryCondition};
 use nodeget_lib::permission::data_structure::{DynamicMonitoring, Permission, Scope};
@@ -16,6 +15,7 @@ use sea_orm::{
     QuerySelect, SelectModel, Selector,
 };
 use serde_json::value::RawValue;
+use tracing::error;
 
 pub async fn query_dynamic(
     token: String,

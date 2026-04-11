@@ -3,7 +3,6 @@ use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
-use tracing::error;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::query::QueryCondition;
 use nodeget_lib::permission::data_structure::{Permission, Scope, StaticMonitoring};
@@ -11,6 +10,7 @@ use nodeget_lib::permission::token_auth::TokenOrAuth;
 use sea_orm::{ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde_json::value::RawValue;
 use std::collections::HashSet;
+use tracing::error;
 
 pub async fn delete_static(
     token: String,

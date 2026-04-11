@@ -87,8 +87,21 @@ impl RpcServer for JsWorkerRpcImpl {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "js-worker::create", token_key = tk, username = un, name = %name, description = ?description, route_name = ?route_name, runtime_clean_time = ?runtime_clean_time);
         async {
-            rpc_exec!(create::create(token, name, description, js_script_base64, route_name, runtime_clean_time, env).await)
-        }.instrument(span).await
+            rpc_exec!(
+                create::create(
+                    token,
+                    name,
+                    description,
+                    js_script_base64,
+                    route_name,
+                    runtime_clean_time,
+                    env
+                )
+                .await
+            )
+        }
+        .instrument(span)
+        .await
     }
 
     async fn update(
@@ -104,20 +117,37 @@ impl RpcServer for JsWorkerRpcImpl {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "js-worker::update", token_key = tk, username = un, name = %name, description = ?description, route_name = ?route_name, runtime_clean_time = ?runtime_clean_time);
         async {
-            rpc_exec!(update::update(token, name, description, js_script_base64, route_name, runtime_clean_time, env).await)
-        }.instrument(span).await
+            rpc_exec!(
+                update::update(
+                    token,
+                    name,
+                    description,
+                    js_script_base64,
+                    route_name,
+                    runtime_clean_time,
+                    env
+                )
+                .await
+            )
+        }
+        .instrument(span)
+        .await
     }
 
     async fn delete(&self, token: String, name: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "js-worker::delete", token_key = tk, username = un, name = %name);
-        async { rpc_exec!(delete::delete(token, name).await) }.instrument(span).await
+        async { rpc_exec!(delete::delete(token, name).await) }
+            .instrument(span)
+            .await
     }
 
     async fn read(&self, token: String, name: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "js-worker::read", token_key = tk, username = un, name = %name);
-        async { rpc_exec!(read::read(token, name).await) }.instrument(span).await
+        async { rpc_exec!(read::read(token, name).await) }
+            .instrument(span)
+            .await
     }
 
     async fn run(
@@ -131,18 +161,26 @@ impl RpcServer for JsWorkerRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "js-worker::run", token_key = tk, username = un, js_script_name = %js_script_name, run_type = ?run_type, compile_mode = ?compile_mode);
-        async { rpc_exec!(run::run(token, js_script_name, run_type, params, env, compile_mode).await) }.instrument(span).await
+        async {
+            rpc_exec!(run::run(token, js_script_name, run_type, params, env, compile_mode).await)
+        }
+        .instrument(span)
+        .await
     }
 
     async fn get_rt_pool(&self, token: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "js-worker::get_rt_pool", token_key = tk, username = un);
-        async { rpc_exec!(get_rt_pool::get_rt_pool(token).await) }.instrument(span).await
+        async { rpc_exec!(get_rt_pool::get_rt_pool(token).await) }
+            .instrument(span)
+            .await
     }
 
     async fn list_all_js_worker(&self, token: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "js-worker::list_all_js_worker", token_key = tk, username = un);
-        async { rpc_exec!(list_all_js_worker::list_all_js_worker(token).await) }.instrument(span).await
+        async { rpc_exec!(list_all_js_worker::list_all_js_worker(token).await) }
+            .instrument(span)
+            .await
     }
 }

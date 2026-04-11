@@ -2,7 +2,6 @@ use crate::entity::task;
 use crate::rpc::RpcHelper;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
-use tracing::{debug, error};
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
@@ -13,6 +12,7 @@ use sea_orm::QuerySelect;
 use sea_orm::{EntityTrait, Set};
 use serde_json::Value;
 use serde_json::value::RawValue;
+use tracing::{debug, error};
 
 pub async fn upload_task_result(
     token: String,

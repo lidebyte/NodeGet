@@ -74,7 +74,11 @@ impl RpcServer for TaskRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "task::create_task", token_key = tk, username = un, target_uuid = %target_uuid, task_type = ?task_type);
-        async { rpc_exec!(create_task::create_task(&self.manager, token, target_uuid, task_type).await) }.instrument(span).await
+        async {
+            rpc_exec!(create_task::create_task(&self.manager, token, target_uuid, task_type).await)
+        }
+        .instrument(span)
+        .await
     }
 
     async fn upload_task_result(
@@ -84,7 +88,9 @@ impl RpcServer for TaskRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "task::upload_task_result", token_key = tk, username = un, task_id = %task_response.task_id, agent_uuid = %task_response.agent_uuid);
-        async { rpc_exec!(upload_task_result::upload_task_result(token, task_response).await) }.instrument(span).await
+        async { rpc_exec!(upload_task_result::upload_task_result(token, task_response).await) }
+            .instrument(span)
+            .await
     }
 
     async fn query(
@@ -94,7 +100,9 @@ impl RpcServer for TaskRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "task::query", token_key = tk, username = un, query = ?task_data_query);
-        async { rpc_exec!(query::query(token, task_data_query).await) }.instrument(span).await
+        async { rpc_exec!(query::query(token, task_data_query).await) }
+            .instrument(span)
+            .await
     }
 
     async fn delete(
@@ -104,7 +112,9 @@ impl RpcServer for TaskRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "task::delete", token_key = tk, username = un, conditions = ?conditions);
-        async { rpc_exec!(delete::delete(token, conditions).await) }.instrument(span).await
+        async { rpc_exec!(delete::delete(token, conditions).await) }
+            .instrument(span)
+            .await
     }
 
     async fn register_task(

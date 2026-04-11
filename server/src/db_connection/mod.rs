@@ -1,11 +1,11 @@
 pub mod clean_up;
 
 use crate::{DB, SERVER_CONFIG};
-use tracing::log::LevelFilter;
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, ConnectionTrait, Database};
 use std::process;
 use std::time::Duration;
+use tracing::log::LevelFilter;
 use tracing::{error, info};
 
 // 初始化数据库连接并应用迁移

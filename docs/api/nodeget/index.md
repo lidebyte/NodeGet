@@ -15,7 +15,7 @@ NodeGet 是本项目的基础服务接口模块，提供服务端状态查询、
 | [read_config](./crud.md#read-config)                 | 读取服务端配置文件原文        | SuperToken                  |
 | [edit_config](./crud.md#edit-config)                 | 写入并触发服务端配置热重载      | SuperToken                  |
 | [database_storage](./crud.md#database-storage)       | 查询数据库各表存储占用        | SuperToken                  |
-| [log](./crud.md#log)                                 | 查询内存日志缓冲区           | SuperToken                  |
+| [log](./crud.md#log)                                 | 查询内存日志缓冲区          | SuperToken                  |
 
 ## 版本信息结构体
 
@@ -125,7 +125,8 @@ NodeGet 是本项目的基础服务接口模块，提供服务端状态查询、
 }
 ```
 
-内存日志缓冲区为固定容量的环形缓冲区，满时自动淘汰最旧的条目。容量和过滤级别可在 `[logging]` 配置段中通过 `memory_log_capacity` 和 `memory_log_filter` 设置，详见 [Server 配置](../../guide/config/server.md)
+内存日志缓冲区为固定容量的环形缓冲区，满时自动淘汰最旧的条目。容量和过滤级别可在 `[logging]` 配置段中通过
+`memory_log_capacity` 和 `memory_log_filter` 设置，详见 [Server 配置](../../guide/config/server.md)
 
 ## 注意事项
 
@@ -133,5 +134,6 @@ NodeGet 是本项目的基础服务接口模块，提供服务端状态查询、
 
 `list_all_agent_uuid` 需要 Token 拥有 `NodeGet::ListAllAgentUuid` 权限，返回结果受 Scope 限制
 
-`read_config` / `edit_config` / `database_storage` / `log` 仅允许 **SuperToken** 调用，`token` 支持 `token_key:token_secret` 或 `username|password`
+`read_config` / `edit_config` / `database_storage` / `log` 仅允许 **SuperToken** 调用，`token` 支持
+`token_key:token_secret` 或 `username|password`
 两种格式

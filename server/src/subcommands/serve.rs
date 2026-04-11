@@ -1,12 +1,12 @@
 use crate::entity::js_worker;
 use axum::routing::any;
 use axum::{extract::Path, http::StatusCode};
-use tracing::info;
 use nodeget_lib::js_runtime::RunType;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tower::Service;
+use tracing::info;
 
 use crate::RELOAD_NOTIFY;
 use crate::crontab::init_crontab_worker;
@@ -14,9 +14,7 @@ use crate::js_runtime::runtime_pool;
 use crate::rpc::get_modules;
 use crate::rpc_timing::RpcTimingMiddleware;
 
-pub async fn run(
-    config: &nodeget_lib::config::server::ServerConfig,
-) {
+pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
     #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
     spawn_jemalloc_mem_debug_task();
 
@@ -467,7 +465,9 @@ async fn cleanup_unix_socket_file(path: Option<&str>) {
     match tokio::fs::remove_file(path).await {
         Ok(()) => {}
         Err(e) if e.kind() == ErrorKind::NotFound => {}
-        Err(e) => tracing::warn!(target: "server", path = %path, error = %e, "Failed to remove unix socket file"),
+        Err(e) => {
+            tracing::warn!(target: "server", path = %path, error = %e, "Failed to remove unix socket file")
+        }
     }
 }
 

@@ -13,7 +13,7 @@
 | [kv_get_multi_value](./crud.md#get-multi-key-value)   | 批量读取键值   |
 | [kv_delete_key](./crud.md#delete-key-value)           | 删除键值对    |
 | [kv_get_all_keys](./crud.md#list-all-keys)            | 列出所有键名   |
-| [kv_create](./crud.md#create-namespace)     | 创建命名空间   |
+| [kv_create](./crud.md#create-namespace)               | 创建命名空间   |
 | [kv_list_all_namespace](./crud.md#list-all-namespace) | 列出所有命名空间 |
 
 特殊说明请参考 [special.md](./special.md)。

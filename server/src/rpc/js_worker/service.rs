@@ -1,15 +1,15 @@
 use crate::entity::{js_result, js_worker};
-use crate::js_runtime::runtime_pool;
 use crate::js_runtime::js_runner_source_mode;
+use crate::js_runtime::runtime_pool;
 use crate::rpc::RpcHelper;
 use crate::rpc::js_worker::JsWorkerRpcImpl;
-use tracing::error;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::js_runtime::{JsCodeInput, RunType};
 use nodeget_lib::utils::get_local_timestamp_ms_i64;
 use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde_json::Value;
 use std::time::Duration;
+use tracing::error;
 
 pub async fn enqueue_defined_js_worker_run(
     js_script_name: String,
@@ -278,15 +278,10 @@ pub async fn enqueue_source_js_worker_run(
     tokio::spawn(async move {
         let worker_name_in_spawn = worker_name_for_log.clone();
         let run_outcome: Result<Value, String> = match tokio::task::spawn_blocking(move || {
-            js_runner_source_mode(
-                &source_code,
-                &worker_name,
-                run_type,
-                params,
-                resolved_env,
-            )
+            js_runner_source_mode(&source_code, &worker_name, run_type, params, resolved_env)
         })
-        .await {
+        .await
+        {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(e)) => Err(format!(
                 "JavaScript execution error: {}",

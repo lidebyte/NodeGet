@@ -22,6 +22,7 @@ pub fn js_error(stage: &'static str, message: impl Into<String>) -> Error {
 /// The default `Display` impl for `Error::FromJs` produces misleading output like
 /// `"Error converting from js 'stage' into type 'String': actual message"`.
 /// This function extracts the meaningful portion instead.
+#[must_use]
 pub fn format_js_error(err: &Error) -> String {
     match err {
         Error::FromJs {
@@ -52,7 +53,7 @@ pub(crate) fn init_js_runtime_globals(ctx: &Ctx<'_>) -> Result<(), Error> {
     global.set("randomUUID", Func::from(|| Uuid::new_v4().to_string()))?;
     // Wrap raw functions to return parsed JS objects instead of JSON strings
     ctx.eval::<(), _>(
-        r#"
+        r"
         globalThis.nodeget = async (json) => {
             const input = typeof json === 'string' ? json : JSON.stringify(json);
             const raw = await globalThis.__nodeget_rpc_raw(input);
@@ -62,7 +63,7 @@ pub(crate) fn init_js_runtime_globals(ctx: &Ctx<'_>) -> Result<(), Error> {
             const raw = await globalThis.__nodeget_inline_call_raw(name, paramsJson, timeoutSec, caller);
             return JSON.parse(raw);
         };
-        "#,
+        ",
     )?;
     Ok(())
 }
@@ -454,7 +455,7 @@ pub fn js_runner_source_mode(
             global.set("__nodeget_inline_caller", inline_caller_js)?;
 
             // Use actual script name for better error stack traces
-            let module_name = format!("{}.js", script_name);
+            let module_name = format!("{script_name}.js");
             let declared_module = enrich_exception(
                 &ctx,
                 "js_load",

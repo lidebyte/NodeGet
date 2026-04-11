@@ -1,7 +1,5 @@
 use crate::rpc::js_worker::auth::check_js_worker_permission;
-use crate::rpc::js_worker::service::{
-    enqueue_defined_js_worker_run, enqueue_source_js_worker_run,
-};
+use crate::rpc::js_worker::service::{enqueue_defined_js_worker_run, enqueue_source_js_worker_run};
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::js_runtime::{CompileMode, RunType};

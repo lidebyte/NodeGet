@@ -24,7 +24,8 @@
 {
   "jsonrpc": "2.0",
   "method": "nodeget-server_hello",
-  "params": [], // 无参数
+  "params": [],
+  // 无参数
   "id": 1
 }
 ```
@@ -411,7 +412,8 @@
 
 ```json
 {
-  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET" // SuperToken 字符串
+  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET"
+  // SuperToken 字符串
 }
 ```
 

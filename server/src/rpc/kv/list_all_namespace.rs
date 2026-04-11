@@ -1,9 +1,9 @@
 use crate::kv::list_all_namespaces;
 use crate::rpc::kv::auth::{KvNamespaceListPermission, resolve_kv_list_namespace_permission};
 use jsonrpsee::core::RpcResult;
-use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use serde_json::value::RawValue;
+use tracing::debug;
 
 pub async fn list_all_namespace(token: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {

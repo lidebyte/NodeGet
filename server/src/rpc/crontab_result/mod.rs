@@ -49,7 +49,9 @@ impl RpcServer for CrontabResultRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "crontab-result::query", token_key = tk, username = un, query = ?query);
-        async { rpc_exec!(query::query(token, query).await) }.instrument(span).await
+        async { rpc_exec!(query::query(token, query).await) }
+            .instrument(span)
+            .await
     }
 
     async fn delete(
@@ -59,6 +61,8 @@ impl RpcServer for CrontabResultRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "rpc", "crontab-result::delete", token_key = tk, username = un, delete_params = ?delete_params);
-        async { rpc_exec!(delete::delete(token, delete_params).await) }.instrument(span).await
+        async { rpc_exec!(delete::delete(token, delete_params).await) }
+            .instrument(span)
+            .await
     }
 }

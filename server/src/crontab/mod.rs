@@ -53,18 +53,15 @@ pub async fn set_crontab_enable_by_name(
         .one(db)
         .await?;
 
-    match crontab_option {
-        Some(model) => {
-            let mut active_model: crontab::ActiveModel = model.into();
-            active_model.enable = Set(enable);
-            let updated = active_model.update(db).await?;
-            info!(target: "crontab", name = %name, enable = updated.enable, "crontab enable updated");
-            Ok(Some(updated.enable))
-        }
-        None => {
-            warn!(target: "crontab", name = %name, enable, "crontab not found for set_enable");
-            Ok(None)
-        }
+    if let Some(model) = crontab_option {
+        let mut active_model: crontab::ActiveModel = model.into();
+        active_model.enable = Set(enable);
+        let updated = active_model.update(db).await?;
+        info!(target: "crontab", name = %name, enable = updated.enable, "crontab enable updated");
+        Ok(Some(updated.enable))
+    } else {
+        warn!(target: "crontab", name = %name, enable, "crontab not found for set_enable");
+        Ok(None)
     }
 }
 

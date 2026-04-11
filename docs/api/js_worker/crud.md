@@ -350,11 +350,13 @@
 `run` 不会等待脚本执行结束，返回的 `id` 可用于后续查询执行结果。
 
 **关于 `compile_mode`**：
+
 - `bytecode` 模式：使用脚本创建时预编译的字节码，执行效率高，但错误堆栈可能不显示准确的源码行号
 - `source` 模式：使用原始源码实时编译，执行效率略低，但错误堆栈会显示准确的源码行号（如 `photobed.js:23:5`），便于调试
 - 其他调用方式（WebRoute、inline_call）始终使用 `bytecode` 模式
 
 **关于 `run_type: "route"` 的注意事项**：
+
 - 当使用 `onRoute` 处理函数时，`params` 需要传入序列化的 HTTP Request 对象，格式如下：
   ```json
   {

@@ -22,8 +22,8 @@ pub async fn js_nodeget(json: String) -> StdResult<String, Error> {
 
     // Batch request: JSON array of JSON-RPC requests
     if trimmed.starts_with('[') {
-        let items: Vec<serde_json::Value> = serde_json::from_str(trimmed)
-            .map_err(|e| js_error("jsonrpc_parse", e.to_string()))?;
+        let items: Vec<serde_json::Value> =
+            serde_json::from_str(trimmed).map_err(|e| js_error("jsonrpc_parse", e.to_string()))?;
 
         let futs: Vec<_> = items
             .into_iter()

@@ -1,10 +1,10 @@
 use crate::token::generate_token::generate_and_store_token;
 use jsonrpsee::core::RpcResult;
-use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::create::TokenCreationRequest;
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use serde_json::value::RawValue;
+use tracing::debug;
 
 pub async fn create(
     father_token: String,

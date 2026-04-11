@@ -53,7 +53,7 @@ pub fn wrap_json_into_rpc_with_id_1(method: &str, params: Vec<serde_json::Value>
     // 这个序列化不应该失败，因为结构体只包含基本类型
     // 但如果失败，返回一个错误响应而不是panic
     serde_json::to_string(&rpc).unwrap_or_else(|e| {
-        format!(r#"{{"jsonrpc":"2.0","id":1,"error":{{"code":-32603,"message":"Internal error: failed to serialize request: {}"}}}}"#, e)
+        format!(r#"{{"jsonrpc":"2.0","id":1,"error":{{"code":-32603,"message":"Internal error: failed to serialize request: {e}"}}}}"#)
     })
 }
 

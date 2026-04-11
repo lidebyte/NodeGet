@@ -1,14 +1,10 @@
 use super::CleanupResult;
 use super::config::CleanupConfig;
 use anyhow::Result;
-use sea_orm::{
-    prelude::*, DatabaseConnection, DbBackend, FromQueryResult, QuerySelect, Statement,
-};
+use sea_orm::{DatabaseConnection, DbBackend, FromQueryResult, QuerySelect, Statement, prelude::*};
 
 // 引入实体模块
-use crate::entity::{
-    crontab_result, dynamic_monitoring, kv, static_monitoring, task,
-};
+use crate::entity::{crontab_result, dynamic_monitoring, kv, static_monitoring, task};
 
 /// 验证表名是否合法（防止SQL注入）
 const ALLOWED_MONITORING_TABLES: &[&str] = &["static_monitoring", "dynamic_monitoring"];
@@ -50,12 +46,12 @@ pub async fn cleanup_expired_data_postgres(db: &DatabaseConnection) -> Result<Cl
 }
 
 /// `PostgreSQL`: 获取所有需要清理的配置
-/// 使用 SeaORM 构建查询，避免 Raw SQL
+/// 使用 `SeaORM` 构建查询，避免 Raw SQL
 async fn get_cleanup_configs_postgres(db: &DatabaseConnection) -> Result<Vec<CleanupConfig>> {
     // 使用 SeaORM 构建复杂查询
     // 注意：CASE WHEN 表达式需要使用 Expr::cust 或原生 SQL
     // 这里我们使用更安全的参数化查询
-    let sql = r#"
+    let sql = r"
         SELECT 
             namespace as agent_uuid,
             MAX(CASE WHEN key = 'database_limit_static_monitoring' THEN value #>> '{}' END) as static_limit,
@@ -65,10 +61,11 @@ async fn get_cleanup_configs_postgres(db: &DatabaseConnection) -> Result<Vec<Cle
         WHERE namespace ~ $1
         AND key = ANY($2)
         GROUP BY namespace
-    "#;
+    ";
 
     // 使用参数化查询，避免 SQL 注入
-    let uuid_pattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$".to_string();
+    let uuid_pattern =
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$".to_string();
     let keys: Vec<String> = vec![
         "database_limit_static_monitoring".to_string(),
         "database_limit_dynamic_monitoring".to_string(),
@@ -97,8 +94,8 @@ async fn get_cleanup_configs_postgres(db: &DatabaseConnection) -> Result<Vec<Cle
     Ok(configs)
 }
 
-/// 清理 static_monitoring 表
-/// 使用 SeaORM Entity 构建类型安全的查询
+/// 清理 `static_monitoring` 表
+/// 使用 `SeaORM` Entity 构建类型安全的查询
 async fn cleanup_static_monitoring(
     db: &DatabaseConnection,
     agent_uuid: &str,
@@ -131,7 +128,7 @@ async fn cleanup_static_monitoring(
     Ok(result.rows_affected)
 }
 
-/// 清理 dynamic_monitoring 表
+/// 清理 `dynamic_monitoring` 表
 async fn cleanup_dynamic_monitoring(
     db: &DatabaseConnection,
     agent_uuid: &str,
@@ -163,11 +160,7 @@ async fn cleanup_dynamic_monitoring(
 }
 
 /// 清理 task 表（timestamp 可能为 NULL）
-async fn cleanup_task(
-    db: &DatabaseConnection,
-    agent_uuid: &str,
-    limit_millis: i64,
-) -> Result<u64> {
+async fn cleanup_task(db: &DatabaseConnection, agent_uuid: &str, limit_millis: i64) -> Result<u64> {
     // 首先查询该 agent 的最大 timestamp（排除 NULL）
     let max_timestamp: Option<i64> = task::Entity::find()
         .filter(task::Column::Uuid.eq(uuid::Uuid::parse_str(agent_uuid)?))
@@ -226,9 +219,7 @@ async fn cleanup_crontab_result(db: &DatabaseConnection, limit_millis: i64) -> R
 /// 从 global 配置中获取 `crontab_result` 的清理限制 (`PostgreSQL` 版本)
 /// 查找 namespace 为 `global` 且 key 为 `database_limit_crontab_result` 的 KV 记录
 /// 若不存在则返回 None
-async fn get_global_crontab_result_limit_postgres(
-    db: &DatabaseConnection,
-) -> Result<Option<i64>> {
+async fn get_global_crontab_result_limit_postgres(db: &DatabaseConnection) -> Result<Option<i64>> {
     // 使用 SeaORM 构建查询
     let result = kv::Entity::find()
         .filter(kv::Column::Namespace.eq("global"))
@@ -238,11 +229,7 @@ async fn get_global_crontab_result_limit_postgres(
         .one(db)
         .await?;
 
-    Ok(result.and_then(|row| {
-        row.value
-            .as_str()
-            .and_then(|s| s.parse().ok())
-    }))
+    Ok(result.and_then(|row| row.value.as_str().and_then(|s| s.parse().ok())))
 }
 
 /// 查找具有数据库清理限制的 UUID
@@ -251,15 +238,16 @@ pub async fn find_uuids_with_database_limit_postgres(
 ) -> Result<Vec<String>> {
     // 使用 SeaORM 构建查询
     // 注意：正则匹配需要使用原生 SQL
-    let sql = r#"
+    let sql = r"
         SELECT DISTINCT namespace as name
         FROM kv
         WHERE namespace ~ $1
         AND key LIKE $2
         ORDER BY name ASC
-    "#;
+    ";
 
-    let uuid_pattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+    let uuid_pattern =
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
     let key_pattern = "database_limit_%";
 
     let results = UuidResult::find_by_statement(Statement::from_sql_and_values(

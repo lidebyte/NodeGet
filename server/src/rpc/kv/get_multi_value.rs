@@ -2,11 +2,11 @@ use crate::kv::get_kv_store;
 use crate::rpc::kv::auth::check_kv_read_permission_with_pattern;
 use crate::rpc::kv::{KvValueItem, NamespaceKeyItem};
 use jsonrpsee::core::RpcResult;
-use tracing::debug;
 use nodeget_lib::error::NodegetError;
 use serde_json::Value;
 use serde_json::value::RawValue;
 use std::collections::HashMap;
+use tracing::debug;
 
 fn wildcard_prefix(key_pattern: &str) -> Option<&str> {
     if !key_pattern.contains('*') {

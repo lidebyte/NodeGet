@@ -6,16 +6,15 @@ use nodeget_lib::config::server::LoggingConfig;
 use tracing::field::{Field, Visit};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{
+    EnvFilter, Layer,
     fmt::{
-        self,
+        self, FmtContext, FormattedFields,
         format::{self, FormatEvent, FormatFields},
         time::{ChronoLocal, FormatTime},
-        FmtContext, FormattedFields,
     },
     layer::SubscriberExt,
     registry::LookupSpan,
     util::SubscriberInitExt,
-    EnvFilter, Layer,
 };
 
 /// Default capacity for the in-memory log ring buffer.
@@ -370,7 +369,7 @@ where
 // ===========================================================================
 
 /// ANSI escape pair `(open, reset)` for the given tracing level.
-fn level_ansi(level: tracing::Level) -> (&'static str, &'static str) {
+const fn level_ansi(level: tracing::Level) -> (&'static str, &'static str) {
     const RESET: &str = "\x1b[0m";
     match level {
         tracing::Level::ERROR => ("\x1b[31m", RESET),

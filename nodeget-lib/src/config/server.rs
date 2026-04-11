@@ -40,19 +40,19 @@ pub struct ServerConfig {
 /// 如果设置了 `RUST_LOG` 环境变量，它会覆盖 `log_filter`。
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LoggingConfig {
-    /// 控制台日志过滤器，语法同 RUST_LOG，默认 "info"
+    /// 控制台日志过滤器，语法同 `RUST_LOG，默认` "info"
     pub log_filter: Option<String>,
 
     /// JSON 日志输出文件路径（可选，不设置则不输出 JSON 日志）
     pub json_log_file: Option<String>,
 
-    /// JSON 日志过滤器，语法同 RUST_LOG（可选，默认与 log_filter 相同）
+    /// JSON 日志过滤器，语法同 `RUST_LOG（可选，默认与` `log_filter` 相同）
     pub json_log_filter: Option<String>,
 
     /// 内存日志缓冲区容量（条数），默认 500
     pub memory_log_capacity: Option<usize>,
 
-    /// 内存日志过滤器，语法同 RUST_LOG（可选，默认与 log_filter 相同）
+    /// 内存日志过滤器，语法同 `RUST_LOG（可选，默认与` `log_filter` 相同）
     /// 通过 nodeget-server_log RPC 方法可查询缓冲区内容
     pub memory_log_filter: Option<String>,
 }
