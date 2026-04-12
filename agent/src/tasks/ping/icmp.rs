@@ -3,7 +3,7 @@ use nodeget_lib::error::NodegetError;
 use rand::random;
 use surge_ping::{Client, Config, ICMP, PingIdentifier, PingSequence, SurgeError};
 use tokio::net::lookup_host;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 
 /// ICMP Ping 结果类型
 pub type Result<T> = std::result::Result<T, NodegetError>;
@@ -12,75 +12,57 @@ pub type Result<T> = std::result::Result<T, NodegetError>;
 static ICMP_PAYLOAD: [u8; 8] = [0; 8];
 // Ping 超时时间，设定为 2 秒
 static PING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
 // 全局 IPv4 ICMP 客户端实例
-static GLOBAL_ICMP_V4_CLIENT: OnceCell<Mutex<Client>> = OnceCell::const_new();
+// Client 内部使用 Arc 共享 socket 和 recv_task，Clone 即可并发使用，无需 Mutex
+static GLOBAL_ICMP_V4_CLIENT: OnceCell<Client> = OnceCell::const_new();
 // 全局 IPv6 ICMP 客户端实例
-static GLOBAL_ICMP_V6_CLIENT: OnceCell<Mutex<Client>> = OnceCell::const_new();
+static GLOBAL_ICMP_V6_CLIENT: OnceCell<Client> = OnceCell::const_new();
 
-// 对 IPv4 目标执行 ICMP Ping
-//
-// # 参数
-// * `target` - 目标 IP 地址
-//
-// # 返回值
-// 成功时返回往返时间，失败时返回错误
-async fn ping_v4_target(
-    target: std::net::IpAddr,
-) -> std::result::Result<std::time::Duration, SurgeError> {
-    let client_v4_mutex = GLOBAL_ICMP_V4_CLIENT
+async fn get_v4_client() -> &'static Client {
+    GLOBAL_ICMP_V4_CLIENT
         .get_or_init(|| async {
-            let config_v4 = Config::builder().kind(ICMP::V4).build();
-            let client_v4 = Client::new(&config_v4).unwrap();
-            Mutex::new(client_v4)
+            let config = Config::builder()
+                .kind(ICMP::V4)
+                .build();
+            Client::new(&config).unwrap()
         })
-        .await;
-
-    let mut pinger = {
-        let client = client_v4_mutex.lock().await;
-        client.pinger(target, PingIdentifier(random())).await
-    };
-
-    match pinger
-        .timeout(PING_TIMEOUT)
-        .ping(PingSequence(0), &ICMP_PAYLOAD)
         .await
-    {
-        Ok((_packet, duration)) => Ok(duration),
-        Err(e) => Err(e),
-    }
 }
 
-// 对 IPv6 目标执行 ICMP Ping
+async fn get_v6_client() -> &'static Client {
+    GLOBAL_ICMP_V6_CLIENT
+        .get_or_init(|| async {
+            let config = Config::builder()
+                .kind(ICMP::V6)
+                .build();
+            Client::new(&config).unwrap()
+        })
+        .await
+}
+
+// 对目标执行 ICMP Ping
 //
 // # 参数
 // * `target` - 目标 IP 地址
 //
 // # 返回值
 // 成功时返回往返时间，失败时返回错误
-async fn ping_v6_target(
-    target: std::net::IpAddr,
-) -> std::result::Result<std::time::Duration, SurgeError> {
-    let client_v6_mutex = GLOBAL_ICMP_V6_CLIENT
-        .get_or_init(|| async {
-            let config_v6 = Config::builder().kind(ICMP::V6).build();
-            let client_v6 = Client::new(&config_v6).unwrap();
-            Mutex::new(client_v6)
-        })
-        .await;
-
-    let mut pinger = {
-        let client = client_v6_mutex.lock().await;
-        client.pinger(target, PingIdentifier(random())).await
+async fn ping_ip(target: std::net::IpAddr) -> std::result::Result<std::time::Duration, SurgeError> {
+    let client = if target.is_ipv4() {
+        get_v4_client().await
+    } else {
+        get_v6_client().await
     };
 
-    match pinger
-        .timeout(PING_TIMEOUT)
-        .ping(PingSequence(0), &ICMP_PAYLOAD)
-        .await
-    {
-        Ok((_packet, duration)) => Ok(duration),
-        Err(e) => Err(e),
-    }
+    let mut pinger = client.pinger(target, PingIdentifier(random())).await;
+    pinger.timeout(PING_TIMEOUT);
+
+    let (_, duration) = pinger
+        .ping(PingSequence(random()), &ICMP_PAYLOAD)
+        .await?;
+
+    Ok(duration)
 }
 
 // 对目标执行 ICMP Ping
@@ -108,13 +90,7 @@ pub async fn ping_target(target: String) -> Result<std::time::Duration> {
         return Err(NodegetError::Other("Invalid target".to_owned()));
     };
 
-    if target.is_ipv4() {
-        ping_v4_target(target)
-            .await
-            .map_err(|e| NodegetError::Other(format!("{e}")))
-    } else {
-        ping_v6_target(target)
-            .await
-            .map_err(|e| NodegetError::Other(format!("{e}")))
-    }
+    ping_ip(target)
+        .await
+        .map_err(|e| NodegetError::Other(format!("{e}")))
 }
