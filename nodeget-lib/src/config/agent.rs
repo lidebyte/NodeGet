@@ -1,5 +1,6 @@
 use crate::config::deserialize_uuid_or_auto;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::Path;
 use tokio::fs;
 
@@ -86,6 +87,20 @@ impl AgentConfig {
         let file = fs::read_to_string(path).await?;
 
         let config: Self = toml::from_str(&file)?;
+
+        // 校验 server name 不能重复
+        if let Some(servers) = &config.server {
+            let mut seen = HashSet::with_capacity(servers.len());
+            for server in servers {
+                if !seen.insert(&server.name) {
+                    return Err(format!(
+                        "Duplicate server name '{}' in config",
+                        server.name
+                    )
+                    .into());
+                }
+            }
+        }
 
         Ok(config)
     }
