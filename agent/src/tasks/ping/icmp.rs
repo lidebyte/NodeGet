@@ -23,6 +23,7 @@ static PING_TIMEOUT: Duration = Duration::from_secs(2);
 mod dgram {
     use super::*;
     use socket2::{Domain, Protocol, SockAddr, Socket, Type};
+    use std::mem::MaybeUninit;
     use std::net::SocketAddr;
     use std::time::Instant;
 
@@ -114,7 +115,7 @@ mod dgram {
             let start = Instant::now();
             socket.send_to(&packet, &dest_addr)?;
 
-            let mut recv_buf = [0u8; 256];
+            let mut recv_buf = [MaybeUninit::<u8>::uninit(); 256];
             let deadline = start + PING_TIMEOUT;
 
             loop {
@@ -144,8 +145,12 @@ mod dgram {
                     continue;
                 }
 
+                // SAFETY: recv_from 已写入 n 字节
+                let data: &[u8] =
+                    unsafe { std::slice::from_raw_parts(recv_buf.as_ptr().cast::<u8>(), n) };
+
                 // DGRAM socket 返回的数据不含 IP 头，直接是 ICMP 报文
-                let reply_type = recv_buf[0];
+                let reply_type = data[0];
                 let expected_reply = if is_v6 {
                     ICMPV6_ECHO_REPLY
                 } else {
@@ -158,7 +163,7 @@ mod dgram {
 
                 // 对于 DGRAM ICMP socket，内核会按 id 做 demux
                 // 但为安全起见仍然校验 id
-                let reply_id = u16::from_be_bytes([recv_buf[4], recv_buf[5]]);
+                let reply_id = u16::from_be_bytes([data[4], data[5]]);
                 if reply_id != id {
                     continue;
                 }
