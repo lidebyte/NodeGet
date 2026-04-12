@@ -14,24 +14,23 @@ use std::sync::Arc;
 use tracing::{debug, error};
 use uuid::Uuid;
 
-pub fn validate_task_type(task_type: &TaskEventType) -> anyhow::Result<()> {
-    if let TaskEventType::Execute(execute_task) = task_type
-        && execute_task.cmd.trim().is_empty()
-    {
-        return Err(NodegetError::InvalidInput("Execute cmd cannot be empty".to_owned()).into());
-    }
-
-    Ok(())
-}
-
-pub async fn create_task(
+/// 创建任务并阻塞等待 agent 返回结果
+///
+/// 与 `create_task` 的区别：
+/// - `create_task` 创建任务后立即返回 `{"id": task_id}`
+/// - `create_task_blocking` 创建任务后等待 agent 上传结果，然后返回完整的任务结果
+/// - 如果超时（timeout_ms），返回错误
+pub async fn create_task_blocking(
     manager: &Arc<TaskManager>,
     token: String,
     target_uuid: Uuid,
     task_type: TaskEventType,
+    timeout_ms: u64,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        validate_task_type(&task_type)?;
+        // 内联 create_task 逻辑，以便在 send_event 之前注册 waiter，避免竞态
+
+        super::create_task::validate_task_type(&task_type)?;
 
         let task_name = task_type.task_name();
 
@@ -53,12 +52,12 @@ pub async fn create_task(
         }
 
         let db = <super::TaskRpcImpl as RpcHelper>::get_db()?;
-        let token = generate_random_string(10);
+        let task_token = generate_random_string(10);
 
         let in_data = task::ActiveModel {
             id: ActiveValue::default(),
             uuid: Set(target_uuid),
-            token: Set(token.clone()),
+            token: Set(task_token.clone()),
             cron_source: Set(None),
             timestamp: Set(None),
             success: Set(None),
@@ -68,40 +67,62 @@ pub async fn create_task(
             task_event_result: Set(None),
         };
 
-        debug!(target: "task", uuid = %target_uuid, "Received task");
-
         let result = task::Entity::insert(in_data).exec(db).await.map_err(|e| {
             error!(target: "task", error = %e, "Database insert error");
             NodegetError::DatabaseError(format!("Database insert error: {e}"))
         })?;
 
         let task_id = result.last_insert_id;
-        debug!(target: "task", id = task_id, "Task created");
+        let task_id_u64 = task_id.cast_unsigned();
 
-        let task = TaskEvent {
-            task_id: task_id.cast_unsigned(),
-            task_token: token,
+        debug!(target: "task", task_id = task_id_u64, "task created, registering blocking waiter");
+
+        // 关键：在 send_event 之前注册 waiter，避免 agent 极快返回时错过通知
+        let rx = manager.register_blocking_waiter(task_id_u64).await;
+
+        let task_event = TaskEvent {
+            task_id: task_id_u64,
+            task_token,
             task_event_type: task_type,
         };
 
-        match manager.send_event(target_uuid, task).await {
-            Ok(()) => {
-                let json_str = format!("{{\"id\":{task_id}}}");
+        if let Err(e) = manager.send_event(target_uuid, task_event).await {
+            // 发送失败，清理 waiter 和 DB 记录
+            manager.remove_blocking_waiter(task_id_u64).await;
+            let _ = task::Entity::delete_by_id(task_id).exec(db).await;
+            error!(target: "task", error = %e.1, "Error sending task event");
+            return Err(NodegetError::AgentConnectionError(format!(
+                "Error sending task event: {}",
+                e.1
+            ))
+            .into());
+        }
+
+        debug!(target: "task", task_id = task_id_u64, timeout_ms = timeout_ms, "waiting for agent result");
+
+        // 等待结果或超时
+        let timeout_duration = std::time::Duration::from_millis(timeout_ms);
+        match tokio::time::timeout(timeout_duration, rx).await {
+            Ok(Ok(response)) => {
+                debug!(target: "task", task_id = task_id_u64, success = response.success, "blocking task completed");
+                let json_str = serde_json::to_string(&response)
+                    .map_err(|e| NodegetError::SerializationError(e.to_string()))?;
                 RawValue::from_string(json_str)
                     .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
             }
-            Err(e) => {
-                let _ = task::Entity::delete_by_id(task_id)
-                    .exec(db)
-                    .await
-                    .map_err(|del_err| {
-                        error!(target: "task", error = %del_err, "Database delete error during rollback");
-                        NodegetError::DatabaseError(format!("Database delete error: {del_err}"))
-                    });
-                error!(target: "task", error = %e.1, "Error sending task event");
-                Err(NodegetError::AgentConnectionError(format!(
-                    "Error sending task event: {}",
-                    e.1
+            Ok(Err(_)) => {
+                manager.remove_blocking_waiter(task_id_u64).await;
+                error!(target: "task", task_id = task_id_u64, "blocking waiter channel closed unexpectedly");
+                Err(NodegetError::Other(
+                    "Blocking waiter channel closed unexpectedly".to_owned(),
+                )
+                .into())
+            }
+            Err(_) => {
+                manager.remove_blocking_waiter(task_id_u64).await;
+                debug!(target: "task", task_id = task_id_u64, timeout_ms = timeout_ms, "blocking task timed out");
+                Err(NodegetError::Other(format!(
+                    "Task {task_id_u64} timed out after {timeout_ms}ms"
                 ))
                 .into())
             }

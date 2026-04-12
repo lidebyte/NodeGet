@@ -1,5 +1,6 @@
 use crate::entity::task;
 use crate::rpc::RpcHelper;
+use crate::rpc::task::TaskManager;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
@@ -12,9 +13,11 @@ use sea_orm::QuerySelect;
 use sea_orm::{EntityTrait, Set};
 use serde_json::Value;
 use serde_json::value::RawValue;
+use std::sync::Arc;
 use tracing::{debug, error};
 
 pub async fn upload_task_result(
+    manager: &Arc<TaskManager>,
     token: String,
     task_response: TaskEventResponse,
 ) -> RpcResult<Box<RawValue>> {
@@ -68,6 +71,9 @@ pub async fn upload_task_result(
             ))
             .into());
         }
+
+        // 保存一份完整的 response 用于通知 blocking waiter
+        let response_for_notify = task_response.clone();
 
         // 3. 权限通过后，获取完整任务记录并进行更新
         let task_model = task::Entity::find_by_id(task_response.task_id.cast_signed())
@@ -137,6 +143,11 @@ pub async fn upload_task_result(
             )
             .into());
         }
+
+        // 通知 blocking waiter（如果有 create_task_blocking 在等待此 task_id）
+        manager
+            .notify_blocking_waiter(response_for_notify.task_id, response_for_notify)
+            .await;
 
         debug!(
             target: "task",

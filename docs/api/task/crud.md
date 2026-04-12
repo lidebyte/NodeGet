@@ -146,6 +146,145 @@
 }
 ```
 
+## Create Task Blocking
+
+`task_create_task_blocking` 是 `task_create_task` 的阻塞版本。创建任务后不立即返回 ID，而是等待 Agent 执行完毕并上传结果后，将完整的任务结果直接返回给调用者。
+
+### 方法
+
+调用方法名为 `task_create_task_blocking`，需要提供以下参数：
+
+```json
+{
+  "token": "demo_token",
+  "target_uuid": "AGENT_UUID_HERE",
+  "task_type": {
+    // 任务主体，与 task_create_task 完全一致
+  },
+  "timeout_ms": 5000 // 超时时间（毫秒）
+}
+```
+
+语义说明：
+
+1. `token`、`target_uuid`、`task_type` 的含义与 `task_create_task` 完全一致。
+2. `timeout_ms` 为等待 Agent 返回结果的最大时间（毫秒）。超时后返回错误，但任务本身仍然存在于数据库中（Agent 后续仍可上传结果）。
+3. 内部流程：创建任务 → 发送给 Agent → 等待 Agent 上传结果 → 返回完整结果。
+
+### 权限要求
+
+与 `task_create_task` 一致。
+
+### 返回值
+
+成功时返回完整的 `TaskEventResponse`：
+
+```json
+{
+  "task_id": 4,
+  "agent_uuid": "42e89a61-39de-4569-b6ef-e86bc3ed8f82",
+  "task_token": "aBcDeFgHiJ",
+  "timestamp": 1769341269012,
+  "success": true,
+  "error_message": null,
+  "task_event_result": {
+    "ping": 12.5
+  }
+}
+```
+
+超时时返回错误：
+
+```json
+{
+  "error": {
+    "code": 999,
+    "message": "Task 4 timed out after 5000ms"
+  }
+}
+```
+
+### 完整示例
+
+请求 (ping，超时 5 秒):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "task_create_task_blocking",
+  "params": {
+    "token": "demo_token",
+    "target_uuid": "AGENT_UUID_HERE",
+    "task_type": {
+      "ping": "www.example.com"
+    },
+    "timeout_ms": 5000
+  },
+  "id": 1
+}
+```
+
+响应（Agent 在超时前返回了结果）:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "task_id": 4,
+    "agent_uuid": "42e89a61-39de-4569-b6ef-e86bc3ed8f82",
+    "task_token": "aBcDeFgHiJ",
+    "timestamp": 1769341269012,
+    "success": true,
+    "error_message": null,
+    "task_event_result": {
+      "ping": 12.5
+    }
+  }
+}
+```
+
+请求 (execute，超时 30 秒):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "task_create_task_blocking",
+  "params": {
+    "token": "demo_token",
+    "target_uuid": "AGENT_UUID_HERE",
+    "task_type": {
+      "execute": {
+        "cmd": "uname",
+        "args": ["-a"]
+      }
+    },
+    "timeout_ms": 30000
+  },
+  "id": 1
+}
+```
+
+响应:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "task_id": 5,
+    "agent_uuid": "42e89a61-39de-4569-b6ef-e86bc3ed8f82",
+    "task_token": "xYzAbCdEfG",
+    "timestamp": 1769341270000,
+    "success": true,
+    "error_message": null,
+    "task_event_result": {
+      "execute": "Linux server 6.1.0 #1 SMP x86_64 GNU/Linux\n"
+    }
+  }
+}
+```
+
 ## Query Task
 
 调用者可以通过 `task_query` 查询任务记录。

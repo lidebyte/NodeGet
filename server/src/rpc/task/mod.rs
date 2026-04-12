@@ -14,11 +14,12 @@ use nodeget_lib::utils::JsonError;
 use serde_json::value::RawValue;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{RwLock, mpsc, oneshot};
 use tracing::{Instrument, debug, trace, warn};
 use uuid::Uuid;
 
 mod create_task;
+mod create_task_blocking;
 mod delete;
 mod query;
 mod upload_task_result;
@@ -34,6 +35,15 @@ pub trait Rpc {
         token: String,
         target_uuid: Uuid,
         task_type: TaskEventType,
+    ) -> RpcResult<Box<RawValue>>;
+
+    #[method(name = "create_task_blocking")]
+    async fn create_task_blocking(
+        &self,
+        token: String,
+        target_uuid: Uuid,
+        task_type: TaskEventType,
+        timeout_ms: u64,
     ) -> RpcResult<Box<RawValue>>;
 
     #[method(name = "upload_task_result")]
@@ -81,6 +91,31 @@ impl RpcServer for TaskRpcImpl {
         .await
     }
 
+    async fn create_task_blocking(
+        &self,
+        token: String,
+        target_uuid: Uuid,
+        task_type: TaskEventType,
+        timeout_ms: u64,
+    ) -> RpcResult<Box<RawValue>> {
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "task", "task::create_task_blocking", token_key = tk, username = un, target_uuid = %target_uuid, task_type = ?task_type, timeout_ms = timeout_ms);
+        async {
+            rpc_exec!(
+                create_task_blocking::create_task_blocking(
+                    &self.manager,
+                    token,
+                    target_uuid,
+                    task_type,
+                    timeout_ms,
+                )
+                .await
+            )
+        }
+        .instrument(span)
+        .await
+    }
+
     async fn upload_task_result(
         &self,
         token: String,
@@ -88,7 +123,7 @@ impl RpcServer for TaskRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "task", "task::upload_task_result", token_key = tk, username = un, task_id = %task_response.task_id, agent_uuid = %task_response.agent_uuid);
-        async { rpc_exec!(upload_task_result::upload_task_result(token, task_response).await) }
+        async { rpc_exec!(upload_task_result::upload_task_result(&self.manager, token, task_response).await) }
             .instrument(span)
             .await
     }
@@ -223,12 +258,14 @@ impl RpcServer for TaskRpcImpl {
 }
 
 type Peers = Arc<RwLock<HashMap<Uuid, (Uuid, mpsc::Sender<TaskEvent>)>>>;
+type BlockingWaiters = Arc<RwLock<HashMap<u64, oneshot::Sender<TaskEventResponse>>>>;
 
 static GLOBAL_TASK_MANAGER: OnceLock<Arc<TaskManager>> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct TaskManager {
     peers: Peers,
+    blocking_waiters: BlockingWaiters,
 }
 
 impl TaskManager {
@@ -236,6 +273,7 @@ impl TaskManager {
     pub fn new() -> Self {
         Self {
             peers: Arc::new(RwLock::new(HashMap::new())),
+            blocking_waiters: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -272,6 +310,34 @@ impl TaskManager {
         } else {
             warn!(target: "task", uuid = %uuid, "agent not connected");
             Err((104, format!("Agent {uuid} is not connected")))
+        }
+    }
+
+    /// 注册一个 blocking waiter，等待指定 task_id 的结果
+    pub async fn register_blocking_waiter(
+        &self,
+        task_id: u64,
+    ) -> oneshot::Receiver<TaskEventResponse> {
+        let (tx, rx) = oneshot::channel();
+        self.blocking_waiters.write().await.insert(task_id, tx);
+        debug!(target: "task", task_id = task_id, "blocking waiter registered");
+        rx
+    }
+
+    /// 移除 blocking waiter（超时或取消时调用）
+    pub async fn remove_blocking_waiter(&self, task_id: u64) {
+        self.blocking_waiters.write().await.remove(&task_id);
+    }
+
+    /// 尝试通知 blocking waiter（upload_task_result 时调用）
+    /// 返回 true 表示有 waiter 被通知
+    pub async fn notify_blocking_waiter(&self, task_id: u64, response: TaskEventResponse) -> bool {
+        if let Some(tx) = self.blocking_waiters.write().await.remove(&task_id) {
+            let _ = tx.send(response);
+            debug!(target: "task", task_id = task_id, "blocking waiter notified");
+            true
+        } else {
+            false
         }
     }
 }
