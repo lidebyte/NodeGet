@@ -90,7 +90,7 @@ mod dgram {
     }
 
     /// 使用 DGRAM ICMP socket 执行 ping（阻塞，在 spawn_blocking 中调用）
-    fn dgram_ping_blocking(socket: Socket, target: IpAddr, id: u16, packet: Vec<u8>) -> std::io::Result<Duration> {
+    fn dgram_ping_blocking(socket: Socket, target: IpAddr, packet: Vec<u8>) -> std::io::Result<Duration> {
         let is_v6 = target.is_ipv6();
         let dest = SockAddr::from(SocketAddr::new(target, 0));
 
@@ -135,6 +135,9 @@ mod dgram {
             let data: &[u8] =
                 unsafe { std::slice::from_raw_parts(recv_buf.as_ptr().cast::<u8>(), n) };
 
+            // DGRAM ICMP socket: 内核已按 socket 绑定的 ID 做 demux，
+            // 只会收到属于本 socket 的回复，无需校验 ID。
+            // 只需确认是 Echo Reply 类型。
             let reply_type = data[0];
             let expected_reply = if is_v6 {
                 ICMPV6_ECHO_REPLY
@@ -143,11 +146,6 @@ mod dgram {
             };
 
             if reply_type != expected_reply {
-                continue;
-            }
-
-            let reply_id = u16::from_be_bytes([data[4], data[5]]);
-            if reply_id != id {
                 continue;
             }
 
@@ -186,11 +184,10 @@ mod dgram {
         };
 
         // socket 创建成功，执行 ping —— 此后的错误都是真实的 ping 错误，不应 fallback
-        let id: u16 = random();
-        let packet = build_echo_request(is_v6, id, 0, &ICMP_PAYLOAD);
+        let packet = build_echo_request(is_v6, 0, 0, &ICMP_PAYLOAD);
 
         let result = tokio::task::spawn_blocking(move || {
-            dgram_ping_blocking(socket, target, id, packet)
+            dgram_ping_blocking(socket, target, packet)
         })
         .await
         .map_err(|e| NodegetError::Other(format!("ping task join error: {e}")))?;
