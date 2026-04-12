@@ -173,7 +173,7 @@
 
 ### 权限要求
 
-与 `task_create_task` 一致。
+需要 Token 同时具备目标 Agent UUID Scope（或 Global Scope）下的 Task 创建权限和 Task 读取权限。
 
 ### 返回值
 

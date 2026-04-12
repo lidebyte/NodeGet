@@ -40,13 +40,16 @@ pub async fn create_task_blocking(
         let is_allowed = check_token_limit(
             &token_or_auth,
             vec![Scope::AgentUuid(target_uuid)],
-            vec![Permission::Task(Task::Create(task_name.to_string()))],
+            vec![
+                Permission::Task(Task::Create(task_name.to_string())),
+                Permission::Task(Task::Read(task_name.to_string())),
+            ],
         )
         .await?;
 
         if !is_allowed {
             return Err(NodegetError::PermissionDenied(format!(
-                "Permission Denied: Missing Task Create ({task_name}) permission for this Agent"
+                "Permission Denied: Missing Task Create or Read ({task_name}) permission for this Agent"
             ))
             .into());
         }
