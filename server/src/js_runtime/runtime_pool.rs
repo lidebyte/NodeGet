@@ -514,6 +514,7 @@ async fn execute_on_worker(
                 globalThis.inlineCall = inlineCall;
                 const runtimeCtx = {
                     runType: runHandler,
+                    workerName: globalThis.__nodeget_current_script_name ?? null,
                     inlineCall,
                     inlineCaller: globalThis.__nodeget_inline_caller ?? null
                 };
@@ -547,7 +548,7 @@ async fn execute_on_worker(
                     }
 
                     const routeRequest = new Request(String(input.url ?? ""), routeInit);
-                    const routeResponse = await handler(routeRequest, env, runtimeCtx);
+                    const routeResponse = await handler.call(entry, routeRequest, env, runtimeCtx);
 
                     if (!(routeResponse instanceof Response)) {
                         throw new Error("onRoute must return a Response object");
@@ -562,7 +563,7 @@ async fn execute_on_worker(
                     };
                 }
 
-                const result = await handler(input, env, runtimeCtx);
+                const result = await handler.call(entry, input, env, runtimeCtx);
                 if (typeof result === "undefined") {
                     throw new Error("JS handler must return a JSON-serializable value");
                 }
