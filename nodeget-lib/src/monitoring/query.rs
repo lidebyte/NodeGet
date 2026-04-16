@@ -264,6 +264,15 @@ impl DynamicSummaryQueryField {
     pub const fn json_key(&self) -> &'static str {
         self.column_name()
     }
+
+    /// 该字段是否在数据库中以 *10 缩放存储（读取时需要 /10.0 还原）
+    #[must_use]
+    pub const fn is_scaled(&self) -> bool {
+        matches!(
+            self,
+            Self::CpuUsage | Self::LoadOne | Self::LoadFive | Self::LoadFifteen
+        )
+    }
 }
 
 // 动态监控摘要数据查询结构体

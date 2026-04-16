@@ -11,9 +11,9 @@ use nodeget_lib::permission::data_structure::{
 };
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::error_message::anyhow_error_to_raw;
-use sea_orm::sea_query::{Alias, Query, SelectStatement, UnionType};
+use sea_orm::sea_query::{Alias, Expr, Query, SelectStatement, UnionType};
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, Order, QueryFilter, QueryOrder,
+    ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, FromQueryResult, Order, QueryFilter, QueryOrder,
     QuerySelect, QueryTrait, Statement, StatementBuilder,
 };
 use serde_json::value::RawValue;
@@ -128,6 +128,13 @@ fn build_union_last_statement(
     ))
 }
 
+/// Column names that are stored as *10 scaled integers and need /10.0 on read
+const SCALED_COLUMNS: &[&str] = &["cpu_usage", "load_one", "load_five", "load_fifteen"];
+
+fn is_scaled_column(name: &str) -> bool {
+    SCALED_COLUMNS.contains(&name)
+}
+
 fn build_single_last_select(
     uuid: Uuid,
     fields: &[DynamicSummaryQueryField],
@@ -189,7 +196,14 @@ fn build_single_last_select(
     };
 
     for col_name in col_names {
-        wrapped.column((alias.clone(), Alias::new(col_name)));
+        if is_scaled_column(col_name) {
+            wrapped.expr_as(
+                Expr::col((alias.clone(), Alias::new(col_name))).div(10.0),
+                Alias::new(col_name),
+            );
+        } else {
+            wrapped.column((alias.clone(), Alias::new(col_name)));
+        }
     }
 
     wrapped.clone()

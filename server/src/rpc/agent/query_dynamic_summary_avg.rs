@@ -152,15 +152,23 @@ fn build_postgres_summary_avg_sql(fields: &[DynamicSummaryQueryField]) -> String
         output
     });
 
-    // Aggregate columns: simple AVG for flat columns
+    // Aggregate columns: simple AVG for flat columns, with /10.0 descaling for scaled fields
     let aggregate_columns = fields
         .iter()
         .map(|field| {
-            format!(
-                "AVG({col})::double precision AS {key}",
-                col = field.column_name(),
-                key = field.json_key()
-            )
+            if field.is_scaled() {
+                format!(
+                    "AVG({col})::double precision / 10.0 AS {key}",
+                    col = field.column_name(),
+                    key = field.json_key()
+                )
+            } else {
+                format!(
+                    "AVG({col})::double precision AS {key}",
+                    col = field.column_name(),
+                    key = field.json_key()
+                )
+            }
         })
         .collect::<Vec<_>>()
         .join(",\n            ");

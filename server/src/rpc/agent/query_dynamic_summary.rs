@@ -15,6 +15,7 @@ use sea_orm::{
     ColumnTrait, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect, SelectModel,
     Selector,
 };
+use sea_orm::prelude::Expr;
 use serde_json::value::RawValue;
 use tracing::error;
 
@@ -64,18 +65,18 @@ pub async fn query_dynamic_summary(
             .column(dynamic_monitoring_summary::Column::Timestamp);
 
         let query = if query_data.fields.is_empty() {
-            // Select all data columns
+            // Select all data columns (scaled fields use /10.0)
             query
-                .column(dynamic_monitoring_summary::Column::CpuUsage)
+                .column_as(Expr::col(dynamic_monitoring_summary::Column::CpuUsage).div(10.0), "cpu_usage")
                 .column(dynamic_monitoring_summary::Column::GpuUsage)
                 .column(dynamic_monitoring_summary::Column::UsedSwap)
                 .column(dynamic_monitoring_summary::Column::TotalSwap)
                 .column(dynamic_monitoring_summary::Column::UsedMemory)
                 .column(dynamic_monitoring_summary::Column::TotalMemory)
                 .column(dynamic_monitoring_summary::Column::AvailableMemory)
-                .column(dynamic_monitoring_summary::Column::LoadOne)
-                .column(dynamic_monitoring_summary::Column::LoadFive)
-                .column(dynamic_monitoring_summary::Column::LoadFifteen)
+                .column_as(Expr::col(dynamic_monitoring_summary::Column::LoadOne).div(10.0), "load_one")
+                .column_as(Expr::col(dynamic_monitoring_summary::Column::LoadFive).div(10.0), "load_five")
+                .column_as(Expr::col(dynamic_monitoring_summary::Column::LoadFifteen).div(10.0), "load_fifteen")
                 .column(dynamic_monitoring_summary::Column::Uptime)
                 .column(dynamic_monitoring_summary::Column::BootTime)
                 .column(dynamic_monitoring_summary::Column::ProcessCount)
@@ -91,7 +92,7 @@ pub async fn query_dynamic_summary(
                 .column(dynamic_monitoring_summary::Column::ReceiveSpeed)
         } else {
             query_data.fields.iter().fold(query, |q, field| {
-                q.column(field_to_column(field))
+                select_field(q, field)
             })
         };
 
@@ -158,6 +159,22 @@ pub async fn query_dynamic_summary(
                 Some(json_str),
             ))
         }
+    }
+}
+
+/// Select a field into the query, applying /10.0 descaling for scaled fields.
+fn select_field<E>(
+    q: sea_orm::Select<E>,
+    field: &DynamicSummaryQueryField,
+) -> sea_orm::Select<E>
+where
+    E: EntityTrait,
+{
+    let col = field_to_column(field);
+    if field.is_scaled() {
+        q.column_as(Expr::col(col).div(10.0), field.column_name())
+    } else {
+        q.column(col)
     }
 }
 
