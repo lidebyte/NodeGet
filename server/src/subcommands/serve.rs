@@ -28,6 +28,8 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
 
     runtime_pool::init_global_pool();
 
+    crate::monitoring_buffer::init(config.monitoring_buffer.as_ref());
+
     let rpc_module = get_modules();
 
     let (stop_handle, _server_handle) = jsonrpsee::server::stop_channel();
@@ -157,6 +159,7 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
     tokio::select! {
         result = &mut serve_future => {
             result.unwrap();
+            crate::monitoring_buffer::flush_and_shutdown().await;
             #[cfg(not(target_os = "windows"))]
             if let Some(task) = unix_server_task.take() {
                 task.abort();
@@ -169,6 +172,7 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
             .expect("Reload notify not initialized")
             .notified() => {
             info!(target: "server", "Config reload requested, stopping server for restart...");
+            crate::monitoring_buffer::flush_and_shutdown().await;
             let stop_handle = stop_handle.clone();
             tokio::spawn(async move {
                 let _ = tokio::time::timeout(std::time::Duration::from_secs(5), stop_handle.shutdown()).await;

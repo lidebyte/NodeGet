@@ -29,6 +29,7 @@ mod crontab;
 pub mod js_runtime;
 mod kv;
 mod logging;
+pub(crate) mod monitoring_buffer;
 mod rpc_timing;
 mod subcommands;
 mod token;

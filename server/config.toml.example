@@ -46,6 +46,16 @@ log_filter = "info"
 # 注意：如果未设置且设置了 RUST_LOG 环境变量，则 RUST_LOG 的值也会作为此项的默认值
 # memory_log_filter = "info"
 
+# 监控数据缓冲写入配置（可选，整个 [monitoring_buffer] 段不填则使用默认值）
+# 启用后，Agent 上报的监控数据会先缓存在内存中，按间隔批量写入数据库，减少 DB 压力
+[monitoring_buffer]
+
+# 刷新间隔，单位毫秒，默认 500
+# flush_interval_ms = 500
+
+# 单次最大批量大小，默认 1000
+# max_batch_size = 1000
+
 # 数据库配置
 [database]
 

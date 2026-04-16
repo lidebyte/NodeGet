@@ -52,6 +52,16 @@ memory_log_filter = "info"
 # 注意：流式日志订阅（nodeget-server_stream_log）的过滤器不在此处配置，
 # 而是由客户端在订阅时通过 log_filter 参数指定，详见 API 文档
 
+# 监控数据缓冲写入配置（可选，整个 [monitoring_buffer] 段不填则使用默认值）
+# 启用后，Agent 上报的监控数据会先缓存在内存中，按间隔批量写入数据库，减少 DB 压力
+[monitoring_buffer]
+
+# 刷新间隔，单位毫秒，默认 500
+flush_interval_ms = 500
+
+# 单次最大批量大小，默认 1000
+max_batch_size = 1000
+
 # 数据库配置
 [database]
 

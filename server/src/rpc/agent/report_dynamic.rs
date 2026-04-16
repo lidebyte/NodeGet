@@ -7,17 +7,10 @@ use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::data_structure::DynamicMonitoringData;
 use nodeget_lib::permission::data_structure::{DynamicMonitoring, Permission, Scope};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
-use sea_orm::{ActiveValue, EntityTrait, Set};
+use sea_orm::{ActiveValue, Set};
 use serde_json::value::RawValue;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::debug;
-
-// 生成唯一错误ID用于内部追踪
-static ERROR_COUNTER: AtomicU64 = AtomicU64::new(0);
-fn generate_error_id() -> u64 {
-    ERROR_COUNTER.fetch_add(1, Ordering::SeqCst)
-}
 
 pub async fn report_dynamic(
     token: String,
@@ -45,8 +38,6 @@ pub async fn report_dynamic(
             .into());
         }
 
-        let db = AgentRpcImpl::get_db()?;
-
         let in_data = dynamic_monitoring::ActiveModel {
             id: ActiveValue::default(),
             uuid: Set(agent_uuid),
@@ -69,22 +60,12 @@ pub async fn report_dynamic(
 
         debug!(target: "monitoring", agent_uuid = %dynamic_monitoring_data.uuid, "Received dynamic data");
 
-        let result = dynamic_monitoring::Entity::insert(in_data)
-            .exec(db)
-            .await
-            .map_err(|e| {
-                // 内部记录详细错误，向客户端返回通用错误
-                let error_id = generate_error_id();
-                tracing::error!(target: "monitoring", error_id = error_id, error = %e, "Database insert error");
-                NodegetError::DatabaseError(format!(
-                    "Database error occurred. Reference: {error_id}"
-                ))
-            })?;
+        crate::monitoring_buffer::get()
+            .dynamic_mon
+            .send(in_data)
+            .map_err(|_| NodegetError::DatabaseError("Buffer closed".to_owned()))?;
 
-        debug!(target: "monitoring", id = result.last_insert_id, "Inserted dynamic data");
-
-        let json_str = format!("{{\"id\":{}}}", result.last_insert_id);
-        RawValue::from_string(json_str)
+        RawValue::from_string(r#"{"status":"buffered"}"#.to_owned())
             .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
     };
 

@@ -27,6 +27,21 @@ pub struct ServerConfig {
 
     // 数据库配置
     pub database: DatabaseConfig,
+
+    // 监控数据缓冲写入配置（可选）
+    pub monitoring_buffer: Option<MonitoringBufferConfig>,
+}
+
+/// 监控数据缓冲写入配置
+///
+/// 控制 `report_static`、`report_dynamic`、`report_dynamic_summary` 三个写入接口
+/// 的批量插入行为。启用后，数据先缓存在内存中，按间隔批量写入数据库。
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MonitoringBufferConfig {
+    /// 刷新间隔（毫秒），默认 500
+    pub flush_interval_ms: Option<u64>,
+    /// 单次最大批量大小，默认 1000
+    pub max_batch_size: Option<usize>,
 }
 
 /// 日志配置
