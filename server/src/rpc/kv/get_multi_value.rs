@@ -93,6 +93,8 @@ pub async fn get_multi_value(
             NodegetError::SerializationError(format!("Failed to serialize kv multi values: {e}"))
         })?;
 
+        debug!(target: "kv", result_count = output.len(), "get_multi_value completed");
+
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(format!("{e}")).into())
     };

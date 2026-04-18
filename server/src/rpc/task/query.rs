@@ -14,7 +14,7 @@ use sea_orm::{
     ColumnTrait, DbBackend, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect,
 };
 use serde_json::value::RawValue;
-use tracing::error;
+use tracing::{debug, error};
 
 /// 转义 SQL LIKE 特殊字符，防止注入攻击
 ///
@@ -26,6 +26,7 @@ fn escape_like_pattern(pattern: &str) -> String {
 
 pub async fn query(token: String, task_data_query: TaskDataQuery) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
+        debug!(target: "task", condition_count = task_data_query.condition.len(), "processing task query request");
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
@@ -187,10 +188,12 @@ pub async fn query(token: String, task_data_query: TaskDataQuery) -> RpcResult<B
 
         output_buffer.push(b'[');
         let mut first = true;
+        let mut result_count: usize = 0;
 
         while let Some(item_res) = stream.next().await {
             match item_res {
                 Ok(mut v) => {
+                    result_count += 1;
                     if let Some(obj) = v.as_object_mut() {
                         rename_key(obj, "id", "task_id");
                         try_parse_json_field(obj, "task_event_type");
@@ -221,6 +224,8 @@ pub async fn query(token: String, task_data_query: TaskDataQuery) -> RpcResult<B
         }
 
         output_buffer.push(b']');
+
+        debug!(target: "task", result_count, "Task query completed");
 
         let json_string = String::from_utf8(output_buffer).map_err(|e| {
             error!(target: "task", error = %e, "UTF8 conversion error");

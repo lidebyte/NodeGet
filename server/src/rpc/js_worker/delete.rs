@@ -32,6 +32,8 @@ pub async fn delete(token: String, name: String) -> RpcResult<Box<RawValue>> {
         runtime_pool::global_pool().evict_worker(name.as_str());
         trace!(target: "js_worker", name = %name, "evicted worker from runtime pool after delete");
 
+        debug!(target: "js_worker", name = %name, rows_affected = delete_result.rows_affected, "js_worker deleted successfully");
+
         let response = serde_json::json!({
             "success": true,
             "rows_affected": delete_result.rows_affected

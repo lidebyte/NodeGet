@@ -44,6 +44,8 @@ pub async fn set_enable(token: String, name: String, enable: bool) -> RpcResult<
         let state = result_state
             .ok_or_else(|| NodegetError::NotFound(format!("Crontab not found: {name}")))?;
 
+        debug!(target: "crontab", name = %name, enabled = state, "Crontab enable state updated");
+
         let json_str = format!("{{\"success\":true,\"enabled\":{state}}}");
 
         RawValue::from_string(json_str)

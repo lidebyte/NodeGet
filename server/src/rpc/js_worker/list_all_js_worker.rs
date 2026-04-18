@@ -23,6 +23,8 @@ pub async fn list_all_js_worker(token: String) -> RpcResult<Box<RawValue>> {
 
         let allowed_names = filter_workers_by_list_permission(&token, all_names).await?;
 
+        debug!(target: "js_worker", count = allowed_names.len(), "list_all_js_worker completed");
+
         let json_str = serde_json::to_string(&allowed_names)
             .map_err(|e| NodegetError::SerializationError(e.to_string()))?;
         RawValue::from_string(json_str)

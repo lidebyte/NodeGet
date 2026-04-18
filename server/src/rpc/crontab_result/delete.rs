@@ -34,6 +34,8 @@ pub async fn delete(token: String, delete_params: CrontabResultDelete) -> RpcRes
 
         let deleted_count = result.rows_affected;
 
+        debug!(target: "crontab_result", deleted_count, "crontab_result delete completed");
+
         // 构建响应
         let response = serde_json::json!({
             "success": true,

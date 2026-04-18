@@ -18,7 +18,7 @@ use sea_orm::{
 };
 use serde_json::value::RawValue;
 use std::collections::HashSet;
-use tracing::error;
+use tracing::{debug, error};
 use uuid::Uuid;
 
 use super::query_dynamic_summary::field_to_column;
@@ -227,10 +227,12 @@ async fn execute_statement_query(
 
     output_buffer.push(b'[');
     let mut first = true;
+    let mut result_count: usize = 0;
 
     while let Some(item_res) = stream.next().await {
         match item_res {
             Ok(value) => {
+                result_count += 1;
                 if first {
                     first = false;
                 } else {
@@ -263,6 +265,8 @@ async fn execute_statement_query(
         error!(target: "monitoring", error = %e, "RawValue creation error");
         NodegetError::SerializationError("RawValue creation error".to_string())
     })?;
+
+    debug!(target: "monitoring", result_count = result_count, "Dynamic monitoring summary multi-last query completed");
 
     Ok(raw_value)
 }

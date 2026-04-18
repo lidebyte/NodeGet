@@ -12,6 +12,7 @@ use serde_json::Value;
 use serde_json::value::RawValue;
 use std::fmt::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tracing::debug;
 
 // 生成唯一错误ID用于内部追踪
 static ERROR_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -29,6 +30,16 @@ pub async fn query_dynamic_avg(
     dynamic_data_avg_query: DynamicDataAvgQuery,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
+        debug!(
+            target: "monitoring",
+            uuid = %dynamic_data_avg_query.uuid,
+            fields_count = dynamic_data_avg_query.fields.len(),
+            points = dynamic_data_avg_query.points,
+            timestamp_from = ?dynamic_data_avg_query.timestamp_from,
+            timestamp_to = ?dynamic_data_avg_query.timestamp_to,
+            "Dynamic avg query requested"
+        );
+
         validate_avg_query(&dynamic_data_avg_query)?;
 
         let token_or_auth = TokenOrAuth::from_full_token(&token)
@@ -141,8 +152,11 @@ async fn query_dynamic_avg_postgres(
         })?;
 
     let json = row.map_or(Value::Array(Vec::new()), |r| r.data);
+    let result_count = if let Value::Array(ref arr) = json { arr.len() } else { 1 };
     let json = serde_json::to_string(&json)
         .map_err(|e| NodegetError::SerializationError(format!("Serialization failed: {e}")))?;
+
+    debug!(target: "monitoring", result_count, "Dynamic avg query completed");
 
     RawValue::from_string(json).map_err(|e| {
         NodegetError::SerializationError(format!("RawValue creation error: {e}")).into()

@@ -10,7 +10,7 @@ use nodeget_lib::permission::token_auth::TokenOrAuth;
 use sea_orm::{ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde_json::value::RawValue;
 use std::collections::HashSet;
-use tracing::error;
+use tracing::{debug, error};
 
 pub async fn delete_static(
     token: String,
@@ -122,6 +122,8 @@ pub async fn delete_static(
                 })?
                 .rows_affected
         };
+
+        debug!(target: "monitoring", rows_affected = rows_affected, conditions = conditions.len(), "Static monitoring delete completed");
 
         let json_str = format!(
             "{{\"success\":true,\"deleted\":{},\"condition_count\":{}}}",

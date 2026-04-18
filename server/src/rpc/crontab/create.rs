@@ -64,6 +64,8 @@ pub async fn create(
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
         let res_id = inserted.id;
 
+        debug!(target: "crontab", id = res_id, name = %inserted.name, "Crontab created successfully");
+
         let json_str = format!("{{\"id\":{res_id}}}");
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(format!("{e}")).into())

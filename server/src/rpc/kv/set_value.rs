@@ -20,6 +20,8 @@ pub async fn set_value(
 
         set_v_to_kv(namespace, key, value).await?;
 
+        debug!(target: "kv", "set_value completed");
+
         let json_str = "{\"success\":true}".to_string();
 
         RawValue::from_string(json_str)

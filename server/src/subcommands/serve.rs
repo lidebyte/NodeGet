@@ -6,7 +6,7 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tower::Service;
-use tracing::info;
+use tracing::{error, info, warn};
 
 use crate::RELOAD_NOTIFY;
 use crate::crontab::init_crontab_worker;
@@ -149,10 +149,14 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
         }
     }
 
-    let listener =
-        tokio::net::TcpListener::bind(config.ws_listener.parse::<SocketAddr>().unwrap())
-            .await
-            .unwrap();
+    let addr: SocketAddr = config.ws_listener.parse().unwrap_or_else(|e| {
+        error!(target: "server", address = %config.ws_listener, error = %e, "failed to parse listen address");
+        panic!("Invalid listen address '{}': {e}", config.ws_listener);
+    });
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap_or_else(|e| {
+        error!(target: "server", address = %addr, error = %e, "failed to bind TCP listener");
+        panic!("Failed to bind to {addr}: {e}");
+    });
 
     let serve_future = IntoFuture::into_future(axum::serve(
         listener,
@@ -272,6 +276,7 @@ async fn handle_js_worker_route(
 
     let route_name = route_name.trim().to_owned();
     if route_name.is_empty() {
+        warn!(target: "js_worker", "route request with empty route_name");
         return build_http_error(StatusCode::BAD_REQUEST, "route_name cannot be empty");
     }
 
@@ -318,6 +323,7 @@ async fn handle_js_worker_route(
     let body_bytes = match axum::body::to_bytes(body, ROUTE_BODY_LIMIT_BYTES).await {
         Ok(bytes) => bytes.to_vec(),
         Err(e) => {
+            error!(target: "js_worker", route_name = %route_name, error = %e, "failed to read request body");
             return build_http_error(
                 StatusCode::BAD_REQUEST,
                 format!("Failed to read request body: {e}"),
@@ -328,6 +334,7 @@ async fn handle_js_worker_route(
     let db = match crate::DB.get() {
         Some(db) => db.clone(),
         None => {
+            error!(target: "js_worker", route_name = %route_name, "DB not initialized for route request");
             return build_http_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Database is not initialized",
@@ -342,12 +349,14 @@ async fn handle_js_worker_route(
     {
         Ok(Some(model)) => model,
         Ok(None) => {
+            warn!(target: "js_worker", route_name = %route_name, "no js_worker bound to route_name");
             return build_http_error(
                 StatusCode::NOT_FOUND,
                 "No js_worker bound to this route_name",
             );
         }
         Err(e) => {
+            error!(target: "js_worker", route_name = %route_name, error = %e, "DB query failed for route request");
             return build_http_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Database query failed: {e}"),
@@ -356,6 +365,7 @@ async fn handle_js_worker_route(
     };
 
     let Some(bytecode) = model.js_byte_code else {
+        error!(target: "js_worker", route_name = %route_name, worker_name = %model.name, "js_worker has no precompiled bytecode");
         return build_http_error(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("js_worker '{}' has no precompiled bytecode", model.name),
@@ -371,6 +381,7 @@ async fn handle_js_worker_route(
     let params = match serde_json::to_value(js_input) {
         Ok(v) => v,
         Err(e) => {
+            error!(target: "js_worker", route_name = %route_name, error = %e, "failed to serialize route input");
             return build_http_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to serialize route input: {e}"),
@@ -393,6 +404,7 @@ async fn handle_js_worker_route(
     let js_value = match run_result {
         Ok(v) => v,
         Err(e) => {
+            error!(target: "js_worker", route_name = %route_name, error = %e, "route worker execution failed");
             return build_http_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Route worker execution failed: {e}"),
@@ -403,6 +415,7 @@ async fn handle_js_worker_route(
     let js_output: JsRouteOutput = match serde_json::from_value(js_value) {
         Ok(v) => v,
         Err(e) => {
+            error!(target: "js_worker", route_name = %route_name, error = %e, "invalid onRoute return format");
             return build_http_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Invalid onRoute return format: {e}"),
@@ -426,6 +439,7 @@ async fn handle_js_worker_route(
     response
         .body(jsonrpsee::server::HttpBody::from(js_output.body_bytes))
         .unwrap_or_else(|e| {
+            error!(target: "js_worker", route_name = %route_name, error = %e, "failed to build HTTP response");
             build_http_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to build response: {e}"),

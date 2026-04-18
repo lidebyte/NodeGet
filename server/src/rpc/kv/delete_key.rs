@@ -14,6 +14,8 @@ pub async fn delete_key(token: String, namespace: String, key: String) -> RpcRes
 
         delete_key_from_kv(namespace, key).await?;
 
+        debug!(target: "kv", "delete_key completed");
+
         let json_str = "{\"success\":true}".to_string();
 
         RawValue::from_string(json_str)

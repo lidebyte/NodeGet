@@ -89,6 +89,8 @@ pub async fn query(token: String, query: CrontabResultDataQuery) -> RpcResult<Bo
             NodegetError::DatabaseError(format!("Failed to query crontab_result: {e}"))
         })?;
 
+        debug!(target: "crontab_result", result_count = results.len(), "crontab_result query completed");
+
         // 序列化结果
         let json_str = serde_json::to_string(&results).map_err(|e| {
             NodegetError::SerializationError(format!("Failed to serialize results: {e}"))

@@ -63,6 +63,8 @@ pub async fn edit(
             .await
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
+        debug!(target: "crontab", id = updated.id, name = %name, "Crontab edited successfully");
+
         let json_str = format!("{{\"id\":{},\"success\":true}}", updated.id);
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(e.to_string()).into())

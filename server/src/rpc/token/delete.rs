@@ -61,6 +61,7 @@ pub async fn delete(token: String, target_token: String) -> RpcResult<Box<RawVal
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
         let json_str = if delete_result_by_key.rows_affected > 0 {
+            debug!(target: "token", target = %target_token_to_delete, matched_by = "token_key", "Token deleted successfully");
             format!(
                 "{{\"message\":\"Token {} deleted successfully by SuperToken\",\"rows_affected\":{},\"matched_by\":\"token_key\"}}",
                 target_token_to_delete, delete_result_by_key.rows_affected
@@ -72,6 +73,7 @@ pub async fn delete(token: String, target_token: String) -> RpcResult<Box<RawVal
                     .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
             if delete_result_by_username.rows_affected > 0 {
+                debug!(target: "token", target = %target_token_to_delete, matched_by = "username", "Token deleted successfully");
                 format!(
                     "{{\"message\":\"Token {} deleted successfully by SuperToken\",\"rows_affected\":{},\"matched_by\":\"username\"}}",
                     target_token_to_delete, delete_result_by_username.rows_affected

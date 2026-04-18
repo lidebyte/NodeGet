@@ -57,6 +57,8 @@ pub async fn list_all_tokens(token: String) -> RpcResult<Box<RawValue>> {
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         let response = ListAllTokensResponse { tokens };
+
+        debug!(target: "token", token_count = response.tokens.len(), "list_all_tokens completed");
         let json_str = serde_json::to_string(&response).map_err(|e| {
             NodegetError::SerializationError(format!("Failed to serialize token list: {e}"))
         })?;

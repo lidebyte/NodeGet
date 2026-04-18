@@ -45,6 +45,8 @@ pub async fn delete(token: String, name: String) -> RpcResult<Box<RawValue>> {
             return Err(NodegetError::NotFound(format!("Crontab not found: {name}")).into());
         }
 
+        debug!(target: "crontab", name = %name, "Crontab deleted successfully");
+
         let json_str = format!("{{\"success\":{deleted}}}");
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(format!("{e}")).into())

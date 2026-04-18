@@ -67,12 +67,14 @@ pub async fn report_static(
             data_hash: Set(data_hash),
         };
 
-        debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Received static data");
+        debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Received static data, sending to buffer");
 
         crate::monitoring_buffer::get()
             .static_mon
             .send(in_data)
             .map_err(|_| NodegetError::DatabaseError("Buffer closed".to_owned()))?;
+
+        debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Static data buffered successfully");
 
         RawValue::from_string(r#"{"status":"buffered"}"#.to_owned())
             .map_err(|e| NodegetError::SerializationError(e.to_string()).into())

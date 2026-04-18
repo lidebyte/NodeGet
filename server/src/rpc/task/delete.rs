@@ -12,13 +12,14 @@ use sea_orm::{
     ColumnTrait, DbBackend, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect,
 };
 use serde_json::value::RawValue;
-use tracing::error;
+use tracing::{debug, error};
 
 pub async fn delete(
     token: String,
     conditions: Vec<TaskQueryCondition>,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
+        debug!(target: "task", condition_count = conditions.len(), "processing task delete request");
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
@@ -204,6 +205,8 @@ pub async fn delete(
         let json_str = format!(
             "{{\"success\":true,\"deleted\":{rows_affected},\"condition_count\":{condition_count}}}"
         );
+
+        debug!(target: "task", rows_affected, condition_count, "Task delete completed");
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
     };

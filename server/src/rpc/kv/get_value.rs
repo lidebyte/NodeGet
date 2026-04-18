@@ -13,6 +13,7 @@ pub async fn get_value(token: String, namespace: String, key: String) -> RpcResu
         check_kv_read_permission(&token, &namespace, &key).await?;
 
         let value = get_v_from_kv(namespace, key).await?;
+        let found = value.is_some();
 
         let json_str = match value {
             Some(v) => serde_json::to_string(&v).map_err(|e| {
@@ -20,6 +21,8 @@ pub async fn get_value(token: String, namespace: String, key: String) -> RpcResu
             })?,
             None => "null".to_string(),
         };
+
+        debug!(target: "kv", found, "get_value completed");
 
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(format!("{e}")).into())

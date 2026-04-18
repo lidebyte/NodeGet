@@ -26,6 +26,8 @@ pub async fn create(
         )
         .await?;
 
+        debug!(target: "token", token_key = %key, "Token created successfully");
+
         let json_str = format!("{{\"key\":\"{key}\",\"secret\":\"{secret}\"}}");
 
         RawValue::from_string(json_str)

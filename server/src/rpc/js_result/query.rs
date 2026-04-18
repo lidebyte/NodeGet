@@ -149,6 +149,8 @@ pub async fn query(token: String, query: JsResultDataQuery) -> RpcResult<Box<Raw
             .await
             .map_err(|e| NodegetError::DatabaseError(format!("Failed to query js_result: {e}")))?;
 
+        debug!(target: "js_result", result_count = results.len(), "js_result query completed");
+
         let json_str = serde_json::to_string(&results).map_err(|e| {
             NodegetError::SerializationError(format!("Failed to serialize results: {e}"))
         })?;

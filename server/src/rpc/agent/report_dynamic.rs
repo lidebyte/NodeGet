@@ -58,12 +58,14 @@ pub async fn report_dynamic(
                 .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
         };
 
-        debug!(target: "monitoring", agent_uuid = %dynamic_monitoring_data.uuid, "Received dynamic data");
+        debug!(target: "monitoring", agent_uuid = %dynamic_monitoring_data.uuid, "Received dynamic data, sending to buffer");
 
         crate::monitoring_buffer::get()
             .dynamic_mon
             .send(in_data)
             .map_err(|_| NodegetError::DatabaseError("Buffer closed".to_owned()))?;
+
+        debug!(target: "monitoring", agent_uuid = %dynamic_monitoring_data.uuid, "Dynamic data buffered successfully");
 
         RawValue::from_string(r#"{"status":"buffered"}"#.to_owned())
             .map_err(|e| NodegetError::SerializationError(e.to_string()).into())

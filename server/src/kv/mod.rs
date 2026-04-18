@@ -6,6 +6,7 @@ use sea_orm::{
     QuerySelect, Set,
 };
 use serde_json::Value;
+use tracing::{debug, error};
 
 use crate::DB;
 use crate::entity::kv;
@@ -59,6 +60,7 @@ pub async fn create_kv(namespace: String) -> Result<KVStore> {
 
     // 检查命名空间是否已存在
     if namespace_exists(db, &namespace).await? {
+        debug!(target: "kv", namespace = %namespace, "create_kv: namespace already exists");
         return Err(
             NodegetError::DatabaseError(format!("Namespace '{namespace}' already exists")).into(),
         );
@@ -66,13 +68,17 @@ pub async fn create_kv(namespace: String) -> Result<KVStore> {
 
     // 单表模式：写入一条内部 marker 表示 namespace 已创建
     let active_model = kv::ActiveModel {
-        namespace: Set(namespace),
+        namespace: Set(namespace.clone()),
         key: Set(NAMESPACE_MARKER_KEY.to_owned()),
         value: Set(Value::Null),
         ..Default::default()
     };
-    active_model.insert(db).await?;
+    if let Err(e) = active_model.insert(db).await {
+        error!(target: "kv", namespace = %namespace, error = %e, "create_kv: failed to insert namespace marker");
+        return Err(e.into());
+    }
 
+    debug!(target: "kv", namespace = %namespace_name, "namespace created");
     Ok(KVStore::new(namespace_name))
 }
 
@@ -126,15 +132,17 @@ pub async fn set_v_to_kv(namespace: String, key: String, value: Value) -> Result
         };
 
         active_model.update(db).await?;
+        debug!(target: "kv", namespace = %namespace, key = %key, "kv key updated");
     } else {
         let active_model = kv::ActiveModel {
-            namespace: Set(namespace),
-            key: Set(key),
+            namespace: Set(namespace.clone()),
+            key: Set(key.clone()),
             value: Set(value),
             ..Default::default()
         };
 
         active_model.insert(db).await?;
+        debug!(target: "kv", namespace = %namespace, key = %key, "kv key inserted");
     }
     Ok(())
 }
@@ -175,6 +183,7 @@ pub async fn delete_key_from_kv(namespace: String, key: String) -> Result<()> {
         .exec(db)
         .await?;
 
+    debug!(target: "kv", namespace = %namespace, key = %key, "kv key deleted");
     Ok(())
 }
 
@@ -194,6 +203,7 @@ pub async fn delete_kv(namespace: String) -> Result<()> {
         .exec(db)
         .await?;
 
+    debug!(target: "kv", namespace = %namespace, "namespace deleted");
     Ok(())
 }
 

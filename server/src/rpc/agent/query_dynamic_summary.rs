@@ -17,7 +17,7 @@ use sea_orm::{
 };
 use sea_orm::prelude::Expr;
 use serde_json::value::RawValue;
-use tracing::error;
+use tracing::{debug, error};
 
 pub async fn query_dynamic_summary(
     token: String,
@@ -237,10 +237,12 @@ async fn execute_query(
 
     output_buffer.push(b'[');
     let mut first = true;
+    let mut result_count: usize = 0;
 
     while let Some(item_res) = stream.next().await {
         match item_res {
             Ok(v) => {
+                result_count += 1;
                 if first {
                     first = false;
                 } else {
@@ -273,6 +275,8 @@ async fn execute_query(
         error!(target: "monitoring", error = %e, "RawValue creation error");
         NodegetError::SerializationError("RawValue creation error".to_string())
     })?;
+
+    debug!(target: "monitoring", result_count = result_count, "Dynamic monitoring summary query completed");
 
     Ok(raw_value)
 }

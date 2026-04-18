@@ -11,6 +11,8 @@ pub async fn get_rt_pool(token: String) -> RpcResult<Box<RawValue>> {
         check_get_rt_pool_permission(&token).await?;
 
         let snapshot = runtime_pool::global_pool().snapshot();
+
+        debug!(target: "js_worker", workers = snapshot.workers.len(), "get_rt_pool completed");
         let json_str = serde_json::to_string(&snapshot)
             .map_err(|e| NodegetError::SerializationError(e.to_string()))?;
         RawValue::from_string(json_str)

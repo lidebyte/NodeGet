@@ -109,6 +109,8 @@ pub async fn create(
             .await
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
+        debug!(target: "js_worker", id = inserted.id, name = %inserted.name, "js_worker created successfully");
+
         let response = serde_json::json!({
             "id": inserted.id,
             "name": inserted.name,

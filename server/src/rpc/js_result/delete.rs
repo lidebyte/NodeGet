@@ -210,6 +210,8 @@ pub async fn delete(token: String, query: JsResultDataQuery) -> RpcResult<Box<Ra
             "deleted": deleted_rows,
             "condition_count": condition_count,
         });
+
+        debug!(target: "js_result", deleted_rows, condition_count, "js_result delete completed");
         let json_str = serde_json::to_string(&response).map_err(|e| {
             NodegetError::SerializationError(format!("Failed to serialize delete response: {e}"))
         })?;

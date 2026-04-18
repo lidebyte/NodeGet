@@ -29,6 +29,8 @@ pub async fn read(token: String, name: String) -> RpcResult<Box<RawValue>> {
             .ok_or_else(|| NodegetError::NotFound(format!("js_worker not found: {name}")))?;
         let js_script_base64 = BASE64_STANDARD.encode(model.js_script.as_bytes());
 
+        debug!(target: "js_worker", name = %model.name, "js_worker read completed");
+
         let response = serde_json::json!({
             "name": model.name,
             "description": model.description,

@@ -105,6 +105,8 @@ pub async fn update(
         runtime_pool::global_pool().evict_worker(updated.name.as_str());
         trace!(target: "js_worker", name = %updated.name, "evicted worker from runtime pool after update");
 
+        debug!(target: "js_worker", name = %updated.name, "js_worker updated successfully");
+
         let response = serde_json::json!({
             "success": true,
             "name": updated.name,

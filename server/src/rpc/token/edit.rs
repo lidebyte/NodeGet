@@ -72,6 +72,8 @@ pub async fn edit(
             tracing::error!(target: "token", error = %e, "Failed to reload token cache after edit");
         }
 
+        debug!(target: "token", id = updated.id, token_key = %updated.token_key, "Token edited successfully");
+
         let response = serde_json::json!({
             "success": true,
             "id": updated.id,

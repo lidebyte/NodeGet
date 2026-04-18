@@ -9,6 +9,7 @@ use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::get_local_timestamp_ms_i64;
 use serde_json::Value;
 use subtle::ConstantTimeEq;
+use tracing::warn;
 
 /// 统一的身份验证失败错误消息，防止信息泄露
 const AUTH_FAILED_MESSAGE: &str = "Invalid credentials";
@@ -26,27 +27,29 @@ pub async fn get_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<Token> {
 
     let token_model = match token_or_auth {
         TokenOrAuth::Token(key, secret) => {
-            let model = cache
-                .find_by_key(key)
-                .await
-                .ok_or_else(|| NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()))?;
+            let model = cache.find_by_key(key).await.ok_or_else(|| {
+                warn!(target: "auth", token_key = %key, "auth failed: token key not found");
+                NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned())
+            })?;
 
             let computed_hash = hash_string(secret);
             if !verify_hash_constant_time(&computed_hash, &model.token_hash) {
+                warn!(target: "auth", token_key = %key, "auth failed: invalid token secret");
                 return Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into());
             }
 
             model
         }
         TokenOrAuth::Auth(username, password) => {
-            let model = cache
-                .find_by_username(username)
-                .await
-                .ok_or_else(|| NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()))?;
+            let model = cache.find_by_username(username).await.ok_or_else(|| {
+                warn!(target: "auth", username = %username, "auth failed: username not found");
+                NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned())
+            })?;
 
             let p_hash = hash_string(password);
             let stored_hash = model.password_hash.as_deref().unwrap_or("");
             if !verify_hash_constant_time(&p_hash, stored_hash) {
+                warn!(target: "auth", username = %username, "auth failed: invalid password");
                 return Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into());
             }
 
@@ -201,11 +204,13 @@ pub async fn check_token_limit(
     if let Some(from) = token.timestamp_from
         && now < from
     {
+        warn!(target: "auth", token_key = %token.token_key, "token not yet valid (timestamp_from)");
         return Ok(false);
     }
     if let Some(to) = token.timestamp_to
         && now > to
     {
+        warn!(target: "auth", token_key = %token.token_key, "token expired (timestamp_to)");
         return Ok(false);
     }
 
@@ -233,6 +238,13 @@ pub async fn check_token_limit(
             }
 
             if !is_allowed {
+                warn!(
+                    target: "auth",
+                    token_key = %token.token_key,
+                    scope = ?req_scope,
+                    permission = ?req_perm,
+                    "permission denied"
+                );
                 return Ok(false);
             }
         }
