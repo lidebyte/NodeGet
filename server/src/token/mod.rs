@@ -1,5 +1,7 @@
 use sha2::{Digest, Sha256};
 
+// 令牌缓存模块
+pub mod cache;
 // 令牌生成模块
 pub mod generate_token;
 // 令牌获取和权限检查模块
@@ -45,6 +47,12 @@ pub async fn delete_token_by_key(token_key: String) -> Result<DeleteResult, sea_
         .exec(db)
         .await?;
 
+    if delete_result.rows_affected > 0 {
+        if let Err(e) = cache::TokenCache::reload().await {
+            tracing::error!(target: "token", error = %e, "Failed to reload token cache after delete_by_key");
+        }
+    }
+
     Ok(delete_result)
 }
 
@@ -68,6 +76,12 @@ pub async fn delete_token_by_username(username: String) -> Result<DeleteResult, 
         .filter(token::Column::Username.eq(&username))
         .exec(db)
         .await?;
+
+    if delete_result.rows_affected > 0 {
+        if let Err(e) = cache::TokenCache::reload().await {
+            tracing::error!(target: "token", error = %e, "Failed to reload token cache after delete_by_username");
+        }
+    }
 
     Ok(delete_result)
 }

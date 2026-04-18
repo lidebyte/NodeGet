@@ -1,5 +1,4 @@
-use crate::DB;
-use crate::entity::token;
+use crate::token::cache::TokenCache;
 use crate::token::hash_string;
 use crate::token::super_token::check_super_token;
 use nodeget_lib::error::NodegetError;
@@ -8,7 +7,6 @@ use nodeget_lib::permission::data_structure::{
 };
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::get_local_timestamp_ms_i64;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::Value;
 use subtle::ConstantTimeEq;
 
@@ -24,17 +22,13 @@ fn verify_hash_constant_time(computed_hash: &str, stored_hash: &str) -> bool {
 }
 
 pub async fn get_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<Token> {
-    let db = DB.get().ok_or_else(|| {
-        NodegetError::ConfigNotFound("Database connection not initialized".to_owned())
-    })?;
+    let cache = TokenCache::global();
 
     let token_model = match token_or_auth {
         TokenOrAuth::Token(key, secret) => {
-            let model = token::Entity::find()
-                .filter(token::Column::TokenKey.eq(key))
-                .one(db)
+            let model = cache
+                .find_by_key(key)
                 .await
-                .map_err(|e| NodegetError::DatabaseError(format!("Database query error: {e}")))?
                 .ok_or_else(|| NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()))?;
 
             let computed_hash = hash_string(secret);
@@ -45,11 +39,9 @@ pub async fn get_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<Token> {
             model
         }
         TokenOrAuth::Auth(username, password) => {
-            let model = token::Entity::find()
-                .filter(token::Column::Username.eq(username))
-                .one(db)
+            let model = cache
+                .find_by_username(username)
                 .await
-                .map_err(|e| NodegetError::DatabaseError(format!("Database query error: {e}")))?
                 .ok_or_else(|| NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()))?;
 
             let p_hash = hash_string(password);
@@ -75,26 +67,14 @@ pub async fn get_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<Token> {
 }
 
 pub async fn get_token_by_key_or_username(identifier: &str) -> anyhow::Result<Token> {
-    let db = DB.get().ok_or_else(|| {
-        NodegetError::ConfigNotFound("Database connection not initialized".to_owned())
-    })?;
+    let cache = TokenCache::global();
 
-    let token_model = if let Some(model) = token::Entity::find()
-        .filter(token::Column::TokenKey.eq(identifier))
-        .one(db)
-        .await
-        .map_err(|e| NodegetError::DatabaseError(format!("Database query error: {e}")))?
-    {
+    let token_model = if let Some(model) = cache.find_by_key(identifier).await {
         model
     } else {
-        token::Entity::find()
-            .filter(token::Column::Username.eq(identifier))
-            .one(db)
-            .await
-            .map_err(|e| NodegetError::DatabaseError(format!("Database query error: {e}")))?
-            .ok_or_else(|| {
-                NodegetError::NotFound(format!("Token not found by key/username: {identifier}"))
-            })?
+        cache.find_by_username(identifier).await.ok_or_else(|| {
+            NodegetError::NotFound(format!("Token not found by key/username: {identifier}"))
+        })?
     };
 
     let token_limit = parse_token_limit_with_compat(token_model.token_limit)?;

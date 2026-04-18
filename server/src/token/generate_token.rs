@@ -1,5 +1,6 @@
 use crate::DB;
 use crate::entity::token;
+use crate::token::cache::TokenCache;
 use crate::token::hash_string;
 use crate::token::super_token::check_super_token;
 use nodeget_lib::error::NodegetError;
@@ -80,6 +81,11 @@ pub async fn generate_and_store_token(
         .exec(db)
         .await
         .map_err(|e| NodegetError::DatabaseError(format!("Database insert error: {e}")))?;
+
+    // Reload cache after creating new token
+    if let Err(e) = TokenCache::reload().await {
+        tracing::error!(target: "token", error = %e, "Failed to reload token cache after generate_and_store_token");
+    }
 
     Ok((token_key, token_secret))
 }

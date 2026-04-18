@@ -1,5 +1,6 @@
 use crate::DB;
 use crate::entity::token;
+use crate::token::cache::TokenCache;
 use crate::token::super_token::check_super_token;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
@@ -65,6 +66,11 @@ pub async fn edit(
             .update(db)
             .await
             .map_err(|e| NodegetError::DatabaseError(format!("Database update error: {e}")))?;
+
+        // Reload cache after editing token
+        if let Err(e) = TokenCache::reload().await {
+            tracing::error!(target: "token", error = %e, "Failed to reload token cache after edit");
+        }
 
         let response = serde_json::json!({
             "success": true,

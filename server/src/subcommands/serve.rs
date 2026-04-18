@@ -20,6 +20,10 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
 
     super::init_or_skip_super_token().await;
 
+    crate::token::cache::TokenCache::init()
+        .await
+        .expect("Failed to initialize token cache");
+
     let _ = nodeget_lib::utils::uuid::compare_uuid(config.server_uuid);
 
     let terminal_state = crate::terminal::TerminalState {

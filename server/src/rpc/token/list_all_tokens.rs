@@ -1,12 +1,10 @@
-use crate::DB;
-use crate::entity::token;
+use crate::token::cache::TokenCache;
 use crate::token::get::parse_token_limit_with_compat;
 use crate::token::super_token::check_super_token;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::data_structure::Token;
 use nodeget_lib::permission::token_auth::TokenOrAuth;
-use sea_orm::EntityTrait;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use tracing::{debug, warn};
@@ -34,14 +32,7 @@ pub async fn list_all_tokens(token: String) -> RpcResult<Box<RawValue>> {
             .into());
         }
 
-        let db = DB.get().ok_or_else(|| {
-            NodegetError::ConfigNotFound("Database connection not initialized".to_owned())
-        })?;
-
-        let token_models = token::Entity::find()
-            .all(db)
-            .await
-            .map_err(|e| NodegetError::DatabaseError(format!("Database query error: {e}")))?;
+        let token_models = TokenCache::global().get_all().await;
 
         let tokens = token_models
             .into_iter()
