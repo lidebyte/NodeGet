@@ -6,7 +6,7 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tower::Service;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::RELOAD_NOTIFY;
 use crate::crontab::init_crontab_worker;
@@ -19,20 +19,25 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
     spawn_jemalloc_mem_debug_task();
 
     super::init_or_skip_super_token().await;
+    debug!(target: "server", "Super token initialization completed");
 
     crate::token::cache::TokenCache::init()
         .await
         .expect("Failed to initialize token cache");
+    debug!(target: "server", "Token cache initialized");
 
     let _ = nodeget_lib::utils::uuid::compare_uuid(config.server_uuid);
+    debug!(target: "server", uuid = %config.server_uuid, "Server UUID compared");
 
     let terminal_state = crate::terminal::TerminalState {
         sessions: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
     };
 
     runtime_pool::init_global_pool();
+    debug!(target: "server", "JS runtime pool initialized");
 
     crate::monitoring_buffer::init(config.monitoring_buffer.as_ref());
+    debug!(target: "server", "Monitoring buffer initialized");
 
     let rpc_module = get_modules();
 
@@ -119,6 +124,7 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
             }));
 
     init_crontab_worker();
+    debug!(target: "server", "Crontab worker initialized");
 
     #[cfg(not(target_os = "windows"))]
     let mut unix_server_task: Option<tokio::task::JoinHandle<()>> = None;
@@ -157,6 +163,7 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
         error!(target: "server", address = %addr, error = %e, "failed to bind TCP listener");
         panic!("Failed to bind to {addr}: {e}");
     });
+    info!(target: "server", address = %addr, "Server listening on TCP");
 
     let serve_future = IntoFuture::into_future(axum::serve(
         listener,

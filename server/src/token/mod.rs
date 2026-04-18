@@ -25,6 +25,7 @@ pub fn hash_string(need_hash: &str) -> String {
 use crate::DB;
 use crate::entity::token;
 use sea_orm::{ColumnTrait, DeleteResult, EntityTrait, QueryFilter};
+use tracing::debug;
 
 // 删除令牌的方法
 //
@@ -34,6 +35,7 @@ use sea_orm::{ColumnTrait, DeleteResult, EntityTrait, QueryFilter};
 // # 返回值
 // 返回删除结果，包含删除的行数，或数据库错误
 pub async fn delete_token_by_key(token_key: String) -> Result<DeleteResult, sea_orm::DbErr> {
+    debug!(target: "token", %token_key, "Deleting token by key");
     let Some(db) = DB.get() else {
         return Err(sea_orm::DbErr::Conn(sea_orm::RuntimeErr::Internal(
             "Database not initialized".to_owned(),
@@ -48,9 +50,12 @@ pub async fn delete_token_by_key(token_key: String) -> Result<DeleteResult, sea_
         .await?;
 
     if delete_result.rows_affected > 0 {
+        debug!(target: "token", %token_key, rows_affected = delete_result.rows_affected, "Token deleted by key");
         if let Err(e) = cache::TokenCache::reload().await {
             tracing::error!(target: "token", error = %e, "Failed to reload token cache after delete_by_key");
         }
+    } else {
+        debug!(target: "token", %token_key, "No token found to delete by key");
     }
 
     Ok(delete_result)
@@ -64,6 +69,7 @@ pub async fn delete_token_by_key(token_key: String) -> Result<DeleteResult, sea_
 // # 返回值
 // 返回删除结果，包含删除的行数，或数据库错误
 pub async fn delete_token_by_username(username: String) -> Result<DeleteResult, sea_orm::DbErr> {
+    debug!(target: "token", %username, "Deleting token by username");
     let Some(db) = DB.get() else {
         return Err(sea_orm::DbErr::Conn(sea_orm::RuntimeErr::Internal(
             "Database not initialized".to_owned(),
@@ -78,9 +84,12 @@ pub async fn delete_token_by_username(username: String) -> Result<DeleteResult, 
         .await?;
 
     if delete_result.rows_affected > 0 {
+        debug!(target: "token", %username, rows_affected = delete_result.rows_affected, "Token deleted by username");
         if let Err(e) = cache::TokenCache::reload().await {
             tracing::error!(target: "token", error = %e, "Failed to reload token cache after delete_by_username");
         }
+    } else {
+        debug!(target: "token", %username, "No token found to delete by username");
     }
 
     Ok(delete_result)

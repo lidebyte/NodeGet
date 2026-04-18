@@ -6,6 +6,7 @@ use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::generate_random_string;
 use sea_orm::{EntityTrait, Set, TransactionTrait};
+use tracing::debug;
 
 async fn insert_new_super_token(
     db: &sea_orm::DatabaseConnection,
@@ -39,6 +40,7 @@ async fn insert_new_super_token(
             NodegetError::DatabaseError(format!("Failed to initialize super token: {e}"))
         })?;
 
+    debug!(target: "token", "Super token inserted into database");
     Ok((full_token, raw_password))
 }
 
@@ -55,6 +57,7 @@ pub async fn generate_super_token() -> anyhow::Result<Option<(String, String)>> 
     // 先尝试插入，如果失败（记录已存在）则返回 None
     match insert_new_super_token(db).await {
         Ok(result) => {
+            debug!(target: "token", "Super token generated successfully");
             // Reload cache after creating super token
             if let Err(e) = TokenCache::reload().await {
                 tracing::error!(target: "token", error = %e, "Failed to reload token cache after generate_super_token");
@@ -66,6 +69,7 @@ pub async fn generate_super_token() -> anyhow::Result<Option<(String, String)>> 
             let error_msg = format!("{e}");
             if error_msg.contains("UNIQUE constraint failed") || error_msg.contains("duplicate key")
             {
+                debug!(target: "token", "Super token already exists, skipping generation");
                 Ok(None)
             } else {
                 Err(e)
@@ -75,6 +79,7 @@ pub async fn generate_super_token() -> anyhow::Result<Option<(String, String)>> 
 }
 
 pub async fn roll_super_token() -> anyhow::Result<(String, String)> {
+    debug!(target: "token", "Rolling super token - starting transaction");
     let db = DB.get().ok_or_else(|| {
         NodegetError::DatabaseError("Database connection not initialized".to_string())
     })?;
@@ -116,6 +121,8 @@ pub async fn roll_super_token() -> anyhow::Result<(String, String)> {
         .await
         .map_err(|e| NodegetError::DatabaseError(format!("Transaction failed: {e}")))?;
 
+    debug!(target: "token", "Super token rolled successfully");
+
     // Reload cache after rolling super token
     if let Err(e) = TokenCache::reload().await {
         tracing::error!(target: "token", error = %e, "Failed to reload token cache after roll_super_token");
@@ -139,10 +146,15 @@ pub async fn check_super_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<bo
 
     match token_or_auth {
         TokenOrAuth::Token(key, secret) => {
-            Ok(key == &super_record.token_key && hash_string(secret) == super_record.token_hash)
+            let is_super = key == &super_record.token_key && hash_string(secret) == super_record.token_hash;
+            debug!(target: "token", is_super, "Super token check completed (token auth)");
+            Ok(is_super)
         }
-        TokenOrAuth::Auth(username, password) => Ok(Some(username.clone())
-            == super_record.username
-            && Some(hash_string(password)) == super_record.password_hash),
+        TokenOrAuth::Auth(username, password) => {
+            let is_super = Some(username.clone()) == super_record.username
+                && Some(hash_string(password)) == super_record.password_hash;
+            debug!(target: "token", is_super, "Super token check completed (basic auth)");
+            Ok(is_super)
+        }
     }
 }

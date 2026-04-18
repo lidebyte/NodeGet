@@ -33,6 +33,8 @@ pub async fn create(
             return Err(NodegetError::ParseError(format!("Invalid cron expression: {e}")).into());
         }
 
+        debug!(target: "crontab", name = %name, cron_expression = %cron_expression, "Cron expression validated");
+
         let db = CrontabRpcImpl::get_db()?;
 
         let existing_job = crontab::Entity::find()

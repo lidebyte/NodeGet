@@ -47,6 +47,8 @@ pub async fn delete(token: String, target_token: String) -> RpcResult<Box<RawVal
                 NodegetError::NotFound("Super Token record (ID 1) not found in database".to_owned())
             })?;
 
+        debug!(target: "token", target = %target_token_to_delete, "Super record found, checking if target is super token");
+
         let target_is_super_by_key = target_token_to_delete == super_record.token_key;
         let target_is_super_by_username =
             super_record.username.as_deref() == Some(target_token_to_delete.as_str());

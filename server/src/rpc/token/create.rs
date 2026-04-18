@@ -14,7 +14,7 @@ pub async fn create(
         let father_token_or_auth = TokenOrAuth::from_full_token(&father_token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
-        debug!(target: "token", "Processing token creation request, verifying super token");
+        debug!(target: "token", has_username = token_creation.username.is_some(), "Token creation request parsed, verifying super token");
 
         let (key, secret) = generate_and_store_token(
             &father_token_or_auth,

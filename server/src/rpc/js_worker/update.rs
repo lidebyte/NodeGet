@@ -36,6 +36,8 @@ pub async fn update(
 
         check_js_worker_permission(&token, name.as_str(), JsWorkerPermission::Write).await?;
 
+        debug!(target: "js_worker", name = %name, "js_worker update permission check passed");
+
         if js_script_base64.trim().is_empty() {
             return Err(
                 NodegetError::InvalidInput("js_script_base64 cannot be empty".to_owned()).into(),

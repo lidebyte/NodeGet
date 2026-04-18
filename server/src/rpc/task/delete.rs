@@ -76,6 +76,8 @@ pub async fn delete(
             .into());
         }
 
+        debug!(target: "task", condition_count = conditions.len(), "Task delete permission check passed");
+
         let db = TaskRpcImpl::get_db()?;
 
         let mut select_query = task::Entity::find().select_only().column(task::Column::Id);

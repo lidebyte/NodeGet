@@ -22,6 +22,8 @@ pub async fn query_static(
     static_data_query: StaticDataQuery,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
+        debug!(target: "monitoring", conditions_count = static_data_query.condition.len(), fields_count = static_data_query.fields.len(), "Static query request received");
+
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
@@ -169,6 +171,7 @@ async fn execute_query(
     field_mappings: &[(&str, &str)],
     capacity_hint: u64,
 ) -> anyhow::Result<Box<RawValue>> {
+    debug!(target: "monitoring", "Starting static query DB stream");
     let mut stream = query.stream(db).await.map_err(|e| {
         error!(target: "monitoring", error = %e, "Database query error");
         NodegetError::DatabaseError(format!("Database query error: {e}"))

@@ -20,6 +20,8 @@ pub async fn read(token: String, name: String) -> RpcResult<Box<RawValue>> {
 
         check_js_worker_permission(&token, name.as_str(), JsWorkerPermission::Read).await?;
 
+        debug!(target: "js_worker", name = %name, "js_worker read permission check passed");
+
         let db = JsWorkerRpcImpl::get_db()?;
         let model = js_worker::Entity::find()
             .filter(js_worker::Column::Name.eq(name.as_str()))

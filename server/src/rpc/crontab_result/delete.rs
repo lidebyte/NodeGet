@@ -18,6 +18,8 @@ pub async fn delete(token: String, delete_params: CrontabResultDelete) -> RpcRes
         // 检查删除权限
         check_crontab_result_delete_permission(&token, delete_params.cron_name.as_deref()).await?;
 
+        debug!(target: "crontab_result", cron_name = ?delete_params.cron_name, before_time = delete_params.before_time, "crontab_result delete permission check passed");
+
         // 构建删除条件
         let mut delete = crontab_result::Entity::delete_many()
             .filter(crontab_result::Column::RunTime.lt(delete_params.before_time));

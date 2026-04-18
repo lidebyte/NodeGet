@@ -14,7 +14,7 @@ use serde_json::Value;
 use serde_json::value::RawValue;
 use std::fmt::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 static ERROR_COUNTER: AtomicU64 = AtomicU64::new(0);
 fn generate_error_id() -> u64 {
@@ -42,6 +42,8 @@ pub async fn query_dynamic_summary_avg(
         );
 
         validate_avg_query(&query)?;
+
+        debug!(target: "monitoring", "Dynamic summary avg query validation passed");
 
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
@@ -95,17 +97,20 @@ pub async fn query_dynamic_summary_avg(
 
 fn validate_avg_query(query: &DynamicSummaryAvgQuery) -> anyhow::Result<()> {
     if query.fields.is_empty() {
+        warn!(target: "monitoring", "Dynamic summary avg query validation failed: fields empty");
         return Err(NodegetError::InvalidInput(
             "fields cannot be empty for dynamic_summary_avg_query".to_owned(),
         )
         .into());
     }
     if query.points == 0 {
+        warn!(target: "monitoring", "Dynamic summary avg query validation failed: points is 0");
         return Err(NodegetError::InvalidInput("points must be >= 1".to_owned()).into());
     }
     if let (Some(start), Some(end)) = (query.timestamp_from, query.timestamp_to)
         && start > end
     {
+        warn!(target: "monitoring", start, end, "Dynamic summary avg query validation failed: timestamp_from > timestamp_to");
         return Err(NodegetError::InvalidInput(
             "timestamp_from cannot be greater than timestamp_to".to_owned(),
         )
@@ -131,6 +136,7 @@ async fn query_summary_avg_postgres(
     query: &DynamicSummaryAvgQuery,
 ) -> anyhow::Result<Box<RawValue>> {
     let sql = build_postgres_summary_avg_sql(&query.fields);
+    tracing::trace!(target: "monitoring", fields_count = query.fields.len(), "Dynamic summary avg SQL generated");
     let statement = Statement::from_sql_and_values(
         DatabaseBackend::Postgres,
         sql,

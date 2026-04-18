@@ -66,6 +66,8 @@ pub async fn delete(token: String, query: JsResultDataQuery) -> RpcResult<Box<Ra
             }
         }
 
+        debug!(target: "js_result", condition_count, workers_count = requested_worker_names.len(), "js_result delete permission check passed");
+
         for condition in query.condition {
             match condition {
                 JsResultQueryCondition::Id(id) => {

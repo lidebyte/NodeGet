@@ -5,7 +5,7 @@ use sea_orm::EntityTrait;
 use std::sync::{Mutex, OnceLock};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
 
 // ── 默认值 ──────────────────────────────────────────────────────────
 
@@ -117,7 +117,10 @@ impl<T> BufferSender<T> {
     pub fn send(&self, item: T) -> Result<(), mpsc::error::SendError<T>> {
         let guard = self.tx.lock().unwrap_or_else(|e| e.into_inner());
         match guard.as_ref() {
-            Some(tx) => tx.send(item),
+            Some(tx) => {
+                trace!(target: "monitoring", "Buffer item queued");
+                tx.send(item)
+            }
             None => Err(mpsc::error::SendError(item)),
         }
     }
@@ -125,6 +128,7 @@ impl<T> BufferSender<T> {
     /// 关闭 sender（drop 内部的 UnboundedSender）
     fn close(&self) {
         let mut guard = self.tx.lock().unwrap_or_else(|e| e.into_inner());
+        debug!(target: "monitoring", "Closing buffer sender");
         guard.take(); // drop the sender, closing the channel
     }
 }
@@ -181,6 +185,7 @@ async fn flush_loop<E, A>(
         }
 
         if !buf.is_empty() {
+            trace!(target: "monitoring", table = table_name, buffered = buf.len(), "Flushing buffered items on tick");
             do_flush::<E, A>(table_name, &mut buf).await;
         }
     }

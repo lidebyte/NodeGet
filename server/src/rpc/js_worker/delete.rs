@@ -19,6 +19,8 @@ pub async fn delete(token: String, name: String) -> RpcResult<Box<RawValue>> {
 
         check_js_worker_permission(&token, name.as_str(), JsWorkerPermission::Delete).await?;
 
+        debug!(target: "js_worker", name = %name, "js_worker delete permission check passed");
+
         let db = JsWorkerRpcImpl::get_db()?;
         let delete_result = js_worker::Entity::delete_many()
             .filter(js_worker::Column::Name.eq(name.as_str()))

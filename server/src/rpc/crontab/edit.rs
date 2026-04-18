@@ -27,6 +27,8 @@ pub async fn edit(
             return Err(NodegetError::ParseError(format!("Invalid cron expression: {e}")).into());
         }
 
+        debug!(target: "crontab", name = %name, cron_expression = %cron_expression, "Cron expression validated");
+
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 

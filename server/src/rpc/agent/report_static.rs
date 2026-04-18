@@ -65,11 +65,11 @@ pub async fn report_static(
             uuid: Set(agent_uuid),
             timestamp: Set(static_monitoring_data.time.cast_signed()),
             cpu_data: AgentRpcImpl::try_set_json(static_monitoring_data.cpu)
-                .map_err(|e| NodegetError::SerializationError(format!("{e}")))?,
+                .map_err(|e| NodegetError::SerializationError(format!("cpu_data: {e}")))?,
             system_data: AgentRpcImpl::try_set_json(static_monitoring_data.system)
-                .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
+                .map_err(|e| NodegetError::SerializationError(format!("system_data: {e}")))?,
             gpu_data: AgentRpcImpl::try_set_json(static_monitoring_data.gpu)
-                .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
+                .map_err(|e| NodegetError::SerializationError(format!("gpu_data: {e}")))?,
             data_hash: Set(data_hash),
         };
 

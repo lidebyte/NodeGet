@@ -37,6 +37,8 @@ pub async fn run(
         )
         .await?;
 
+        debug!(target: "js_worker", script_name = %script_name, "js_worker run permission check passed");
+
         let js_result_id = match compile_mode {
             CompileMode::Bytecode => {
                 enqueue_defined_js_worker_run(script_name, run_type, params, env).await?

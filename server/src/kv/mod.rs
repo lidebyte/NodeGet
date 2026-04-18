@@ -6,7 +6,7 @@ use sea_orm::{
     QuerySelect, Set,
 };
 use serde_json::Value;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::DB;
 use crate::entity::kv;
@@ -35,11 +35,13 @@ async fn ensure_namespace_exists(db: &DatabaseConnection, namespace: &str) -> Re
         return Ok(());
     }
 
+    warn!(target: "kv", namespace = %namespace, "Namespace not found");
     Err(NodegetError::DatabaseError(format!("Namespace '{namespace}' not found")).into())
 }
 
 fn ensure_not_reserved_key(key: &str) -> Result<()> {
     if key == NAMESPACE_MARKER_KEY {
+        warn!(target: "kv", key = %key, "Attempt to use reserved key");
         return Err(NodegetError::InvalidInput(
             "Key is reserved for internal namespace marker".to_owned(),
         )
@@ -200,6 +202,7 @@ pub async fn delete_key_from_kv(namespace: String, key: String) -> Result<()> {
 /// # 返回值
 /// 成功时返回 ()，失败返回错误
 pub async fn delete_kv(namespace: String) -> Result<()> {
+    debug!(target: "kv", namespace = %namespace, "Deleting namespace");
     let db = get_db()?;
     ensure_namespace_exists(db, &namespace).await?;
 

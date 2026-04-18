@@ -9,6 +9,7 @@ use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::generate_random_string;
 use sea_orm::{ActiveValue, EntityTrait, Set};
 use serde_json;
+use tracing::debug;
 
 // 根据父级令牌权限生成并存储新令牌
 //
@@ -43,6 +44,8 @@ pub async fn generate_and_store_token(
         .into());
     }
 
+    debug!(target: "token", "Super token check passed, proceeding with token generation");
+
     let db = DB.get().ok_or_else(|| {
         NodegetError::ConfigNotFound("Database connection not initialized".to_owned())
     })?;
@@ -54,8 +57,10 @@ pub async fn generate_and_store_token(
         .into());
     }
 
+    let has_credentials = username.is_some();
     let token_key = generate_random_string(16);
     let token_secret = generate_random_string(32);
+    debug!(target: "token", %token_key, has_credentials, "Token key and secret generated");
 
     let token_hash = hash_string(&token_secret);
 
@@ -64,6 +69,8 @@ pub async fn generate_and_store_token(
     let token_limit_json = serde_json::to_value(token_limit).map_err(|e| {
         NodegetError::SerializationError(format!("Failed to serialize token limits: {e}"))
     })?;
+
+    debug!(target: "token", %token_key, "Token limit serialized, building model for DB insert");
 
     let new_token_model = token::ActiveModel {
         id: ActiveValue::NotSet,
@@ -81,6 +88,8 @@ pub async fn generate_and_store_token(
         .exec(db)
         .await
         .map_err(|e| NodegetError::DatabaseError(format!("Database insert error: {e}")))?;
+
+    debug!(target: "token", %token_key, "Token inserted into database successfully");
 
     // Reload cache after creating new token
     if let Err(e) = TokenCache::reload().await {

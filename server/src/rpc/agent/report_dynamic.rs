@@ -46,19 +46,19 @@ pub async fn report_dynamic(
             uuid: Set(agent_uuid),
             timestamp: Set(dynamic_monitoring_data.time.cast_signed()),
             cpu_data: AgentRpcImpl::try_set_json(dynamic_monitoring_data.cpu)
-                .map_err(|e| NodegetError::SerializationError(format!("{e}")))?,
+                .map_err(|e| NodegetError::SerializationError(format!("cpu_data: {e}")))?,
             ram_data: AgentRpcImpl::try_set_json(dynamic_monitoring_data.ram)
-                .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
+                .map_err(|e| NodegetError::SerializationError(format!("ram_data: {e}")))?,
             load_data: AgentRpcImpl::try_set_json(dynamic_monitoring_data.load)
-                .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
+                .map_err(|e| NodegetError::SerializationError(format!("load_data: {e}")))?,
             system_data: AgentRpcImpl::try_set_json(dynamic_monitoring_data.system)
-                .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
+                .map_err(|e| NodegetError::SerializationError(format!("system_data: {e}")))?,
             disk_data: AgentRpcImpl::try_set_json(dynamic_monitoring_data.disk)
-                .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
+                .map_err(|e| NodegetError::SerializationError(format!("disk_data: {e}")))?,
             network_data: AgentRpcImpl::try_set_json(dynamic_monitoring_data.network)
-                .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
+                .map_err(|e| NodegetError::SerializationError(format!("network_data: {e}")))?,
             gpu_data: AgentRpcImpl::try_set_json(dynamic_monitoring_data.gpu)
-                .map_err(|e| NodegetError::SerializationError(e.to_string()))?,
+                .map_err(|e| NodegetError::SerializationError(format!("gpu_data: {e}")))?,
         };
 
         debug!(target: "monitoring", agent_uuid = %dynamic_monitoring_data.uuid, "Received dynamic data, sending to buffer");

@@ -38,6 +38,8 @@ pub async fn dynamic_summary_multi_last_query(
     fields: Vec<DynamicSummaryQueryField>,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
+        debug!(target: "monitoring", uuids_count = uuids.len(), fields_count = fields.len(), "Dynamic summary multi-last query request received");
+
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
@@ -216,6 +218,7 @@ async fn execute_statement_query(
     statement: Statement,
     capacity_hint: usize,
 ) -> anyhow::Result<Box<RawValue>> {
+    debug!(target: "monitoring", "Starting dynamic summary multi-last query DB stream");
     let mut stream = serde_json::Value::find_by_statement(statement)
         .stream(db)
         .await

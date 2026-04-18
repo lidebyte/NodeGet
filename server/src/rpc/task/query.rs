@@ -82,6 +82,8 @@ pub async fn query(token: String, task_data_query: TaskDataQuery) -> RpcResult<B
             )
             .into());
         }
+        debug!(target: "task", condition_count = task_data_query.condition.len(), "Task query permission check passed");
+
         let db = TaskRpcImpl::get_db()?;
 
         let mut query = task::Entity::find().select_only();

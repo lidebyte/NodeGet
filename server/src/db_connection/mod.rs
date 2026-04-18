@@ -6,7 +6,7 @@ use sea_orm::{ConnectOptions, ConnectionTrait, Database};
 use std::process;
 use std::time::Duration;
 use tracing::log::LevelFilter;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 // 初始化数据库连接并应用迁移
 //
@@ -37,6 +37,21 @@ pub async fn init_db_connection() {
                 config.database.max_lifetime_ms.unwrap_or(30000),
             ))
             .max_connections(config.database.max_connections.unwrap_or(10));
+
+        let connect_timeout = config.database.connect_timeout_ms.unwrap_or(3000);
+        let acquire_timeout = config.database.acquire_timeout_ms.unwrap_or(3000);
+        let idle_timeout = config.database.idle_timeout_ms.unwrap_or(3000);
+        let max_lifetime = config.database.max_lifetime_ms.unwrap_or(30000);
+        let max_connections = config.database.max_connections.unwrap_or(10);
+        debug!(
+            target: "db",
+            connect_timeout,
+            acquire_timeout,
+            idle_timeout,
+            max_lifetime,
+            max_connections,
+            "Database connection options configured"
+        );
 
         let db = Database::connect(opt).await.unwrap_or_else(|e| {
             error!(target: "db", error = %e, "Unable to connect to the database");

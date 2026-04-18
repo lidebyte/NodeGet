@@ -114,6 +114,8 @@ pub async fn query(token: String, query: JsResultDataQuery) -> RpcResult<Box<Raw
             }
         }
 
+        debug!(target: "js_result", condition_count = query.condition.len(), workers_count = requested_worker_names.len(), "js_result query permission check passed");
+
         for condition in &query.condition {
             match condition {
                 JsResultQueryCondition::Limit(limit) => {

@@ -80,6 +80,8 @@ pub async fn delete_static(
                     NodegetError::DatabaseError(format!("Database query error: {e}"))
                 })?;
 
+            debug!(target: "monitoring", ids_count = ids.len(), limit, is_last, "Static delete fetched IDs for limit/last path");
+
             if ids.is_empty() {
                 0
             } else {

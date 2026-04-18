@@ -75,6 +75,8 @@ pub async fn query(token: String, query: CrontabResultDataQuery) -> RpcResult<Bo
             check_crontab_result_read_permission(&token, "*").await?;
         }
 
+        debug!(target: "crontab_result", condition_count = query.condition.len(), has_cron_name_filter, "crontab_result query permission check passed");
+
         // 默认按 run_time 降序排序（如果没有指定 Last）
         if !query
             .condition

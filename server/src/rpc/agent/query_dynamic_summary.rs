@@ -24,6 +24,8 @@ pub async fn query_dynamic_summary(
     query_data: DynamicSummaryQuery,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
+        debug!(target: "monitoring", conditions_count = query_data.condition.len(), fields_count = query_data.fields.len(), "Dynamic summary query request received");
+
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
@@ -229,6 +231,7 @@ async fn execute_query(
     query: Selector<SelectModel<serde_json::Value>>,
     capacity_hint: u64,
 ) -> anyhow::Result<Box<RawValue>> {
+    debug!(target: "monitoring", "Starting dynamic summary query DB stream");
     let mut stream = query.stream(db).await.map_err(|e| {
         error!(target: "monitoring", error = %e, "Database query error");
         NodegetError::DatabaseError(format!("Database query error: {e}"))

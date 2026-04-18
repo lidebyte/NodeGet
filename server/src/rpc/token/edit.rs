@@ -59,6 +59,8 @@ pub async fn edit(
             .into());
         };
 
+        debug!(target: "token", id = model.id, token_key = %model.token_key, "Target token found for editing");
+
         let mut active_model: token::ActiveModel = model.into();
         active_model.token_limit = Set(serde_json::to_value(limit).map_err(|e| {
             NodegetError::SerializationError(format!("Failed to serialize token limit: {e}"))
