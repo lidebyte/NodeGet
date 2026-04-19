@@ -1,6 +1,6 @@
 use crate::js_runtime::js_error;
 use crate::rpc::get_modules;
-use futures::future::join_all;
+use futures_util::future::join_all;
 use rquickjs::Error;
 use std::result::Result as StdResult;
 use tracing::{debug, trace};

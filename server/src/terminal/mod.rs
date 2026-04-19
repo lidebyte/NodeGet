@@ -7,7 +7,7 @@ use crate::terminal::check_agent::check_agent;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
 use axum::extract::{Query, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
-use futures::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use nodeget_lib::utils::error_message::generate_error_message;
 use serde::Deserialize;
 use std::collections::HashMap;

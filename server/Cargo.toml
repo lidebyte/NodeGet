@@ -17,8 +17,8 @@ migration = { path = "migration" }
 tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
 chrono = { version = "0.4.43", default-features = false, features = ["now", "std"] }
 uuid = { version = "1.19.0", default-features = false, features = ["v4"] }
-futures = "0.3.31"
-sha2 = "0.11.0-rc.3"
+futures-util = "0.3.31"
+sha2 = "0.10"
 subtle = "2.6.1"
 hex = "0.4.3"
 base64 = "0.22.1"
@@ -44,7 +44,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt",
 
 # JS Runtime
 rquickjs = {version = "0.11", git = "https://github.com/delskayn/rquickjs.git", default-features = false, features = ["futures"] }
-llrt_fetch = { git = "https://github.com/awslabs/llrt.git", default-features = false, features = ["http1", "compression-rust", "webpki-roots", "tls-ring"] }
+llrt_fetch = { git = "https://github.com/awslabs/llrt.git", default-features = false, features = ["http1", "compression-c", "webpki-roots", "tls-ring"] }
 llrt_buffer = { git = "https://github.com/awslabs/llrt.git", default-features = false }
 llrt_timers = { git = "https://github.com/awslabs/llrt.git", default-features = false }
 llrt_url = { git = "https://github.com/awslabs/llrt.git", default-features = false }
