@@ -1,6 +1,6 @@
 use crate::error::{NodegetError, Result};
 use rand::distr::Alphanumeric;
-use rand::{Rng, RngExt, rng};
+use rand::{RngExt, rng};
 use serde::Deserialize;
 use serde::Serialize;
 

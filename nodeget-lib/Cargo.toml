@@ -22,5 +22,3 @@ palc = { version = "0.0.2", default-features = false, features = ["help"] }
 for-agent = []
 for-server = []
 
-[build-dependencies]
-vergen-gix = { version = "9.0.6", features = ["build", "cargo", "rustc"] }
