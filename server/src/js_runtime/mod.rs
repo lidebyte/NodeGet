@@ -165,7 +165,7 @@ pub fn compile_js_module_to_bytecode(js_code: impl AsRef<str>) -> Result<Vec<u8>
         rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
         let ctx = AsyncContext::full(&rt).await?;
 
-        let compile_result: Result<Vec<u8>, Error> = rquickjs::async_with!(ctx => |ctx| {
+        let compile_result: Result<Vec<u8>, Error> = ctx.async_with(async |ctx| {
             // Keep compile context aligned with runtime context.
             init_js_runtime_globals(&ctx)?;
 
@@ -200,7 +200,7 @@ pub fn js_runner(
         rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
         let ctx = AsyncContext::full(&rt).await?;
 
-        let js_result: Result<Value, Error> = rquickjs::async_with!(ctx => |ctx| {
+        let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
             init_js_runtime_globals(&ctx)?;
             let global = ctx.globals();
 
@@ -442,7 +442,7 @@ pub fn js_runner_source_mode(
         rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
         let ctx = AsyncContext::full(&rt).await?;
 
-        let js_result: Result<Value, Error> = rquickjs::async_with!(ctx => |ctx| {
+        let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
             init_js_runtime_globals(&ctx)?;
             let global = ctx.globals();
 

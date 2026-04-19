@@ -9,7 +9,6 @@ use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::task::{TaskEventResponse, TaskEventType};
 use sea_orm::ColumnTrait;
 use sea_orm::QueryFilter;
-use sea_orm::QuerySelect;
 use sea_orm::{EntityTrait, Set};
 use serde_json::Value;
 use serde_json::value::RawValue;
