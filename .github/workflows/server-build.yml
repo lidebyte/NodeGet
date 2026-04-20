@@ -43,9 +43,12 @@ jobs:
           - release_for: linux_i686_gnu
             target: i686-unknown-linux-gnu
             binary_name: nodeget-server-linux-i686-gnu
+            # QuickJS cutils.h x87 FPU macro needs gnu11 for label-before-declaration
+            cross_opts: --env CFLAGS_i686_unknown_linux_gnu=-std=gnu11
           - release_for: linux_i686_musl
             target: i686-unknown-linux-musl
             binary_name: nodeget-server-linux-i686-musl
+            cross_opts: --env CFLAGS_i686_unknown_linux_musl=-std=gnu11
           - release_for: linux_arm_musleabi
             target: arm-unknown-linux-musleabi
             binary_name: nodeget-server-linux-arm-musleabi
@@ -90,6 +93,7 @@ jobs:
         run: cargo clean && cross build --target ${{ matrix.platform.target }} --profile minimal --jobs 32 --locked
         env:
           CROSS_NO_WARNINGS: 0
+          CROSS_CONTAINER_OPTS: ${{ matrix.platform.cross_opts || '' }}
 
       - name: Compress binary
         run: upx --brute ./target/${{ matrix.platform.target }}/minimal/nodeget-server
