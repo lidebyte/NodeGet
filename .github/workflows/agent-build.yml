@@ -37,13 +37,6 @@ jobs:
           - release_for: linux_i686_musl
             target: i686-unknown-linux-musl
             binary_name: nodeget-agent-linux-i686-musl
-          # i586
-          - release_for: linux_i586_gnu
-            target: i586-unknown-linux-gnu
-            binary_name: nodeget-agent-linux-i586-gnu
-          - release_for: linux_i586_musl
-            target: i586-unknown-linux-musl
-            binary_name: nodeget-agent-linux-i586-musl
           # aarch64
           - release_for: linux_aarch64_gnu
             target: aarch64-unknown-linux-gnu
@@ -116,31 +109,6 @@ jobs:
             target: s390x-unknown-linux-gnu
             binary_name: nodeget-agent-linux-s390x-gnu
             no_upx: true
-          # mips
-          - release_for: linux_mips_gnu
-            target: mips-unknown-linux-gnu
-            binary_name: nodeget-agent-linux-mips-gnu
-            no_upx: true
-          - release_for: linux_mips_musl
-            target: mips-unknown-linux-musl
-            binary_name: nodeget-agent-linux-mips-musl
-            no_upx: true
-          - release_for: linux_mipsel_gnu
-            target: mipsel-unknown-linux-gnu
-            binary_name: nodeget-agent-linux-mipsel-gnu
-            no_upx: true
-          - release_for: linux_mipsel_musl
-            target: mipsel-unknown-linux-musl
-            binary_name: nodeget-agent-linux-mipsel-musl
-            no_upx: true
-          - release_for: linux_mips64_gnuabi64
-            target: mips64-unknown-linux-gnuabi64
-            binary_name: nodeget-agent-linux-mips64-gnuabi64
-            no_upx: true
-          - release_for: linux_mips64el_gnuabi64
-            target: mips64el-unknown-linux-gnuabi64
-            binary_name: nodeget-agent-linux-mips64el-gnuabi64
-            no_upx: true
           # sparc64
           - release_for: linux_sparc64_gnu
             target: sparc64-unknown-linux-gnu
@@ -183,7 +151,7 @@ jobs:
 
   release-dev:
     name: Release Dev
-    needs: agent-release
+    needs: [agent-release, agent-windows, agent-macos]
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     permissions:
@@ -205,3 +173,82 @@ jobs:
           make_latest: false
           body: "Automated dev build from `${{ github.sha }}`"
           files: artifacts/*
+
+  agent-windows:
+    name: Build - ${{ matrix.platform.release_for }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - release_for: windows_x86_64
+            target: x86_64-pc-windows-msvc
+            binary_name: nodeget-agent-windows-x86_64.exe
+          - release_for: windows_i686
+            target: i686-pc-windows-msvc
+            binary_name: nodeget-agent-windows-i686.exe
+          - release_for: windows_aarch64
+            target: aarch64-pc-windows-msvc
+            binary_name: nodeget-agent-windows-aarch64.exe
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.platform.target }}
+
+      - name: Build binary
+        working-directory: ./agent
+        run: cargo build --target ${{ matrix.platform.target }} --profile minimal --locked
+
+      - name: Rename binary
+        run: copy target\${{ matrix.platform.target }}\minimal\nodeget-agent.exe target\${{ matrix.platform.target }}\minimal\${{ matrix.platform.binary_name }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-${{ matrix.platform.target }}
+          path: target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
+          if-no-files-found: error
+
+  agent-macos:
+    name: Build - ${{ matrix.platform.release_for }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - release_for: macos_x86_64
+            target: x86_64-apple-darwin
+            binary_name: nodeget-agent-macos-x86_64
+            runner: macos-13
+          - release_for: macos_aarch64
+            target: aarch64-apple-darwin
+            binary_name: nodeget-agent-macos-aarch64
+            runner: macos-latest
+    runs-on: ${{ matrix.platform.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.platform.target }}
+
+      - name: Build binary
+        working-directory: ./agent
+        run: cargo build --target ${{ matrix.platform.target }} --profile minimal --locked
+
+      - name: Rename binary
+        run: cp target/${{ matrix.platform.target }}/minimal/nodeget-agent target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-${{ matrix.platform.target }}
+          path: target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
+          if-no-files-found: error
