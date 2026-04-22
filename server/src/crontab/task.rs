@@ -44,24 +44,24 @@ pub async fn crontab_task(
         );
 
         for uuid in uuids {
-            let process_logic = async {
-                let token = generate_random_string(10);
+            let process_logic =
+                async {
+                    let token = generate_random_string(10);
 
-                let in_data = task::ActiveModel {
-                    id: ActiveValue::default(),
-                    uuid: Set(uuid),
-                    token: Set(token.clone()),
-                    cron_source: Set(Some(cron_name.clone())),
-                    timestamp: Set(None),
-                    success: Set(None),
-                    error_message: Set(None),
-                    task_event_type: TaskRpcImpl::try_set_json(task_event_type.clone())
-                        .map_err(|e| NodegetError::SerializationError(format!("{e}")))?,
-                    task_event_result: Set(None),
-                };
+                    let in_data = task::ActiveModel {
+                        id: ActiveValue::default(),
+                        uuid: Set(uuid),
+                        token: Set(token.clone()),
+                        cron_source: Set(Some(cron_name.clone())),
+                        timestamp: Set(None),
+                        success: Set(None),
+                        error_message: Set(None),
+                        task_event_type: TaskRpcImpl::try_set_json(task_event_type.clone())
+                            .map_err(|e| NodegetError::SerializationError(format!("{e}")))?,
+                        task_event_result: Set(None),
+                    };
 
-                let result =
-                    task::Entity::insert(in_data).exec(db).await.map_err(|e| {
+                    let result = task::Entity::insert(in_data).exec(db).await.map_err(|e| {
                         error!(
                             target: "crontab",
                             agent_uuid = %uuid,
@@ -71,62 +71,61 @@ pub async fn crontab_task(
                         NodegetError::DatabaseError(format!("Database insert error: {e}"))
                     })?;
 
-                let task_id = result.last_insert_id;
-                debug!(
-                    target: "crontab",
-                    agent_uuid = %uuid,
-                    task_id,
-                    "task record inserted"
-                );
+                    let task_id = result.last_insert_id;
+                    debug!(
+                        target: "crontab",
+                        agent_uuid = %uuid,
+                        task_id,
+                        "task record inserted"
+                    );
 
-                let task = TaskEvent {
-                    task_id: task_id.cast_unsigned(),
-                    task_token: token,
-                    task_event_type: task_event_type.clone(),
+                    let task = TaskEvent {
+                        task_id: task_id.cast_unsigned(),
+                        task_token: token,
+                        task_event_type: task_event_type.clone(),
+                    };
+
+                    let manager = TaskManager::global();
+
+                    match manager.send_event(uuid, task).await {
+                        Ok(()) => {
+                            info!(
+                                target: "crontab",
+                                agent_uuid = %uuid,
+                                task_id,
+                                "task event sent to agent"
+                            );
+                            Ok(task_id)
+                        }
+                        Err(e) => {
+                            let _ = task::Entity::delete_by_id(task_id).exec(db).await.map_err(
+                                |del_err| {
+                                    error!(
+                                        target: "crontab",
+                                        agent_uuid = %uuid,
+                                        task_id,
+                                        error = %del_err,
+                                        "database delete error during rollback"
+                                    );
+                                    NodegetError::DatabaseError(format!(
+                                        "Database delete error: {del_err}"
+                                    ))
+                                },
+                            );
+                            error!(
+                                target: "crontab",
+                                agent_uuid = %uuid,
+                                task_id,
+                                error = %e.1,
+                                "failed to send task event to agent"
+                            );
+                            Err(NodegetError::AgentConnectionError(format!(
+                                "Error sending task event: {}",
+                                e.1
+                            )))
+                        }
+                    }
                 };
-
-                let manager = TaskManager::global();
-
-                match manager.send_event(uuid, task).await {
-                    Ok(()) => {
-                        info!(
-                            target: "crontab",
-                            agent_uuid = %uuid,
-                            task_id,
-                            "task event sent to agent"
-                        );
-                        Ok(task_id)
-                    }
-                    Err(e) => {
-                        let _ = task::Entity::delete_by_id(task_id)
-                            .exec(db)
-                            .await
-                            .map_err(|del_err| {
-                                error!(
-                                    target: "crontab",
-                                    agent_uuid = %uuid,
-                                    task_id,
-                                    error = %del_err,
-                                    "database delete error during rollback"
-                                );
-                                NodegetError::DatabaseError(format!(
-                                    "Database delete error: {del_err}"
-                                ))
-                            });
-                        error!(
-                            target: "crontab",
-                            agent_uuid = %uuid,
-                            task_id,
-                            error = %e.1,
-                            "failed to send task event to agent"
-                        );
-                        Err(NodegetError::AgentConnectionError(format!(
-                            "Error sending task event: {}",
-                            e.1
-                        )))
-                    }
-                }
-            };
 
             // 执行逻辑并获取结果状态
             let (success, message, task_id) = match process_logic.await {

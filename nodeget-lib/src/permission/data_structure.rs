@@ -20,7 +20,7 @@ pub struct Token {
 }
 
 // 权限限制结构体，定义特定作用域下的权限集合
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Limit {
     // 作用域列表
@@ -44,7 +44,7 @@ pub enum Scope {
 }
 
 // 权限枚举，定义不同类型的操作权限
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Permission {
     // 静态监控权限
@@ -77,7 +77,7 @@ pub enum Permission {
 }
 
 // 静态监控权限枚举
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StaticMonitoring {
     // 读取权限，指定可读取的字段类型
@@ -89,7 +89,7 @@ pub enum StaticMonitoring {
 }
 
 // 动态监控权限枚举
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DynamicMonitoring {
     // 读取权限，指定可读取的字段类型
@@ -101,7 +101,7 @@ pub enum DynamicMonitoring {
 }
 
 // 动态监控摘要权限枚举
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DynamicMonitoringSummary {
     // 读取权限
@@ -115,7 +115,7 @@ pub enum DynamicMonitoringSummary {
 // 任务权限枚举
 // Type 字段名
 // 接受 ping / tcp_ping / http_ping / web_shell / execute / http_request / ip
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Task {
     // 创建权限，指定任务类型
@@ -131,7 +131,7 @@ pub enum Task {
 }
 
 // Crontab 权限枚举
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Crontab {
     Read,
@@ -141,7 +141,7 @@ pub enum Crontab {
 
 // CrontabResult 权限枚举
 // 注意：该权限仅在 Global Scope 下有效
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CrontabResult {
     // 读取权限，指定可读取的 cron_name
@@ -151,7 +151,7 @@ pub enum CrontabResult {
 }
 
 // Kv 权限枚举
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kv {
     ListAllNamespace,
@@ -162,7 +162,7 @@ pub enum Kv {
 }
 
 // Terminal 权限枚举
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Terminal {
     Connect,
@@ -171,7 +171,7 @@ pub enum Terminal {
 // NodeGet 权限枚举
 // 在 Global Scope 下可列出系统内全部 Agent UUID
 // 在 AgentUuid Scope 下可列出对应范围内的 Agent UUID（仍需方法层校验）
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NodeGet {
     // 列出所有 Agent Uuid
@@ -179,7 +179,7 @@ pub enum NodeGet {
     GetRtPool,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JsWorker {
     ListAllJsWorker,
@@ -191,7 +191,7 @@ pub enum JsWorker {
     RunRawJsWorker,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JsResult {
     Read(String),

@@ -25,59 +25,58 @@ fn verify_hash_constant_time(computed_hash: &str, stored_hash: &str) -> bool {
 pub async fn get_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<Token> {
     let cache = TokenCache::global();
 
-    let token_model = match token_or_auth {
+    let cached_token = match token_or_auth {
         TokenOrAuth::Token(key, secret) => {
-            let model = cache.find_by_key(key).await.ok_or_else(|| {
+            let entry = cache.find_by_key(key).await.ok_or_else(|| {
                 warn!(target: "auth", token_key = %key, "auth failed: token key not found");
                 NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned())
             })?;
 
             let computed_hash = hash_string(secret);
-            if !verify_hash_constant_time(&computed_hash, &model.token_hash) {
+            if !verify_hash_constant_time(&computed_hash, &entry.model.token_hash) {
                 warn!(target: "auth", token_key = %key, "auth failed: invalid token secret");
                 return Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into());
             }
 
             debug!(target: "auth", token_key = %key, "token secret verified successfully");
-            model
+            entry
         }
         TokenOrAuth::Auth(username, password) => {
-            let model = cache.find_by_username(username).await.ok_or_else(|| {
+            let entry = cache.find_by_username(username).await.ok_or_else(|| {
                 warn!(target: "auth", username = %username, "auth failed: username not found");
                 NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned())
             })?;
 
             let p_hash = hash_string(password);
-            let stored_hash = model.password_hash.as_deref().unwrap_or("");
+            let stored_hash = entry.model.password_hash.as_deref().unwrap_or("");
             if !verify_hash_constant_time(&p_hash, stored_hash) {
                 warn!(target: "auth", username = %username, "auth failed: invalid password");
                 return Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into());
             }
 
             debug!(target: "auth", username = %username, "password verified successfully");
-            model
+            entry
         }
     };
 
-    let token_limit = parse_token_limit_with_compat(token_model.token_limit)?;
-    debug!(target: "auth", token_key = %token_model.token_key, limits_count = token_limit.len(), "token authenticated successfully");
+    debug!(target: "auth", token_key = %cached_token.model.token_key, limits_count = cached_token.parsed_limits.len(), "token authenticated successfully");
 
     Ok(Token {
-        version: token_model.version,
-        token_key: token_model.token_key,
-        timestamp_from: token_model.time_stamp_from,
-        timestamp_to: token_model.time_stamp_to,
-        token_limit,
-        username: token_model.username,
+        version: cached_token.model.version,
+        token_key: cached_token.model.token_key.clone(),
+        timestamp_from: cached_token.model.time_stamp_from,
+        timestamp_to: cached_token.model.time_stamp_to,
+        token_limit: cached_token.parsed_limits.clone(),
+        username: cached_token.model.username.clone(),
     })
 }
 
 pub async fn get_token_by_key_or_username(identifier: &str) -> anyhow::Result<Token> {
     let cache = TokenCache::global();
 
-    let token_model = if let Some(model) = cache.find_by_key(identifier).await {
+    let cached_token = if let Some(entry) = cache.find_by_key(identifier).await {
         debug!(target: "auth", identifier = %identifier, "found token by key");
-        model
+        entry
     } else {
         cache.find_by_username(identifier).await.ok_or_else(|| {
             warn!(target: "auth", identifier = %identifier, "token not found by key or username");
@@ -85,16 +84,15 @@ pub async fn get_token_by_key_or_username(identifier: &str) -> anyhow::Result<To
         })?
     };
 
-    let token_limit = parse_token_limit_with_compat(token_model.token_limit)?;
-    debug!(target: "auth", identifier = %identifier, token_key = %token_model.token_key, "token resolved successfully");
+    debug!(target: "auth", identifier = %identifier, token_key = %cached_token.model.token_key, "token resolved successfully");
 
     Ok(Token {
-        version: token_model.version,
-        token_key: token_model.token_key,
-        timestamp_from: token_model.time_stamp_from,
-        timestamp_to: token_model.time_stamp_to,
-        token_limit,
-        username: token_model.username,
+        version: cached_token.model.version,
+        token_key: cached_token.model.token_key.clone(),
+        timestamp_from: cached_token.model.time_stamp_from,
+        timestamp_to: cached_token.model.time_stamp_to,
+        token_limit: cached_token.parsed_limits.clone(),
+        username: cached_token.model.username.clone(),
     })
 }
 

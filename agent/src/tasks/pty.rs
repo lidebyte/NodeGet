@@ -1,5 +1,5 @@
 use crate::AGENT_CONFIG;
-use futures::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use log::{error, info};
 use nodeget_lib::error::NodegetError;
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};

@@ -148,7 +148,8 @@
 
 ## Create Task Blocking
 
-`task_create_task_blocking` 是 `task_create_task` 的阻塞版本。创建任务后不立即返回 ID，而是等待 Agent 执行完毕并上传结果后，将完整的任务结果直接返回给调用者。
+`task_create_task_blocking` 是 `task_create_task` 的阻塞版本。创建任务后不立即返回 ID，而是等待 Agent
+执行完毕并上传结果后，将完整的任务结果直接返回给调用者。
 
 ### 方法
 

@@ -68,11 +68,7 @@ pub trait Rpc {
     ) -> RpcResult<Box<RawValue>>;
 
     #[method(name = "delete_namespace")]
-    async fn delete_namespace(
-        &self,
-        token: String,
-        namespace: String,
-    ) -> RpcResult<Box<RawValue>>;
+    async fn delete_namespace(&self, token: String, namespace: String) -> RpcResult<Box<RawValue>>;
 
     #[method(name = "get_all_keys")]
     async fn get_all_keys(&self, token: String, namespace: String) -> RpcResult<Box<RawValue>>;
@@ -147,11 +143,7 @@ impl RpcServer for KvRpcImpl {
             .await
     }
 
-    async fn delete_namespace(
-        &self,
-        token: String,
-        namespace: String,
-    ) -> RpcResult<Box<RawValue>> {
+    async fn delete_namespace(&self, token: String, namespace: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "kv", "kv::delete_namespace", token_key = tk, username = un, namespace = %namespace);
         async { rpc_exec!(delete_namespace::delete_namespace(token, namespace).await) }

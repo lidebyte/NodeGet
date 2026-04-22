@@ -560,7 +560,8 @@ mod list_all_agent_uuid {
         debug!(target: "server", "fetching all agent uuids");
         // Get UUIDs from monitoring_uuid cache (covers static/dynamic/summary)
         let uuid_cache = crate::monitoring_uuid_cache::MonitoringUuidCache::global();
-        let mut uuid_set: std::collections::BTreeSet<Uuid> = uuid_cache.get_all_uuids().await.into_iter().collect();
+        let mut uuid_set: std::collections::BTreeSet<Uuid> =
+            uuid_cache.get_all_uuids().await.into_iter().collect();
 
         // Also include UUIDs from task table (not covered by monitoring_uuid)
         let sql = r"SELECT uuid FROM task";
@@ -691,10 +692,7 @@ mod database_storage {
             ORDER BY t.name
         ";
 
-        let table_names: Vec<String> = TABLE_NAMES
-            .iter()
-            .map(ToString::to_string)
-            .collect();
+        let table_names: Vec<String> = TABLE_NAMES.iter().map(ToString::to_string).collect();
 
         let rows = TableSizeRow::find_by_statement(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,

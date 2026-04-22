@@ -68,10 +68,7 @@ pub async fn report_dynamic(
 
         debug!(target: "monitoring", agent_uuid = %dynamic_monitoring_data.uuid, "Received dynamic data, sending to buffer");
 
-        crate::monitoring_buffer::get()
-            .dynamic_mon
-            .send(in_data)
-            .map_err(|_| NodegetError::DatabaseError("Buffer closed".to_owned()))?;
+        crate::monitoring_buffer::get().dynamic_mon.send(in_data);
 
         debug!(target: "monitoring", agent_uuid = %dynamic_monitoring_data.uuid, "Dynamic data buffered successfully");
 

@@ -3,7 +3,7 @@ use crate::monitoring_uuid_cache::MonitoringUuidCache;
 use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::query::{QueryCondition, StaticDataQuery, StaticDataQueryField};
@@ -100,7 +100,9 @@ pub async fn query_static(
         for cond in &static_data_query.condition {
             if let QueryCondition::Uuid(uuid) = cond {
                 let uuid_id = uuid_cache.get_id(uuid).await.ok_or_else(|| {
-                    anyhow::anyhow!(NodegetError::NotFound(format!("Unknown agent UUID: {uuid}")))
+                    anyhow::anyhow!(NodegetError::NotFound(format!(
+                        "Unknown agent UUID: {uuid}"
+                    )))
                 })?;
                 uuid_ids.push(uuid_id);
             }

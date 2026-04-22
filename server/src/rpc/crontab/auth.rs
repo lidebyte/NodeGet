@@ -10,12 +10,10 @@ use tracing::{trace, warn};
 
 fn scopes_from_cron_type(cron_type: &CronType) -> anyhow::Result<Vec<Scope>> {
     let scopes = match cron_type {
-        CronType::Agent(uuids, _) => {
-            uuids
-                .iter()
-                .map(|uuid| Scope::AgentUuid(*uuid))
-                .collect::<Vec<_>>()
-        }
+        CronType::Agent(uuids, _) => uuids
+            .iter()
+            .map(|uuid| Scope::AgentUuid(*uuid))
+            .collect::<Vec<_>>(),
         CronType::Server(_) => vec![Scope::Global],
     };
 

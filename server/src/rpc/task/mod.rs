@@ -123,9 +123,13 @@ impl RpcServer for TaskRpcImpl {
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "task", "task::upload_task_result", token_key = tk, username = un, task_id = %task_response.task_id, agent_uuid = %task_response.agent_uuid);
-        async { rpc_exec!(upload_task_result::upload_task_result(&self.manager, token, task_response).await) }
-            .instrument(span)
-            .await
+        async {
+            rpc_exec!(
+                upload_task_result::upload_task_result(&self.manager, token, task_response).await
+            )
+        }
+        .instrument(span)
+        .await
     }
 
     async fn query(

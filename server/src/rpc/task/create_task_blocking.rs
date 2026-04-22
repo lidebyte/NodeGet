@@ -51,7 +51,7 @@ pub async fn create_task_blocking(
             return Err(NodegetError::PermissionDenied(format!(
                 "Permission Denied: Missing Task Create or Read ({task_name}) permission for this Agent"
             ))
-            .into());
+                .into());
         }
 
         let db = <super::TaskRpcImpl as RpcHelper>::get_db()?;
@@ -116,10 +116,10 @@ pub async fn create_task_blocking(
             Ok(Err(_)) => {
                 manager.remove_blocking_waiter(task_id_u64).await;
                 error!(target: "task", task_id = task_id_u64, "blocking waiter channel closed unexpectedly");
-                Err(NodegetError::Other(
-                    "Blocking waiter channel closed unexpectedly".to_owned(),
+                Err(
+                    NodegetError::Other("Blocking waiter channel closed unexpectedly".to_owned())
+                        .into(),
                 )
-                .into())
             }
             Err(_) => {
                 manager.remove_blocking_waiter(task_id_u64).await;

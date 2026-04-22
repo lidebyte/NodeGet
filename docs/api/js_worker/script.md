@@ -46,7 +46,8 @@ async function handler(params, env, ctx) {}
 - `ctx`：运行时上下文，当前包含：
     - `ctx.runType`：当前入口名（`"onCall"` / `"onInlineCall"` / `"onCron"` / `"onRoute"`）
     - `ctx.workerName`：当前 Worker 的名字
-    - `ctx.inlineCall(js_worker_name, params, timeout_sec?)`：调用另一个 JS Worker 的 `onInlineCall`，返回其结果；会写入 `js_result`
+    - `ctx.inlineCall(js_worker_name, params, timeout_sec?)`：调用另一个 JS Worker 的 `onInlineCall`，返回其结果；会写入
+      `js_result`
     - `ctx.inlineCaller`：调用者脚本名（如 A 通过 `inlineCall` 调 B，则 B 中该值为 `"A"`；顶层调用为 `null`）
 
 `onRoute` 入口签名：
@@ -73,7 +74,7 @@ async function onRoute(request, env, ctx) {}
     - `nodeget(json)` — 传入完整 JSON-RPC 请求（string 或 object）
     - `nodeget(method, params)` — 快捷方式，自动生成 id
     - `nodeget(method, params, id)` — 快捷方式，指定 id
-  返回解析后的 JS 对象。
+      返回解析后的 JS 对象。
 - `globalThis.randomUUID()`：已注入，生成随机 UUID v4 字符串。
 - `ctx.inlineCall`：已注入，可 `await` 调用指定 `js_worker` 的 `onInlineCall`。
 - 更多注入函数/对象见 [injected](./injected.md)。

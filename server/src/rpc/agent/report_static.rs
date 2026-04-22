@@ -46,7 +46,20 @@ pub async fn report_static(
             .await
             .map_err(|e| NodegetError::DatabaseError(format!("UUID cache error: {e}")))?;
 
-        // 检查该 uuid + data_hash 是否已存在，若存在则跳过写入
+        // Fast path: check in-memory hash cache first to avoid DB query
+        let hash_cache = crate::static_hash_cache::StaticHashCache::global();
+        if hash_cache
+            .is_duplicate(uuid_id, &static_monitoring_data.data_hash)
+            .await
+        {
+            debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Static data hash cached as duplicate, skipping");
+            return RawValue::from_string(
+                r#"{"status":"skipped","reason":"duplicate_hash"}"#.to_owned(),
+            )
+            .map_err(|e| NodegetError::SerializationError(e.to_string()).into());
+        }
+
+        // Slow path: check DB for hash existence (covers hashes from before cache was populated)
         let db = <AgentRpcImpl as crate::rpc::RpcHelper>::get_db()?;
         let exists = static_monitoring::Entity::find()
             .filter(static_monitoring::Column::UuidId.eq(uuid_id))
@@ -59,9 +72,15 @@ pub async fn report_static(
             })?;
 
         if exists.is_some() {
+            // Update cache so next time we skip the DB query
+            hash_cache
+                .update(uuid_id, static_monitoring_data.data_hash.clone())
+                .await;
             debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Static data hash already exists, skipping");
-            return RawValue::from_string(r#"{"status":"skipped","reason":"duplicate_hash"}"#.to_owned())
-                .map_err(|e| NodegetError::SerializationError(e.to_string()).into());
+            return RawValue::from_string(
+                r#"{"status":"skipped","reason":"duplicate_hash"}"#.to_owned(),
+            )
+            .map_err(|e| NodegetError::SerializationError(e.to_string()).into());
         }
 
         let data_hash = static_monitoring_data.data_hash;
@@ -75,15 +94,15 @@ pub async fn report_static(
                 .map_err(|e| NodegetError::SerializationError(format!("system_data: {e}")))?,
             gpu_data: AgentRpcImpl::try_set_json(static_monitoring_data.gpu)
                 .map_err(|e| NodegetError::SerializationError(format!("gpu_data: {e}")))?,
-            data_hash: Set(data_hash),
+            data_hash: Set(data_hash.clone()),
         };
 
         debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Received static data, sending to buffer");
 
-        crate::monitoring_buffer::get()
-            .static_mon
-            .send(in_data)
-            .map_err(|_| NodegetError::DatabaseError("Buffer closed".to_owned()))?;
+        crate::monitoring_buffer::get().static_mon.send(in_data);
+
+        // Update hash cache after successful buffer
+        hash_cache.update(uuid_id, data_hash).await;
 
         debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Static data buffered successfully");
 

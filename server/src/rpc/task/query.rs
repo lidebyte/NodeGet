@@ -2,7 +2,7 @@ use crate::entity::task;
 use crate::rpc::RpcHelper;
 use crate::rpc::task::TaskRpcImpl;
 use crate::token::get::check_token_limit;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::data_structure::{Permission, Scope, Task};

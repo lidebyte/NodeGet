@@ -20,6 +20,7 @@ jobs:
   server-release:
     name: Build - ${{ matrix.platform.release_for }}
     strategy:
+      fail-fast: false
       matrix:
         platform:
           - release_for: linux_x86_64_musl
@@ -40,24 +41,6 @@ jobs:
           - release_for: linux_aarch64_musl
             target: aarch64-unknown-linux-musl
             binary_name: nodeget-server-linux-aarch64-musl
-          - release_for: linux_i686_gnu
-            target: i686-unknown-linux-gnu
-            binary_name: nodeget-server-linux-i686-gnu
-          - release_for: linux_i686_musl
-            target: i686-unknown-linux-musl
-            binary_name: nodeget-server-linux-i686-musl
-          - release_for: linux_arm_musleabi
-            target: arm-unknown-linux-musleabi
-            binary_name: nodeget-server-linux-arm-musleabi
-          - release_for: linux_arm_musleabihf
-            target: arm-unknown-linux-musleabihf
-            binary_name: nodeget-server-linux-arm-musleabihf
-          - release_for: linux_armv5te_gnu
-            target: armv5te-unknown-linux-gnueabi
-            binary_name: nodeget-server-linux-armv5te-gnueabi
-          - release_for: linux_armv5te_musl
-            target: armv5te-unknown-linux-musleabi
-            binary_name: nodeget-server-linux-armv5te-musleabi
           - release_for: linux_armv7_gnueabi
             target: armv7-unknown-linux-gnueabi
             binary_name: nodeget-server-linux-armv7-gnueabi
@@ -87,7 +70,7 @@ jobs:
 
       - name: Build binary
         working-directory: ./server
-        run: cargo clean && cross build --target ${{ matrix.platform.target }} --profile minimal --jobs 32 --locked
+        run: cargo clean && cross build --target ${{ matrix.platform.target }} --profile minimal --jobs 32
         env:
           CROSS_NO_WARNINGS: 0
 
@@ -100,6 +83,107 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform.target }}
+          name: server-${{ matrix.platform.target }}
+          path: target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
+          if-no-files-found: error
+
+  release-dev:
+    name: Release Dev
+    needs: [server-release, server-windows, server-macos]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: server-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Upload to dev release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev
+          name: "Dev Build (Latest)"
+          prerelease: true
+          make_latest: false
+          body: "Automated dev build from `${{ github.sha }}`"
+          files: artifacts/*
+
+  server-windows:
+    name: Build - ${{ matrix.platform.release_for }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - release_for: windows_x86_64
+            target: x86_64-pc-windows-msvc
+            binary_name: nodeget-server-windows-x86_64.exe
+          - release_for: windows_aarch64
+            target: aarch64-pc-windows-msvc
+            binary_name: nodeget-server-windows-aarch64.exe
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.platform.target }}
+
+      - name: Build binary
+        working-directory: ./server
+        run: cargo build --target ${{ matrix.platform.target }} --profile minimal
+
+      - name: Rename binary
+        run: copy target\${{ matrix.platform.target }}\minimal\nodeget-server.exe target\${{ matrix.platform.target }}\minimal\${{ matrix.platform.binary_name }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.platform.target }}
+          path: target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
+          if-no-files-found: error
+
+  server-macos:
+    name: Build - ${{ matrix.platform.release_for }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - release_for: macos_x86_64
+            target: x86_64-apple-darwin
+            binary_name: nodeget-server-macos-x86_64
+            runner: macos-13
+          - release_for: macos_aarch64
+            target: aarch64-apple-darwin
+            binary_name: nodeget-server-macos-aarch64
+            runner: macos-latest
+    runs-on: ${{ matrix.platform.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.platform.target }}
+
+      - name: Build binary
+        working-directory: ./server
+        run: cargo build --target ${{ matrix.platform.target }} --profile minimal
+
+      - name: Rename binary
+        run: cp target/${{ matrix.platform.target }}/minimal/nodeget-server target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.platform.target }}
           path: target/${{ matrix.platform.target }}/minimal/${{ matrix.platform.binary_name }}
           if-no-files-found: error

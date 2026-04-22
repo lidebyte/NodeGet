@@ -23,29 +23,24 @@ pub async fn edit(
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
         debug!(target: "crontab", name = %name, "processing crontab edit request");
-        if let Err(e) = Schedule::from_str(&cron_expression) {
-            return Err(NodegetError::ParseError(format!("Invalid cron expression: {e}")).into());
-        }
-
-        debug!(target: "crontab", name = %name, cron_expression = %cron_expression, "Cron expression validated");
-
+        // 1. 先验证 Token 格式（低成本操作）
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
         let db = CrontabRpcImpl::get_db()?;
 
-        let model = crontab::Entity::find()
+        // 查询原有 cron 的类型，用于覆盖旧 Scope 的权限检查
+        let original_model = crontab::Entity::find()
             .filter(crontab::Column::Name.eq(&name))
             .one(db)
             .await
-            .map_err(|e| NodegetError::DatabaseError(e.to_string()))?
+            .map_err(|e| NodegetError::DatabaseError(format!("{e}")))?
             .ok_or_else(|| NodegetError::NotFound(format!("Crontab not found: {name}")))?;
 
-        debug!(target: "crontab", id = model.id, name = %name, "Crontab found for editing");
+        let original_cron_type = parse_cron_type(&original_model.cron_type, &name)?;
 
-        let original_cron_type = parse_cron_type(&model.cron_type, &name)?;
-
-        // 编辑已有 Crontab 前，必须覆盖其原有全部 Scope。
+        // 2. 检查权限（防止未授权访问）
+        // 编辑已有 Crontab 前，必须覆盖其原有全部 Scope
         ensure_crontab_scope_permission(
             &token_or_auth,
             &original_cron_type,
@@ -54,11 +49,19 @@ pub async fn edit(
         )
         .await?;
 
-        // 新配置本身也必须满足完整 Scope + Task(Create) 写入权限。
+        // 新配置本身也必须满足完整 Scope + Task(Create) 写入权限
         ensure_crontab_payload_write_permission(&token_or_auth, &cron_type).await?;
         debug!(target: "crontab", name = %name, "Crontab edit permission checks passed");
 
-        let mut active_model: crontab::ActiveModel = model.into();
+        // 3. 最后验证 Cron 表达式（高成本操作，防止 DoS）
+        if let Err(e) = Schedule::from_str(&cron_expression) {
+            return Err(NodegetError::ParseError(format!("Invalid cron expression: {e}")).into());
+        }
+
+        debug!(target: "crontab", name = %name, cron_expression = %cron_expression, "Cron expression validated");
+        debug!(target: "crontab", id = original_model.id, name = %name, "Crontab found for editing");
+
+        let mut active_model: crontab::ActiveModel = original_model.into();
         active_model.cron_expression = Set(cron_expression);
         active_model.cron_type = CrontabRpcImpl::try_set_json(&cron_type)
             .map_err(|e| NodegetError::SerializationError(e.to_string()))?;
@@ -69,6 +72,10 @@ pub async fn edit(
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
         debug!(target: "crontab", id = updated.id, name = %name, "Crontab edited successfully");
+
+        if let Err(e) = crate::crontab::cache::CrontabCache::reload().await {
+            tracing::error!(target: "crontab", error = %e, "failed to reload crontab cache after edit");
+        }
 
         let json_str = format!("{{\"id\":{},\"success\":true}}", updated.id);
         RawValue::from_string(json_str)

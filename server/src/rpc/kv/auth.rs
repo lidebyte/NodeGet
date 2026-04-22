@@ -282,22 +282,18 @@ pub async fn check_kv_delete_namespace_permission(
 
     let scope = Scope::KvNamespace(namespace.to_owned());
     let global_delete_perm = Permission::Kv(Kv::Delete("*".to_owned()));
-    let has_global_delete = check_token_limit(
-        &token_or_auth,
-        vec![scope],
-        vec![global_delete_perm],
-    )
-    .await?;
+    let has_global_delete =
+        check_token_limit(&token_or_auth, vec![scope], vec![global_delete_perm]).await?;
 
     if has_global_delete {
         return Ok(());
     }
 
     warn!(target: "kv", namespace = %namespace, "delete namespace permission denied");
-    Err(NodegetError::PermissionDenied(format!(
-        "No permission to delete namespace '{namespace}'"
-    ))
-    .into())
+    Err(
+        NodegetError::PermissionDenied(format!("No permission to delete namespace '{namespace}'"))
+            .into(),
+    )
 }
 
 /// 检查是否有列出所有 keys 的权限

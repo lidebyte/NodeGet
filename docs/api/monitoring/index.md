@@ -372,8 +372,10 @@ JSON 示例：
 
 - **StaticDataQueryField**: `cpu` / `system` / `gpu`
 - **DynamicDataQueryField**: `cpu` / `ram` / `load` / `system` / `disk` / `network` / `gpu`
-- **DynamicSummaryQueryField**: `cpu_usage` / `gpu_usage` / `used_swap` / `total_swap` / `used_memory` / `total_memory` /
-  `available_memory` / `load_one` / `load_five` / `load_fifteen` / `uptime` / `boot_time` / `process_count` / `total_space` /
+- **DynamicSummaryQueryField**: `cpu_usage` / `gpu_usage` / `used_swap` / `total_swap` / `used_memory` /
+  `total_memory` /
+  `available_memory` / `load_one` / `load_five` / `load_fifteen` / `uptime` / `boot_time` / `process_count` /
+  `total_space` /
   `available_space` / `read_speed` / `write_speed` / `tcp_connections` / `udp_connections` / `total_received` /
   `total_transmitted` / `transmit_speed` / `receive_speed`
 

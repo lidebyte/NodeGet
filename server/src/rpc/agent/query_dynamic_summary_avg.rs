@@ -1,26 +1,19 @@
 use crate::monitoring_uuid_cache::MonitoringUuidCache;
 use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
+use crate::rpc::agent::generate_avg_error_id;
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::query::{DynamicSummaryAvgQuery, DynamicSummaryQueryField};
-use nodeget_lib::permission::data_structure::{
-    DynamicMonitoringSummary, Permission, Scope,
-};
+use nodeget_lib::permission::data_structure::{DynamicMonitoringSummary, Permission, Scope};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::error_message::anyhow_error_to_raw;
 use sea_orm::{DatabaseBackend, DatabaseConnection, FromQueryResult, Statement};
 use serde_json::Value;
 use serde_json::value::RawValue;
 use std::fmt::Write;
-use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::{debug, error, warn};
-
-static ERROR_COUNTER: AtomicU64 = AtomicU64::new(0);
-fn generate_error_id() -> u64 {
-    ERROR_COUNTER.fetch_add(1, Ordering::SeqCst)
-}
 
 #[derive(Debug, FromQueryResult)]
 struct JsonAggRow {
@@ -69,7 +62,10 @@ pub async fn query_dynamic_summary_avg(
 
         let uuid_cache = MonitoringUuidCache::global();
         let uuid_id = uuid_cache.get_id(&query.uuid).await.ok_or_else(|| {
-            NodegetError::NotFound(format!("Agent UUID {} not found in monitoring_uuid table", query.uuid))
+            NodegetError::NotFound(format!(
+                "Agent UUID {} not found in monitoring_uuid table",
+                query.uuid
+            ))
         })?;
 
         let db = AgentRpcImpl::get_db()?;
@@ -131,8 +127,7 @@ fn ensure_postgres_backend(db: &DatabaseConnection) -> anyhow::Result<()> {
     }
 
     Err(NodegetError::InvalidInput(
-        "agent_query_dynamic_summary_avg currently only supports PostgreSQL"
-            .to_owned(),
+        "agent_query_dynamic_summary_avg currently only supports PostgreSQL".to_owned(),
     )
     .into())
 }
@@ -162,13 +157,17 @@ async fn query_summary_avg_postgres(
         .one(db)
         .await
         .map_err(|e| {
-            let error_id = generate_error_id();
+            let error_id = generate_avg_error_id();
             tracing::error!(target: "monitoring", error_id = error_id, error = %e, "Failed to query dynamic summary avg in postgres");
             NodegetError::DatabaseError(format!("Database error occurred. Reference: {error_id}"))
         })?;
 
     let json = row.map_or(Value::Array(Vec::new()), |r| r.data);
-    let result_count = if let Value::Array(ref arr) = json { arr.len() } else { 1 };
+    let result_count = if let Value::Array(ref arr) = json {
+        arr.len()
+    } else {
+        1
+    };
     let json = serde_json::to_string(&json)
         .map_err(|e| NodegetError::SerializationError(format!("Serialization failed: {e}")))?;
 

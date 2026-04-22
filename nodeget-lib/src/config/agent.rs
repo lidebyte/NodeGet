@@ -100,11 +100,7 @@ impl AgentConfig {
             let mut seen = HashSet::with_capacity(servers.len());
             for server in servers {
                 if !seen.insert(&server.name) {
-                    return Err(format!(
-                        "Duplicate server name '{}' in config",
-                        server.name
-                    )
-                    .into());
+                    return Err(format!("Duplicate server name '{}' in config", server.name).into());
                 }
             }
         }
@@ -120,7 +116,7 @@ impl AgentConfig {
                 return Err(format!(
                     "dynamic_report_interval_ms ({dynamic_interval}) must be an integer multiple of dynamic_summary_report_interval_ms ({summary_interval})"
                 )
-                .into());
+                    .into());
             }
         }
 

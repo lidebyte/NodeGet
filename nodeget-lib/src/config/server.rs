@@ -30,6 +30,12 @@ pub struct ServerConfig {
 
     // 监控数据缓冲写入配置（可选）
     pub monitoring_buffer: Option<MonitoringBufferConfig>,
+
+    // JSON-RPC 最大请求体大小（字节），默认 10485760（10MB）
+    pub max_request_body_size: Option<u32>,
+
+    // JSON-RPC 最大响应体大小（字节），默认 10485760（10MB）
+    pub max_response_body_size: Option<u32>,
 }
 
 /// 监控数据缓冲写入配置

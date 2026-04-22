@@ -1,18 +1,17 @@
 use crate::entity::dynamic_monitoring_summary;
-use crate::monitoring_uuid_cache::MonitoringUuidCache;
 use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
+use crate::rpc::agent::delete_common::{
+    ResolvedCondition, extract_limit_and_last, resolve_conditions, scopes_from_conditions,
+};
 use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::query::QueryCondition;
-use nodeget_lib::permission::data_structure::{
-    DynamicMonitoringSummary, Permission, Scope,
-};
+use nodeget_lib::permission::data_structure::{DynamicMonitoringSummary, Permission};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use sea_orm::{ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde_json::value::RawValue;
-use std::collections::HashSet;
 use tracing::{debug, error};
 
 pub async fn delete_dynamic_summary(
@@ -36,36 +35,15 @@ pub async fn delete_dynamic_summary(
 
         if !is_allowed {
             return Err(NodegetError::PermissionDenied(
-                "Permission Denied: Missing DynamicMonitoringSummary Delete permission"
-                    .to_owned(),
+                "Permission Denied: Missing DynamicMonitoringSummary Delete permission".to_owned(),
             )
             .into());
         }
         debug!(target: "monitoring", "delete_dynamic_summary: permission check passed");
 
         let db = AgentRpcImpl::get_db()?;
-        let uuid_cache = MonitoringUuidCache::global();
         let (limit_count, is_last) = extract_limit_and_last(&conditions);
-
-        // Pre-resolve UUID conditions to uuid_ids
-        let resolved_conditions: Vec<ResolvedCondition> = {
-            let mut resolved = Vec::with_capacity(conditions.len());
-            for cond in &conditions {
-                match cond {
-                    QueryCondition::Uuid(uuid) => {
-                        let uuid_id = uuid_cache.get_id(uuid).await.ok_or_else(|| {
-                            NodegetError::NotFound(format!("Agent UUID not found in monitoring registry: {uuid}"))
-                        })?;
-                        resolved.push(ResolvedCondition::UuidId(uuid_id));
-                    }
-                    QueryCondition::TimestampFromTo(s, e) => resolved.push(ResolvedCondition::TimestampFromTo(*s, *e)),
-                    QueryCondition::TimestampFrom(s) => resolved.push(ResolvedCondition::TimestampFrom(*s)),
-                    QueryCondition::TimestampTo(e) => resolved.push(ResolvedCondition::TimestampTo(*e)),
-                    QueryCondition::Limit(_) | QueryCondition::Last => {}
-                }
-            }
-            resolved
-        };
+        let resolved_conditions = resolve_conditions(&conditions).await?;
 
         debug!(target: "monitoring", ?limit_count, is_last, "delete_dynamic_summary: executing delete");
 
@@ -74,9 +52,8 @@ pub async fn delete_dynamic_summary(
             for cond in &resolved_conditions {
                 match cond {
                     ResolvedCondition::UuidId(uuid_id) => {
-                        query = query.filter(
-                            dynamic_monitoring_summary::Column::UuidId.eq(*uuid_id),
-                        );
+                        query =
+                            query.filter(dynamic_monitoring_summary::Column::UuidId.eq(*uuid_id));
                     }
                     ResolvedCondition::TimestampFromTo(start, end) => {
                         query = query.filter(
@@ -86,14 +63,12 @@ pub async fn delete_dynamic_summary(
                         );
                     }
                     ResolvedCondition::TimestampFrom(start) => {
-                        query = query.filter(
-                            dynamic_monitoring_summary::Column::Timestamp.gte(*start),
-                        );
+                        query =
+                            query.filter(dynamic_monitoring_summary::Column::Timestamp.gte(*start));
                     }
                     ResolvedCondition::TimestampTo(end) => {
-                        query = query.filter(
-                            dynamic_monitoring_summary::Column::Timestamp.lte(*end),
-                        );
+                        query =
+                            query.filter(dynamic_monitoring_summary::Column::Timestamp.lte(*end));
                     }
                 }
             }
@@ -132,9 +107,8 @@ pub async fn delete_dynamic_summary(
             for cond in &resolved_conditions {
                 match cond {
                     ResolvedCondition::UuidId(uuid_id) => {
-                        query = query.filter(
-                            dynamic_monitoring_summary::Column::UuidId.eq(*uuid_id),
-                        );
+                        query =
+                            query.filter(dynamic_monitoring_summary::Column::UuidId.eq(*uuid_id));
                     }
                     ResolvedCondition::TimestampFromTo(start, end) => {
                         query = query.filter(
@@ -144,14 +118,12 @@ pub async fn delete_dynamic_summary(
                         );
                     }
                     ResolvedCondition::TimestampFrom(start) => {
-                        query = query.filter(
-                            dynamic_monitoring_summary::Column::Timestamp.gte(*start),
-                        );
+                        query =
+                            query.filter(dynamic_monitoring_summary::Column::Timestamp.gte(*start));
                     }
                     ResolvedCondition::TimestampTo(end) => {
-                        query = query.filter(
-                            dynamic_monitoring_summary::Column::Timestamp.lte(*end),
-                        );
+                        query =
+                            query.filter(dynamic_monitoring_summary::Column::Timestamp.lte(*end));
                     }
                 }
             }
@@ -187,49 +159,4 @@ pub async fn delete_dynamic_summary(
             ))
         }
     }
-}
-
-fn scopes_from_conditions(conditions: &[QueryCondition]) -> Vec<Scope> {
-    let mut seen = HashSet::new();
-    let mut scopes = Vec::new();
-
-    for cond in conditions {
-        if let QueryCondition::Uuid(uuid) = cond
-            && seen.insert(*uuid)
-        {
-            scopes.push(Scope::AgentUuid(*uuid));
-        }
-    }
-
-    if scopes.is_empty() {
-        scopes.push(Scope::Global);
-    }
-
-    scopes
-}
-
-fn extract_limit_and_last(conditions: &[QueryCondition]) -> (Option<u64>, bool) {
-    let mut limit_count = None;
-    let mut is_last = false;
-
-    for cond in conditions {
-        match cond {
-            QueryCondition::Limit(n) => {
-                limit_count = Some(*n);
-            }
-            QueryCondition::Last => {
-                is_last = true;
-            }
-            _ => {}
-        }
-    }
-
-    (limit_count, is_last)
-}
-
-enum ResolvedCondition {
-    UuidId(i16),
-    TimestampFromTo(i64, i64),
-    TimestampFrom(i64),
-    TimestampTo(i64),
 }

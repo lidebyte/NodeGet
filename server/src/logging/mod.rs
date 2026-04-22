@@ -7,16 +7,15 @@ use nodeget_lib::config::server::LoggingConfig;
 use tracing::field::{Field, Visit};
 use tracing::{Event, Metadata, Subscriber};
 use tracing_subscriber::{
+    EnvFilter, Layer,
     fmt::{
-        self,
+        self, FmtContext, FormattedFields,
         format::{self, FormatEvent, FormatFields},
         time::{ChronoLocal, FormatTime},
-        FmtContext, FormattedFields,
     },
     layer::SubscriberExt,
     registry::LookupSpan,
     util::SubscriberInitExt,
-    EnvFilter, Layer,
 };
 use uuid::Uuid;
 

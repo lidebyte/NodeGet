@@ -517,7 +517,8 @@
 
 - 语法与 `RUST_LOG` 环境变量相同，支持 `target=level` 的逗号分隔组合
 - 支持虚拟 target `db`，会自动展开为 `sea_orm` / `sea_orm_migration` / `sqlx`
-- 可用的 target: `server`, `rpc`, `db`, `kv`, `monitoring`, `task`, `token`, `js_worker`, `js_result`, `crontab`, `crontab_result`, `js_runtime`, `terminal`
+- 可用的 target: `server`, `rpc`, `db`, `kv`, `monitoring`, `task`, `token`, `js_worker`, `js_result`, `crontab`,
+  `crontab_result`, `js_runtime`, `terminal`
 - 示例: `"info"` 接收所有 INFO 及以上级别，`"debug,db=trace"` 接收 DEBUG 级别 + 数据库 TRACE 级别
 
 ### 权限要求
@@ -533,7 +534,8 @@
 
 ### 返回值
 
-订阅建立成功后，服务端通过 WebSocket 持续推送 JSON-RPC notification，每条 notification 的 `params.result` 为一个日志事件对象:
+订阅建立成功后，服务端通过 WebSocket 持续推送 JSON-RPC notification，每条 notification 的 `params.result`
+为一个日志事件对象:
 
 - `timestamp`: ISO 8601 格式的时间戳（含时区）
 - `level`: 日志级别（`TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`）

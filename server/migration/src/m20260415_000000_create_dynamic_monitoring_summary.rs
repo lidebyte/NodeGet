@@ -42,7 +42,11 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(DynamicMonitoringSummary::Table)
                     .if_not_exists()
-                    .col(big_integer(DynamicMonitoringSummary::Id).auto_increment().primary_key())
+                    .col(
+                        big_integer(DynamicMonitoringSummary::Id)
+                            .auto_increment()
+                            .primary_key(),
+                    )
                     .col(small_integer(DynamicMonitoringSummary::UuidId))
                     .col(big_integer(DynamicMonitoringSummary::Timestamp))
                     .col(small_integer_null(DynamicMonitoringSummary::CpuUsage))

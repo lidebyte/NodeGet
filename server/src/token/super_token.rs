@@ -140,19 +140,21 @@ pub async fn roll_super_token() -> anyhow::Result<(String, String)> {
 // 返回布尔值表示是否为超级令牌，失败时返回错误消息
 pub async fn check_super_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<bool> {
     let cache = TokenCache::global();
-    let super_record = cache.get_super_token().await.ok_or_else(|| {
+    let super_entry = cache.get_super_token().await.ok_or_else(|| {
         NodegetError::NotFound("Super Token record (ID 1) not found in cache".to_owned())
     })?;
 
     match token_or_auth {
         TokenOrAuth::Token(key, secret) => {
-            let is_super = key == &super_record.token_key && hash_string(secret) == super_record.token_hash;
+            let is_super = key == &super_entry.model.token_key
+                && hash_string(secret) == super_entry.model.token_hash;
             debug!(target: "token", is_super, "Super token check completed (token auth)");
             Ok(is_super)
         }
         TokenOrAuth::Auth(username, password) => {
-            let is_super = Some(username.clone()) == super_record.username
-                && Some(hash_string(password)) == super_record.password_hash;
+            let is_super = super_entry.model.username.as_deref() == Some(username.as_str())
+                && super_entry.model.password_hash.as_deref()
+                    == Some(hash_string(password).as_str());
             debug!(target: "token", is_super, "Super token check completed (basic auth)");
             Ok(is_super)
         }

@@ -421,9 +421,11 @@
 
 创建一个新的 Kv Namespace，该操作仅限 Super Token 使用。
 
-创建 Namespace 的本质是在 KV 表中写入一条 key 为 `__nodeget_namespace_marker__`、value 为 `null` 的占位记录。Server 通过该记录判断 Namespace 是否存在。
+创建 Namespace 的本质是在 KV 表中写入一条 key 为 `__nodeget_namespace_marker__`、value 为 `null` 的占位记录。Server
+通过该记录判断 Namespace 是否存在。
 
-该 key 是公开可见的：通过 `kv_get_all_keys` 和 `kv_get_value` 均可读取到。用户也可以通过 `kv_set_value` 修改其 value，或通过 `kv_delete_key` 删除它（删除后该 Namespace 将被视为不存在）。
+该 key 是公开可见的：通过 `kv_get_all_keys` 和 `kv_get_value` 均可读取到。用户也可以通过 `kv_set_value` 修改其 value，或通过
+`kv_delete_key` 删除它（删除后该 Namespace 将被视为不存在）。
 
 ### 方法
 

@@ -318,7 +318,10 @@ pub async fn enqueue_source_js_worker_run(
             }
             Err(e) => {
                 error!(target: "js_worker", js_result_id, worker = %worker_name_in_spawn, duration_ms, error = %e, "Source mode JS execution failed");
-                (None, Some(format!("JavaScript runtime execution failed: {e}")))
+                (
+                    None,
+                    Some(format!("JavaScript runtime execution failed: {e}")),
+                )
             }
         };
 

@@ -1,5 +1,4 @@
 use crate::token::cache::TokenCache;
-use crate::token::get::parse_token_limit_with_compat;
 use crate::token::super_token::check_super_token;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
@@ -32,29 +31,19 @@ pub async fn list_all_tokens(token: String) -> RpcResult<Box<RawValue>> {
             .into());
         }
 
-        let token_models = TokenCache::global().get_all().await;
+        let cached_tokens = TokenCache::global().get_all().await;
 
-        let tokens = token_models
-            .into_iter()
-            .map(|model| -> anyhow::Result<Token> {
-                let token_limit =
-                    parse_token_limit_with_compat(model.token_limit).map_err(|e| {
-                        NodegetError::SerializationError(format!(
-                            "Failed to parse token_limit for token '{}': {e}",
-                            model.token_key
-                        ))
-                    })?;
-
-                Ok(Token {
-                    version: model.version,
-                    token_key: model.token_key,
-                    timestamp_from: model.time_stamp_from,
-                    timestamp_to: model.time_stamp_to,
-                    token_limit,
-                    username: model.username,
-                })
+        let tokens: Vec<Token> = cached_tokens
+            .iter()
+            .map(|entry| Token {
+                version: entry.model.version,
+                token_key: entry.model.token_key.clone(),
+                timestamp_from: entry.model.time_stamp_from,
+                timestamp_to: entry.model.time_stamp_to,
+                token_limit: entry.parsed_limits.clone(),
+                username: entry.model.username.clone(),
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect();
 
         let response = ListAllTokensResponse { tokens };
 

@@ -26,12 +26,9 @@ impl MonitoringUuidCache {
             NodegetError::ConfigNotFound("Database connection not initialized".to_owned())
         })?;
 
-        let all = monitoring_uuid::Entity::find()
-            .all(db)
-            .await
-            .map_err(|e| {
-                NodegetError::DatabaseError(format!("Failed to load monitoring_uuid: {e}"))
-            })?;
+        let all = monitoring_uuid::Entity::find().all(db).await.map_err(|e| {
+            NodegetError::DatabaseError(format!("Failed to load monitoring_uuid: {e}"))
+        })?;
 
         let mut by_uuid = HashMap::with_capacity(all.len());
         let mut by_id = HashMap::with_capacity(all.len());
@@ -72,12 +69,9 @@ impl MonitoringUuidCache {
             NodegetError::ConfigNotFound("Database connection not initialized".to_owned())
         })?;
 
-        let all = monitoring_uuid::Entity::find()
-            .all(db)
-            .await
-            .map_err(|e| {
-                NodegetError::DatabaseError(format!("Failed to reload monitoring_uuid: {e}"))
-            })?;
+        let all = monitoring_uuid::Entity::find().all(db).await.map_err(|e| {
+            NodegetError::DatabaseError(format!("Failed to reload monitoring_uuid: {e}"))
+        })?;
 
         let mut by_uuid = HashMap::with_capacity(all.len());
         let mut by_id = HashMap::with_capacity(all.len());

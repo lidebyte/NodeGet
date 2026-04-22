@@ -40,8 +40,7 @@ pub async fn cleanup_expired_data_postgres(db: &DatabaseConnection) -> Result<Cl
 
         // 清理 dynamic_monitoring_summary
         if let Some(limit) = config.dynamic_monitoring_summary_limit {
-            let deleted =
-                cleanup_dynamic_monitoring_summary(db, &config.agent_uuid, limit).await?;
+            let deleted = cleanup_dynamic_monitoring_summary(db, &config.agent_uuid, limit).await?;
             result.dynamic_monitoring_summary += deleted;
         }
 

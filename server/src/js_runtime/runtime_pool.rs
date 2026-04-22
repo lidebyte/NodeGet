@@ -415,7 +415,7 @@ async fn execute_on_worker(
         .ok_or_else(|| js_error("js_runtime", "Runtime state is missing"))?;
 
     if state.loaded_bytecode_hash != Some(bytecode_hash) {
-        let load_result: Result<(), Error> = rquickjs::async_with!(state.ctx => |ctx| {
+        let load_result: Result<(), Error> = state.ctx.async_with(async |ctx| {
             let declared_module = enrich_exception(&ctx, "js_load", unsafe {
                 Module::load(ctx.clone(), &bytecode)
             })?;
@@ -442,7 +442,7 @@ async fn execute_on_worker(
         state.loaded_bytecode_hash = Some(bytecode_hash);
     }
 
-    let run_result: Result<Value, Error> = rquickjs::async_with!(state.ctx => |ctx| {
+    let run_result: Result<Value, Error> = state.ctx.async_with(async |ctx| {
         let run_type_handler = run_type.handler_name().to_owned();
         ctx.globals().set("__nodeget_run_handler", run_type_handler)?;
 
@@ -618,7 +618,7 @@ async fn create_runtime_state() -> Result<RuntimeState, Error> {
     rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
     let ctx = AsyncContext::full(&rt).await?;
 
-    let init_result: Result<(), Error> = rquickjs::async_with!(ctx => |ctx| {
+    let init_result: Result<(), Error> = ctx.async_with(async |ctx| {
         init_js_runtime_globals(&ctx)
     })
     .await;

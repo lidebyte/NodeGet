@@ -4,12 +4,12 @@ Task 是本项目的重要功能之一，也可以称为 `任务` 等
 
 ## 方法列表
 
-| 方法名                                       | 描述             |
-|-------------------------------------------|----------------|
-| [task_create_task](./crud.md#create-task) | 创建并下发任务给 Agent |
+| 方法名                                                         | 描述                   |
+|-------------------------------------------------------------|----------------------|
+| [task_create_task](./crud.md#create-task)                   | 创建并下发任务给 Agent       |
 | [task_create_task_blocking](./crud.md#create-task-blocking) | 创建任务并阻塞等待 Agent 返回结果 |
-| [task_query_task](./crud.md#query-task)   | 查询任务执行记录       |
-| [task_delete_task](./crud.md#delete-task) | 删除任务执行记录       |
+| [task_query_task](./crud.md#query-task)                     | 查询任务执行记录             |
+| [task_delete_task](./crud.md#delete-task)                   | 删除任务执行记录             |
 
 Agent 端实现请参考 [agent.md](./agent.md)。
 

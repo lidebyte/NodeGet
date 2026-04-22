@@ -3,19 +3,17 @@ use crate::monitoring_uuid_cache::MonitoringUuidCache;
 use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::query::DynamicSummaryQueryField;
-use nodeget_lib::permission::data_structure::{
-    DynamicMonitoringSummary, Permission, Scope,
-};
+use nodeget_lib::permission::data_structure::{DynamicMonitoringSummary, Permission, Scope};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::error_message::anyhow_error_to_raw;
 use sea_orm::sea_query::{Alias, Expr, Query, SelectStatement, UnionType};
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, FromQueryResult, Order, QueryFilter, QueryOrder,
-    QuerySelect, QueryTrait, Statement, StatementBuilder,
+    ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, FromQueryResult, Order, QueryFilter,
+    QueryOrder, QuerySelect, QueryTrait, Statement, StatementBuilder,
 };
 use serde_json::value::RawValue;
 use std::collections::HashSet;
@@ -26,11 +24,29 @@ use super::query_dynamic_summary::field_to_column;
 
 /// All summary data column names for "select all" when fields is empty
 const ALL_SUMMARY_COLUMNS: &[&str] = &[
-    "cpu_usage", "gpu_usage", "used_swap", "total_swap", "used_memory", "total_memory",
-    "available_memory", "load_one", "load_five", "load_fifteen", "uptime", "boot_time",
-    "process_count", "total_space", "available_space", "read_speed", "write_speed",
-    "tcp_connections", "udp_connections", "total_received", "total_transmitted",
-    "transmit_speed", "receive_speed",
+    "cpu_usage",
+    "gpu_usage",
+    "used_swap",
+    "total_swap",
+    "used_memory",
+    "total_memory",
+    "available_memory",
+    "load_one",
+    "load_five",
+    "load_fifteen",
+    "uptime",
+    "boot_time",
+    "process_count",
+    "total_space",
+    "available_space",
+    "read_speed",
+    "write_speed",
+    "tcp_connections",
+    "udp_connections",
+    "total_received",
+    "total_transmitted",
+    "transmit_speed",
+    "receive_speed",
 ];
 
 pub async fn dynamic_summary_multi_last_query(
@@ -80,7 +96,9 @@ pub async fn dynamic_summary_multi_last_query(
         let mut uuid_id_pairs: Vec<(Uuid, i16)> = Vec::with_capacity(deduped_uuids.len());
         for uuid in &deduped_uuids {
             let uuid_id = uuid_cache.get_id(uuid).await.ok_or_else(|| {
-                NodegetError::NotFound(format!("Agent UUID not found in monitoring registry: {uuid}"))
+                NodegetError::NotFound(format!(
+                    "Agent UUID not found in monitoring registry: {uuid}"
+                ))
             })?;
             uuid_id_pairs.push((*uuid, uuid_id));
         }
@@ -151,10 +169,7 @@ fn is_scaled_column(name: &str) -> bool {
     SCALED_COLUMNS.contains(&name)
 }
 
-fn build_single_last_select(
-    uuid_id: i16,
-    fields: &[DynamicSummaryQueryField],
-) -> SelectStatement {
+fn build_single_last_select(uuid_id: i16, fields: &[DynamicSummaryQueryField]) -> SelectStatement {
     let inner_query = dynamic_monitoring_summary::Entity::find()
         .select_only()
         .column(dynamic_monitoring_summary::Column::UuidId)
@@ -187,9 +202,9 @@ fn build_single_last_select(
             .column(dynamic_monitoring_summary::Column::TransmitSpeed)
             .column(dynamic_monitoring_summary::Column::ReceiveSpeed)
     } else {
-        fields.iter().fold(inner_query, |q, field| {
-            q.column(field_to_column(field))
-        })
+        fields
+            .iter()
+            .fold(inner_query, |q, field| q.column(field_to_column(field)))
     };
 
     let inner_query = inner_query
@@ -256,7 +271,10 @@ async fn execute_statement_query(
                     if let Some(uuid_id_val) = obj.remove("uuid_id") {
                         if let Some(uuid_id) = uuid_id_val.as_i64() {
                             if let Some(uuid) = uuid_cache.get_uuid(uuid_id as i16).await {
-                                obj.insert("uuid".to_owned(), serde_json::Value::String(uuid.to_string()));
+                                obj.insert(
+                                    "uuid".to_owned(),
+                                    serde_json::Value::String(uuid.to_string()),
+                                );
                             }
                         }
                     }

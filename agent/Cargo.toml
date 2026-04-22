@@ -1,6 +1,6 @@
 [package]
 name = "nodeget-agent"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 
 [dependencies]
@@ -12,10 +12,10 @@ anyhow = "1.0"
 
 # Asynchronous runtime
 tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "signal", "process"] }
-futures = "0.3.31"
+futures-util = "0.3.31"
 
 # Logging
-log = { version = "0.4.29", default-features = false, features = ["std", "serde"] }
+log = { version = "0.4.29", default-features = false, features = ["std"] }
 simple_logger = { version = "5.1.0", default-features = false, features = ["threads", "time", "timestamps", "colored", "colors"] }
 
 # Http Client
@@ -34,27 +34,30 @@ base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
 surge-ping = "0.8.4"
 
 # Random Number Generation
-rand = { version = "0.10.0", default-features = false, features = ["std", "thread_rng"] }
+rand = { version = "0.9", default-features = false, features = ["std", "thread_rng"] }
 
 # PTY
 portable-pty = "0.9.0"
 
 # Dependency for system information
-## Main cross-platform library
-sysinfo = { version = "0.37.2", default-features = false, features = ["multithread", "windows", "disk", "network", "system"] }
-## Nvidia GPU Support
-nvml-wrapper = "0.11.0"
-
-[target.'cfg(target_os = "linux")'.dependencies]
+## Main cross-platform library (Linux/macOS features)
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+sysinfo = { version = "0.37.2", default-features = false, features = ["multithread", "disk", "network", "system"] }
 # Raw bindings to libc functions (for reading information)
 libc = "0.2.175"
 # Virtualization detection
 heim-virt = "0.1.0-alpha.1"
+## Nvidia GPU Support
+nvml-wrapper = "0.11.0"
 
+## Windows-specific features
 [target.'cfg(target_os = "windows")'.dependencies]
+sysinfo = { version = "0.37.2", default-features = false, features = ["multithread", "windows", "disk", "network", "system"] }
 # Virtualization detection
 raw-cpuid = "11.5.0"
 # Network Connections
 netstat2 = "0.11.2"
 # Windows system calls
 windows-sys = { version = "0.61.2", default-features = false, features = ["Win32_Foundation", "Win32_System_ProcessStatus"] }
+## Nvidia GPU Support
+nvml-wrapper = "0.11.0"

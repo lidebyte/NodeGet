@@ -70,6 +70,10 @@ pub async fn create(
 
         debug!(target: "crontab", id = res_id, name = %inserted.name, "Crontab created successfully");
 
+        if let Err(e) = crate::crontab::cache::CrontabCache::reload().await {
+            tracing::error!(target: "crontab", error = %e, "failed to reload crontab cache after create");
+        }
+
         let json_str = format!("{{\"id\":{res_id}}}");
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(format!("{e}")).into())

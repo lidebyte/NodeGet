@@ -15,9 +15,6 @@ use crate::rpc::get_modules;
 use crate::rpc_timing::RpcTimingMiddleware;
 
 pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
-    #[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
-    spawn_jemalloc_mem_debug_task();
-
     super::init_or_skip_super_token().await;
     debug!(target: "server", "Super token initialization completed");
 
@@ -30,6 +27,14 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
         .await
         .expect("Failed to initialize monitoring UUID cache");
     debug!(target: "server", "Monitoring UUID cache initialized");
+
+    crate::static_hash_cache::StaticHashCache::init();
+    debug!(target: "server", "Static hash cache initialized");
+
+    crate::crontab::cache::CrontabCache::init()
+        .await
+        .expect("Failed to initialize crontab cache");
+    debug!(target: "server", "Crontab cache initialized");
 
     let _ = nodeget_lib::utils::uuid::compare_uuid(config.server_uuid);
     debug!(target: "server", uuid = %config.server_uuid, "Server UUID compared");
@@ -60,8 +65,8 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
         .set_config(
             jsonrpsee::server::ServerConfig::builder()
                 .max_connections(config.jsonrpc_max_connections.unwrap_or(100))
-                .max_response_body_size(u32::MAX)
-                .max_request_body_size(u32::MAX)
+                .max_response_body_size(config.max_response_body_size.unwrap_or(10 * 1024 * 1024))
+                .max_request_body_size(config.max_request_body_size.unwrap_or(10 * 1024 * 1024))
                 .build(),
         )
         .to_service_builder()
@@ -164,10 +169,12 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
         error!(target: "server", address = %config.ws_listener, error = %e, "failed to parse listen address");
         panic!("Invalid listen address '{}': {e}", config.ws_listener);
     });
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap_or_else(|e| {
-        error!(target: "server", address = %addr, error = %e, "failed to bind TCP listener");
-        panic!("Failed to bind to {addr}: {e}");
-    });
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|e| {
+            error!(target: "server", address = %addr, error = %e, "failed to bind TCP listener");
+            panic!("Failed to bind to {addr}: {e}");
+        });
     info!(target: "server", address = %addr, "Server listening on TCP");
 
     let serve_future = IntoFuture::into_future(axum::serve(
@@ -503,36 +510,4 @@ async fn cleanup_unix_socket_file(path: Option<&str>) {
             tracing::warn!(target: "server", path = %path, error = %e, "Failed to remove unix socket file")
         }
     }
-}
-
-#[cfg(all(not(target_os = "windows"), feature = "jemalloc"))]
-fn spawn_jemalloc_mem_debug_task() {
-    static JEMALLOC_MEM_DEBUG_STARTED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
-    if JEMALLOC_MEM_DEBUG_STARTED.set(()).is_err() {
-        return;
-    }
-
-    tokio::spawn(async {
-        loop {
-            use tikv_jemalloc_ctl::{epoch, stats};
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            if epoch::advance().is_err() {
-                return;
-            }
-
-            let allocated = stats::allocated::read().unwrap();
-            let active = stats::active::read().unwrap();
-            let resident = stats::resident::read().unwrap();
-            let mapped = stats::mapped::read().unwrap();
-
-            tracing::info!(
-                target: "server",
-                allocated_mb = format_args!("{:.2}", allocated as f64 / 1024.0 / 1024.0),
-                active_mb = format_args!("{:.2}", active as f64 / 1024.0 / 1024.0),
-                resident_mb = format_args!("{:.2}", resident as f64 / 1024.0 / 1024.0),
-                mapped_mb = format_args!("{:.2}", mapped as f64 / 1024.0 / 1024.0),
-                "Jemalloc memory stats"
-            );
-        }
-    });
 }

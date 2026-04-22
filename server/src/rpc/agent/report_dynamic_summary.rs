@@ -3,9 +3,7 @@ use crate::token::get::check_token_limit;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::monitoring::data_structure::DynamicMonitoringSummaryData;
-use nodeget_lib::permission::data_structure::{
-    DynamicMonitoringSummary, Permission, Scope,
-};
+use nodeget_lib::permission::data_structure::{DynamicMonitoringSummary, Permission, Scope};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use sea_orm::{ActiveValue, Set};
 use serde_json::value::RawValue;
@@ -39,7 +37,7 @@ pub async fn report_dynamic_summary(
                 "Permission Denied: Missing DynamicMonitoringSummary Write permission for this Agent"
                     .to_owned(),
             )
-            .into());
+                .into());
         }
         debug!(target: "monitoring", agent_uuid = %agent_uuid, "report_dynamic_summary: permission check passed");
 
@@ -81,8 +79,7 @@ pub async fn report_dynamic_summary(
 
         crate::monitoring_buffer::get()
             .dynamic_summary
-            .send(in_data)
-            .map_err(|_| NodegetError::DatabaseError("Buffer closed".to_owned()))?;
+            .send(in_data);
 
         debug!(target: "monitoring", agent_uuid = %data.uuid, "Dynamic summary data buffered successfully");
 

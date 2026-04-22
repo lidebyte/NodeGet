@@ -3,22 +3,22 @@ use crate::monitoring_uuid_cache::MonitoringUuidCache;
 use crate::rpc::RpcHelper;
 use crate::rpc::agent::AgentRpcImpl;
 use crate::token::get::check_token_limit;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
-use nodeget_lib::monitoring::query::{DynamicSummaryQuery, DynamicSummaryQueryField, QueryCondition};
-use nodeget_lib::permission::data_structure::{
-    DynamicMonitoringSummary, Permission, Scope,
+use nodeget_lib::monitoring::query::{
+    DynamicSummaryQuery, DynamicSummaryQueryField, QueryCondition,
 };
+use nodeget_lib::permission::data_structure::{DynamicMonitoringSummary, Permission, Scope};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::error_message::anyhow_error_to_raw;
+use sea_orm::prelude::Expr;
 use sea_orm::{
     ColumnTrait, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect, SelectModel,
     Selector,
 };
-use sea_orm::prelude::Expr;
-use serde_json::value::RawValue;
 use serde_json::Value;
+use serde_json::value::RawValue;
 use tracing::{debug, error};
 
 pub async fn query_dynamic_summary(
@@ -75,16 +75,28 @@ pub async fn query_dynamic_summary(
         let query = if query_data.fields.is_empty() {
             // Select all data columns (scaled fields use /10.0)
             query
-                .column_as(Expr::col(dynamic_monitoring_summary::Column::CpuUsage).div(10.0), "cpu_usage")
+                .column_as(
+                    Expr::col(dynamic_monitoring_summary::Column::CpuUsage).div(10.0),
+                    "cpu_usage",
+                )
                 .column(dynamic_monitoring_summary::Column::GpuUsage)
                 .column(dynamic_monitoring_summary::Column::UsedSwap)
                 .column(dynamic_monitoring_summary::Column::TotalSwap)
                 .column(dynamic_monitoring_summary::Column::UsedMemory)
                 .column(dynamic_monitoring_summary::Column::TotalMemory)
                 .column(dynamic_monitoring_summary::Column::AvailableMemory)
-                .column_as(Expr::col(dynamic_monitoring_summary::Column::LoadOne).div(10.0), "load_one")
-                .column_as(Expr::col(dynamic_monitoring_summary::Column::LoadFive).div(10.0), "load_five")
-                .column_as(Expr::col(dynamic_monitoring_summary::Column::LoadFifteen).div(10.0), "load_fifteen")
+                .column_as(
+                    Expr::col(dynamic_monitoring_summary::Column::LoadOne).div(10.0),
+                    "load_one",
+                )
+                .column_as(
+                    Expr::col(dynamic_monitoring_summary::Column::LoadFive).div(10.0),
+                    "load_five",
+                )
+                .column_as(
+                    Expr::col(dynamic_monitoring_summary::Column::LoadFifteen).div(10.0),
+                    "load_fifteen",
+                )
                 .column(dynamic_monitoring_summary::Column::Uptime)
                 .column(dynamic_monitoring_summary::Column::BootTime)
                 .column(dynamic_monitoring_summary::Column::ProcessCount)
@@ -99,9 +111,10 @@ pub async fn query_dynamic_summary(
                 .column(dynamic_monitoring_summary::Column::TransmitSpeed)
                 .column(dynamic_monitoring_summary::Column::ReceiveSpeed)
         } else {
-            query_data.fields.iter().fold(query, |q, field| {
-                select_field(q, field)
-            })
+            query_data
+                .fields
+                .iter()
+                .fold(query, |q, field| select_field(q, field))
         };
 
         let mut limit_count = None;
@@ -112,7 +125,9 @@ pub async fn query_dynamic_summary(
         for cond in &query_data.condition {
             if let QueryCondition::Uuid(uuid) = cond {
                 let uuid_id = uuid_cache.get_id(uuid).await.ok_or_else(|| {
-                    anyhow::anyhow!(NodegetError::NotFound(format!("Unknown agent UUID: {uuid}")))
+                    anyhow::anyhow!(NodegetError::NotFound(format!(
+                        "Unknown agent UUID: {uuid}"
+                    )))
                 })?;
                 uuid_ids.push(uuid_id);
             }
@@ -160,7 +175,13 @@ pub async fn query_dynamic_summary(
             query.order_by(dynamic_monitoring_summary::Column::Timestamp, Order::Asc)
         };
 
-        execute_query(db, query.into_json(), limit_count.unwrap_or(5000), uuid_cache).await
+        execute_query(
+            db,
+            query.into_json(),
+            limit_count.unwrap_or(5000),
+            uuid_cache,
+        )
+        .await
     };
 
     match process_logic.await {
@@ -184,10 +205,7 @@ pub async fn query_dynamic_summary(
 }
 
 /// Select a field into the query, applying /10.0 descaling for scaled fields.
-fn select_field<E>(
-    q: sea_orm::Select<E>,
-    field: &DynamicSummaryQueryField,
-) -> sea_orm::Select<E>
+fn select_field<E>(q: sea_orm::Select<E>, field: &DynamicSummaryQueryField) -> sea_orm::Select<E>
 where
     E: EntityTrait,
 {

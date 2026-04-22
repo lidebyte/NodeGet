@@ -1,3 +1,4 @@
+pub mod cache;
 mod server_cron;
 mod task;
 
@@ -5,14 +6,11 @@ use crate::DB;
 use crate::db_connection::clean_up::cleanup_expired_data;
 use crate::entity::{crontab, crontab_result};
 use crate::rpc::js_worker::service::enqueue_defined_js_worker_run;
+use cache::CrontabCache;
 use chrono::{TimeZone, Utc};
-use cron::Schedule;
 use nodeget_lib::crontab::{AgentCronType, Cron, CronType, ServerCronType};
 use nodeget_lib::js_runtime::RunType;
-use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, Set};
-use sea_orm::{EntityTrait, QueryFilter};
-use serde_json::Value;
-use std::str::FromStr;
+use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, Set};
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{Instrument, debug, error, info, info_span, warn};
@@ -25,6 +23,7 @@ pub async fn delete_crontab_by_name(name: String) -> Result<bool, sea_orm::DbErr
         ))
     })?;
 
+    use sea_orm::{ColumnTrait, QueryFilter};
     let result = crontab::Entity::delete_many()
         .filter(crontab::Column::Name.eq(&name))
         .exec(db)
@@ -33,6 +32,9 @@ pub async fn delete_crontab_by_name(name: String) -> Result<bool, sea_orm::DbErr
     let deleted = result.rows_affected > 0;
     if deleted {
         info!(target: "crontab", name = %name, "crontab deleted");
+        if let Err(e) = CrontabCache::reload().await {
+            error!(target: "crontab", error = %e, "failed to reload crontab cache after delete");
+        }
     } else {
         warn!(target: "crontab", name = %name, "crontab not found for deletion");
     }
@@ -50,6 +52,7 @@ pub async fn set_crontab_enable_by_name(
         ))
     })?;
 
+    use sea_orm::{ColumnTrait, QueryFilter};
     let crontab_option = crontab::Entity::find()
         .filter(crontab::Column::Name.eq(&name))
         .one(db)
@@ -60,6 +63,9 @@ pub async fn set_crontab_enable_by_name(
         active_model.enable = Set(enable);
         let updated = active_model.update(db).await?;
         info!(target: "crontab", name = %name, enable = updated.enable, "crontab enable updated");
+        if let Err(e) = CrontabCache::reload().await {
+            error!(target: "crontab", error = %e, "failed to reload crontab cache after set_enable");
+        }
         Ok(Some(updated.enable))
     } else {
         warn!(target: "crontab", name = %name, enable, "crontab not found for set_enable");
@@ -93,37 +99,13 @@ async fn process_crontab() {
         return;
     };
 
-    let jobs = match crontab::Entity::find()
-        .filter(crontab::Column::Enable.eq(true))
-        .all(db)
-        .await
-    {
-        Ok(jobs) => jobs,
-        Err(err) => {
-            error!(target: "crontab", error = %err, "failed to query enabled crontab jobs");
-            return;
-        }
-    };
+    let cache = CrontabCache::global();
+    let jobs = cache.get_enabled_entries().await;
 
     let now = Utc::now();
 
-    for job in jobs {
-        let schedule = match Schedule::from_str(&job.cron_expression) {
-            Ok(s) => s,
-            Err(e) => {
-                warn!(
-                    target: "crontab",
-                    job_id = job.id,
-                    job_name = %job.name,
-                    cron_expression = %job.cron_expression,
-                    error = %e,
-                    "invalid cron expression, skipping"
-                );
-                continue;
-            }
-        };
-
-        let last_run = job.last_run_time.map_or_else(
+    for (model, schedule, cron_type) in jobs {
+        let last_run = model.last_run_time.map_or_else(
             || now - chrono::Duration::seconds(1),
             |t| Utc.timestamp_millis_opt(t).unwrap(),
         );
@@ -139,55 +121,42 @@ async fn process_crontab() {
 
         info!(
             target: "crontab",
-            job_id = job.id,
-            job_name = %job.name,
-            cron_expression = %job.cron_expression,
+            job_id = model.id,
+            job_name = %model.name,
+            cron_expression = %model.cron_expression,
             "triggering cron job"
         );
 
-        let cron_type = serde_json::from_str(&format!("{}", job.cron_type))
-            .map_err(|e| {
-                warn!(
-                    target: "crontab",
-                    job_id = job.id,
-                    job_name = %job.name,
-                    error = %e,
-                    "invalid cron type, skipping"
-                );
-            })
-            .ok();
-
-        let Some(cron_type) = cron_type else { continue };
-
         // 克隆需要在闭包中使用的数据
-        let job_id = job.id;
-        let job_name = job.name.clone();
+        let job_id = model.id;
+        let job_name = model.name.clone();
 
         let job_parsed = Cron {
-            id: job.id,
-            name: job.name,
-            enable: job.enable,
-            cron_expression: job.cron_expression,
+            id: model.id,
+            name: model.name.clone(),
+            enable: model.enable,
+            cron_expression: model.cron_expression.clone(),
             cron_type,
-            last_run_time: job.last_run_time,
+            last_run_time: model.last_run_time,
         };
 
         // 先更新 last_run_time，防止任务执行超时导致重复触发
-        // 注意：这是可接受的，因为 crontab 任务是幂等的
+        let now_millis = now.timestamp_millis();
+        cache.update_last_run_time(model.id, now_millis).await;
+
         let active_model = crontab::ActiveModel {
-            id: Set(job.id),
-            last_run_time: Set(Some(now.timestamp_millis())),
+            id: Set(model.id),
+            last_run_time: Set(Some(now_millis)),
             ..Default::default()
         };
         if let Err(e) = active_model.update(db).await {
             error!(
                 target: "crontab",
-                job_id = job.id,
+                job_id = model.id,
                 job_name = %job_name,
                 error = %e,
-                "failed to update last_run_time"
+                "failed to update last_run_time in DB"
             );
-            // 继续执行，不要因为记录失败而跳过任务
         }
 
         let span = info_span!(
@@ -300,7 +269,7 @@ async fn run_cleanup_database_job(cron_id: i64, cron_name: String) {
     }
 }
 
-async fn run_js_worker_job(cron_id: i64, cron_name: String, js_script_name: String, params: Value) {
+async fn run_js_worker_job(cron_id: i64, cron_name: String, js_script_name: String, params: serde_json::Value) {
     info!(target: "crontab", cron_id = cron_id, cron_name = %cron_name, js_script_name = %js_script_name, "running js worker cron job");
     let Some(db) = DB.get() else {
         error!(

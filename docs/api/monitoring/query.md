@@ -1108,7 +1108,8 @@ pub struct DynamicSummaryAvgQuery {
 
 ## Dynamic Summary Multi Last Query
 
-批量获取多个 Agent 的最新一条动态摘要监控数据。等价于为每个 UUID 执行 `agent_query_dynamic_summary` 并设置 `condition: ["last"]`。
+批量获取多个 Agent 的最新一条动态摘要监控数据。等价于为每个 UUID 执行 `agent_query_dynamic_summary` 并设置
+`condition: ["last"]`。
 
 ### 方法
 
