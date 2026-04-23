@@ -2,4 +2,4 @@
 outline: deep
 ---
 
-# server配置
+# Server 配置

@@ -2,4 +2,4 @@
 outline: deep
 ---
 
-# agent配置
+# Agent 配置

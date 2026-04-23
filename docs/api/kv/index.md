@@ -1,6 +1,6 @@
 # Kv 键值数据库总览
 
-我们在 Nodeget Server 实现了一个简单的 Key-Value 数据储存
+我们在 NodeGet Server 实现了一个简单的 Key-Value 数据储存。
 
 可用于前端配置存储，节点 Metadata 信息存储等
 
@@ -29,7 +29,7 @@ pub struct KVStore {
 }
 ```
 
-Value 可以是合法的任意 Json 值，在数据库内会以 JsonBinary 的形式储存，所以请不要依赖其顺序性与重复性
+Value 可以是合法的任意 JSON 值，在数据库内会以 `JSONB` 的形式储存，所以请不要依赖其顺序性与重复性。
 
 ## 基本权限
 
@@ -66,7 +66,7 @@ pub enum Kv {
 
 在 `Global` Scope 下拥有该权限时，可列出所有 Namespace；在 `KvNamespace(xxx)` Scope 下拥有该权限时，仅可列出对应的 `xxx`
 
-`ListAllKeys` 可以列出在这一 KvNamespace Scope 下的所有键 (但是不一定可以读取键对应的值)
+`ListAllKeys` 可以列出在这一 KvNamespace Scope 下的所有键（但是不一定可以读取键对应的值）
 
 `Read` / `Write` / `Delete` 的 String，可以拥有通配符，比如 `metadata_*`，表达可以操作这一 KvNamespace Scope 下的所有以
 `metadata_` 开头的键

@@ -5,7 +5,7 @@
 - SQLite / PostgreSQL
 - QuickJS (for js runtime)
 
-## 前端（dashboard）
+## 前端（Dashboard）
 - Vue3
 - TypeScript
 - Tailwind CSS

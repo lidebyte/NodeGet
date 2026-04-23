@@ -1,3 +1,3 @@
 # WIP
 
-English document is working in process.
+English document is work in progress.

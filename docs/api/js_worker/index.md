@@ -1,6 +1,6 @@
-# JsWorker 总览
+# Js Worker 总览
 
-`JsWorker` 用于管理可复用的 JS 脚本，并在服务端运行这些脚本。
+Js Worker 用于管理可复用的 JS 脚本，并在服务端运行这些脚本。
 
 ## 方法列表
 

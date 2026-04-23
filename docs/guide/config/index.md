@@ -1,6 +1,6 @@
 # 配置文件
 
-Nodeget 的主控和被控均使用 Toml 作为配置文件格式，请事先了解 Toml 语法规范: <https://toml.io/cn/>
+NodeGet 的主控和被控均使用 `TOML` 作为配置文件格式，请事先了解 `TOML` 语法规范: <https://toml.io/cn/>
 
 `nodeget-server` 使用子命令启动：
 
@@ -8,10 +8,10 @@ Nodeget 的主控和被控均使用 Toml 作为配置文件格式，请事先了
 # 正常启动服务
 nodeget-server serve -c ./config.toml
 
-# 仅初始化数据库与 supertoken（若已存在则跳过），然后退出
+# 仅初始化数据库与 SuperToken（若已存在则跳过），然后退出
 nodeget-server init -c ./config.toml
 
-# 删除旧 supertoken 并重新生成 id=1 supertoken（会交互确认 y/n）
+# 删除旧 SuperToken 并重新生成 id=1 SuperToken（会交互确认 y/n）
 nodeget-server roll-super-token -c ./config.toml
 ```
 

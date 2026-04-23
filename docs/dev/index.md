@@ -3,7 +3,7 @@
 ## 参考文档
 
 - [主题开发](./theme/index.md)
-- [worker开发](./worker/index.md)
+- [Worker 开发](./worker/index.md)
 - [扩展开发](./extension/index.md)
 - [Bootstrap](./bootstrap/index.md)
 

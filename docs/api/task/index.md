@@ -15,7 +15,7 @@ Agent 端实现请参考 [agent.md](./agent.md)。
 
 ## 基本流程
 
-Agent 可以接收来自 Server 的 Task (任务)，并可以为 Server 配置简单的权限
+Agent 可以接收来自 Server 的 Task（任务），并可以为 Server 配置简单的权限
 
 基本路线:
 
@@ -24,7 +24,7 @@ Agent 事先向 Server 发送 Task 订阅请求，在长连接中处理
 
 调用者发送任务 / 定时任务 => Server => 储存到数据库 => Agent 获取执行 => 返回给 Server => 数据库保存
 
-调用者可用 JsonRpc API 获取或删除任务执行记录
+调用者可用 JSON-RPC API 获取或删除任务执行记录
 ```
 
 ## 任务主体

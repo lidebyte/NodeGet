@@ -2,4 +2,4 @@
 outline: deep
 ---
 
-# nginx配置
+# Nginx 配置

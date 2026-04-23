@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "monitoring_uuid")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id: i16,
+    pub id: i32,
     pub uuid: Uuid,
 }
 

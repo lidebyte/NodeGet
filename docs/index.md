@@ -11,7 +11,7 @@ hero:
       text: 快速开始
       link: /guide/quick-start
     - theme: alt
-      text: API文档
+      text: API 文档
       link: /api
   image:
     src: /logo.png
@@ -19,17 +19,17 @@ hero:
 
 features:
   - title: 多主控模型
-    details: agent原生支持多主控并存，dashboard原生支持多主控切换，以此为基础驱动负载均衡与数据安全（冗余备份）
-  - title: 前后端完全分离，headless模式
-    details: 彻底的前后端分离，所有操作都有api接口，允许前端开发者自由构建展示页面和控制面板，并部署到 cloudflare pages / github page / eo等静态储存
+    details: Agent 原生支持多主控并存，Dashboard 原生支持多主控切换，以此为基础驱动负载均衡与数据安全（冗余备份）
+  - title: 前后端完全分离，headless 模式
+    details: 彻底的前后端分离，所有操作都有 API 接口，允许前端开发者自由构建展示页面和控制面板，并部署到 Cloudflare Pages / GitHub Pages / EdgeOne 等静态储存
   - title: 细粒度权限模型
-    details: 支持基于token的细粒度权限模型，大大增强安全性和灵活性，方便与其三方系统对接
-  - title: 基于 js worker 的 serverless 方案
-    details: 内嵌 js worker（体积极小）与 kv，允许通过自由组合NodeGet提供的基础能力来实现各种神奇的操作
+    details: 支持基于 Token 的细粒度权限模型，大大增强安全性和灵活性，方便与其三方系统对接
+  - title: 基于 Js Worker 的 Serverless 方案
+    details: 内嵌 Js Worker（体积极小）与 Kv，允许通过自由组合 NodeGet 提供的基础能力来实现各种神奇的操作
   - title: 支持加载自定义插件
-    details: 允许用户安装自定义插件，直接集成到dashboard，此功能与细粒度权限模型相辅相成
+    details: 允许用户安装自定义插件，直接集成到 Dashboard，此功能与细粒度权限模型相辅相成
   - title: 卓越的性能
-    details: rust语言内存模型更加安全，在关键的性能瓶颈做了巧妙的性能优化，大大提高了工程吞吐量上限
+    details: Rust 语言内存模型更加安全，在关键的性能瓶颈做了巧妙的性能优化，大大提高了工程吞吐量上限
 ---
 
 <style>

@@ -2,4 +2,4 @@
 outline: deep
 ---
 
-# cloudflare配置
+# Cloudflare 配置

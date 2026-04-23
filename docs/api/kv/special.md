@@ -46,7 +46,7 @@
     - `metadata_price`: 前端展示的机器价格
     - `metadata_price_unit`: 前端展示的机器单位
     - `metadata_price_cycle`: 前端展示的续费周期，单位天
-    - `metadata_region`: 前端展示的地区代码，遵循 ISO 3166-1 二位字母代码 (仅作为展示，不代表 IP 地址所在地区)
+    - `metadata_region`: 前端展示的地区代码，遵循 ISO 3166-1 二位字母代码（仅作为展示，不代表 IP 地址所在地区）
     - ` metadata_longitude` `metadata_latitude`: 经纬度
     - `metadata_hidden`: 前端中隐藏，不代表没有权限访问
 
@@ -68,5 +68,5 @@
 
 需要解释的是，Frontend 和 Token 的 Namespace 并不冲突。
 
-Token Namespace 意为在使用这一 Token 登陆后，前端会使用的参数 (这里的 Token 应该是供给展示的)，前端可以进行拼接或优先使用
+Token Namespace 意为在使用这一 Token 登陆后，前端会使用的参数（这里的 Token 应该是供给展示的），前端可以进行拼接或优先使用
 Token Namespace 定义的参数

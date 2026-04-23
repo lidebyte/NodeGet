@@ -1,6 +1,6 @@
 # Agent 配置
 
-官方脚本安装的 nodeget-agent 的配置路径位于  /etc/nodeget-agent.conf
+官方脚本安装的 `nodeget-agent` 的配置路径位于 `/etc/nodeget-agent.conf`
 
 ```toml
 # 日志等级，可选 trace / debug / info / warn / error，默认 info
@@ -34,7 +34,7 @@ terminal_shell = "bash"
 # 超出该数量只返回命令的最后结果，上文将被截断，默认 10000
 exec_max_character = 10000
 
-# IP 地址获取服务提供商，可选 ipinfo / cloudflare，默认 ipinfo
+# IP 地址获取服务提供商，可选 ipinfo / Cloudflare，默认 ipinfo
 ip_provider = "ipinfo"
 
 # 服务器列表
@@ -55,7 +55,7 @@ server_uuid = "00000000-0000-0000-0000-000000000000"
 # 具有一定权限的 Token，可以为 TokenKey:TokenSecret 或 Username|Password
 token = "test_server1_token"
 
-# Server 的 Websocket 地址，必须携带协议头
+# Server 的 WebSocket 地址，必须携带协议头
 ws_url = "ws://127.0.0.1:2211/"
 
 # 是否允许执行任务

@@ -4,7 +4,7 @@ outline: deep
 
 # Agent Task 实现
 
-该文档会简述 JsonRpc 的基本使用，若完全不了解请看本文档的 `注册任务` 部分，此后只会提供方法名与结构体
+该文档会简述 JSON-RPC 的基本使用，若完全不了解请看本文档的 `注册任务` 部分，此后只会提供方法名与结构体
 
 ## 注册任务
 
@@ -54,7 +54,7 @@ Http、或主动取消订阅 均不会再接收到来自 Server 的任务
 
 ## 接收任务
 
-Agent 会在这一 WebSocket 长连接中接收到 method 为 `task_register_task` 的 JsonRpc Request，其中 `params` 字段如下:
+Agent 会在这一 WebSocket 长连接中接收到 method 为 `task_register_task` 的 JSON-RPC Request，其中 `params` 字段如下:
 
 ```json
 {

@@ -34,8 +34,8 @@ impl MonitoringUuidCache {
         let mut by_id = HashMap::with_capacity(all.len());
 
         for model in &all {
-            by_uuid.insert(model.uuid, model.id);
-            by_id.insert(model.id, model.uuid);
+            by_uuid.insert(model.uuid, model.id as i16);
+            by_id.insert(model.id as i16, model.uuid);
         }
 
         let count = all.len();
@@ -77,8 +77,8 @@ impl MonitoringUuidCache {
         let mut by_id = HashMap::with_capacity(all.len());
 
         for model in &all {
-            by_uuid.insert(model.uuid, model.id);
-            by_id.insert(model.id, model.uuid);
+            by_uuid.insert(model.uuid, model.id as i16);
+            by_id.insert(model.id as i16, model.uuid);
         }
 
         let mut guard = cache.inner.write().await;
@@ -128,7 +128,7 @@ impl MonitoringUuidCache {
             })?;
 
         let id = if let Some(model) = existing {
-            model.id
+            model.id as i16
         } else {
             let new_model = monitoring_uuid::ActiveModel {
                 id: ActiveValue::default(),
@@ -137,7 +137,7 @@ impl MonitoringUuidCache {
             match monitoring_uuid::Entity::insert(new_model).exec(db).await {
                 Ok(result) => {
                     debug!(target: "monitoring", %uuid, id = result.last_insert_id, "New monitoring UUID registered");
-                    result.last_insert_id
+                    result.last_insert_id as i16
                 }
                 Err(_) => {
                     // UNIQUE constraint violation — another thread inserted concurrently
@@ -157,7 +157,7 @@ impl MonitoringUuidCache {
                             )
                         })?;
                     debug!(target: "monitoring", %uuid, id = model.id, "Monitoring UUID resolved after concurrent insert");
-                    model.id
+                    model.id as i16
                 }
             }
         };

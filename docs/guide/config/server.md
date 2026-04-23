@@ -1,9 +1,9 @@
 # Server 配置
 
-官方脚本安装的 nodeget-server 的配置路径位于  /etc/nodeget-server.conf
+官方脚本安装的 `nodeget-server` 的配置路径位于 `/etc/nodeget-server.conf`
 
 ```toml
-# WebSocket 监听地址，同时也会监听 Http 服务
+# WebSocket 监听地址，同时也会监听 HTTP 服务
 ws_listener = "0.0.0.0:2211"
 
 # JSON-RPC 最大连接数，默认 100
@@ -74,10 +74,10 @@ max_batch_size = 1000
 [database]
 
 # 数据库地址
-# 目前支持 sqlite / pgsql
-# 优先使用 pgsql
-# sqlite 示例: sqlite://nodeget.db?mode=rwc
-# pgsql 示例: postgres://user:pass@host:5432/nodeget
+# 目前支持 SQLite / PostgreSQL
+# 优先使用 PostgreSQL
+# SQLite 示例: sqlite://nodeget.db?mode=rwc
+# PostgreSQL 示例: postgres://user:pass@host:5432/nodeget
 database_url = "postgres://user:pass@host:5432/nodeget"
 
 # 连接超时，单位毫秒，默认 3000

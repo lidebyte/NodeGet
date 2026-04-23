@@ -157,7 +157,7 @@ async fn query_static_avg_postgres(
             i64::try_from(query.points)
                 .map_err(|_| NodegetError::InvalidInput("points is too large".to_owned()))?
                 .into(),
-            (uuid_id as i32).into(),
+            uuid_id.into(),
         ],
     );
 

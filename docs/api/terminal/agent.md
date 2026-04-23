@@ -11,7 +11,7 @@ outline: deep
 
 Agent 在处理 `web_shell` 任务时，会收到 `terminal_id` 字段。需要以该 ID 维护本地终端连接池，同一时刻不允许重复 ID
 
-连接建立后，Agent 需要处理来自用户(而不是 Server) 发送的心跳包、Resize 请求，以及最重要的 Binary 数据
+连接建立后，Agent 需要处理来自用户（而不是 Server）发送的心跳包、Resize 请求，以及最重要的 Binary 数据
 
 心跳包与 Resize 均通过文本类型的 WebSocket Message 发送
 
@@ -36,7 +36,7 @@ struct HeartBeat {
 }
 ```
 
-收到心跳包后，返回空值 (无数据) 即可
+收到心跳包后，返回空值（无数据）即可
 
 ## Resize
 
@@ -61,7 +61,7 @@ struct NeedResize {
 }
 ```
 
-根据 `cols` 与 `rows` 通知 Pty 调整终端大小即可，返回空值 (无数据) 即可
+根据 `cols` 与 `rows` 通知 Pty 调整终端大小即可，返回空值（无数据）即可
 
 ## Binary 数据
 

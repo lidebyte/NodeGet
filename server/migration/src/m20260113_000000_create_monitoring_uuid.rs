@@ -19,7 +19,7 @@ impl MigrationTrait for Migration {
                     .table(MonitoringUuid::Table)
                     .if_not_exists()
                     .col(
-                        small_integer(MonitoringUuid::Id)
+                        integer(MonitoringUuid::Id)
                             .auto_increment()
                             .primary_key(),
                     )

@@ -1,8 +1,8 @@
 # Terminal WebShell 总览
 
-WebShell 是 Task 任务系统下的一个特殊功能，也叫 `网页 SSH` / `Terminal`
+WebShell 是 Task 任务系统下的一个特殊功能，也叫「网页 SSH」/ `Terminal`。
 
-与 Monitoring 等基于 JsonRpc 的模块不同，Terminal 使用 WebSocket 连接进行双向通信
+与 Monitoring 等基于 JSON-RPC 的模块不同，Terminal 使用 WebSocket 连接进行双向通信。
 
 ## 通信流程
 
@@ -10,7 +10,7 @@ Terminal 的通信流程如下:
 
 1. 通过 `task_create_task` 创建一个 `web_shell` 类型的 Task，其中包含 `terminal_id` 字段
 2. Agent 接收到任务后，主动通过 WebSocket 连接到 Server 提供的 Terminal Url
-3. 用户(网页端) 通过 WebSocket 连接到 Server 提供的用户 Terminal Url
+3. 用户（网页端）通过 WebSocket 连接到 Server 提供的用户 Terminal Url
 4. Server 在 Agent 与用户之间中继 Binary Message，实现双向通信
 
 ## 连接 URL

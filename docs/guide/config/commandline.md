@@ -1,8 +1,8 @@
 # 命令行参数
 
-nodeget-server/agent 的命令行参数较为简单，大部分参数都在配置文件中
+`nodeget-server`/`nodeget-agent` 的命令行参数较为简单，大部分参数都在配置文件中
 
-## nodeget-server参数
+## `nodeget-server` 参数
 
 ```
 ./nodeget-server -h
@@ -21,7 +21,7 @@ Options:
   -c, --config <CONFIG>
 ```
 
-## nodeget-agent参数
+## `nodeget-agent` 参数
 
 ```
 ./nodeget-agent -h

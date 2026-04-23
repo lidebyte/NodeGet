@@ -58,7 +58,7 @@ Agent 类型:
 }
 ```
 
-Server 类型 (数据库清理):
+Server 类型（数据库清理）:
 
 ```json
 {
