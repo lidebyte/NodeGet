@@ -33,6 +33,7 @@ pub async fn delete(
             "read_config",
             "edit_config",
             "ip",
+            "version",
         ];
 
         let mut scopes = Vec::new();
