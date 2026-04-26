@@ -25,13 +25,27 @@ pub async fn check_terminal_connect_permission(
     let token_or_auth = TokenOrAuth::from_full_token(token)
         .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
-    // 同时检查 AgentUuid scope 和 Global scope
-    let scopes = vec![Scope::AgentUuid(agent_uuid), Scope::Global];
-    let permissions = vec![Permission::Terminal(Terminal::Connect)];
+    // 先检查 AgentUuid scope 的权限
+    let has_agent_permission = check_token_limit(
+        &token_or_auth,
+        vec![Scope::AgentUuid(agent_uuid)],
+        vec![Permission::Terminal(Terminal::Connect)],
+    )
+    .await?;
 
-    let has_permission = check_token_limit(&token_or_auth, scopes, permissions).await?;
+    if has_agent_permission {
+        return Ok(());
+    }
 
-    if has_permission {
+    // 也检查 Global scope 的权限
+    let has_global_permission = check_token_limit(
+        &token_or_auth,
+        vec![Scope::Global],
+        vec![Permission::Terminal(Terminal::Connect)],
+    )
+    .await?;
+
+    if has_global_permission {
         return Ok(());
     }
 
