@@ -4,7 +4,6 @@
 
 先用命令行重置 Token，然后在面板上修改主控节点的 Token，最后修改所有系统自动安装的 Worker 的 env 里面的 Token 变量
 
-
 ## 我可以自托管 Dashboard 吗
 
 完全可以，NodeGet 的所有代码都是开源的，包括 Dashboard 部分

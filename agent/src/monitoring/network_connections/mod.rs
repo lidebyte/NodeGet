@@ -51,6 +51,6 @@ pub fn calc_connections() -> (u64, u64) {
 // # 返回值
 // 返回一个元组，包含 (UDP 连接数, TCP 连接数)，均为 0
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-pub fn calc_connections() -> (u64, u64) {
+pub const fn calc_connections() -> (u64, u64) {
     (0, 0) // TODO: MacOS Support
 }

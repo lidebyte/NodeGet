@@ -270,7 +270,7 @@ pub async fn check_kv_delete_permission(
 
 /// 检查是否有删除整个命名空间的权限
 ///
-/// 需要对该命名空间拥有全局删除权限 (Kv::Delete("*"))
+/// 需要对该命名空间拥有全局删除权限 (`Kv::Delete`("*"))
 pub async fn check_kv_delete_namespace_permission(
     token: &str,
     namespace: &str,

@@ -20,11 +20,11 @@ use nodeget_lib::config::agent::AgentConfig;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::utils::set_ntp_offset_ms;
 use nodeget_lib::utils::uuid::compare_uuid;
+use nodeget_lib::utils::version::NodeGetVersion;
 use std::str::FromStr;
 use std::sync::{OnceLock, RwLock};
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
-use nodeget_lib::utils::version::NodeGetVersion;
 
 mod monitoring;
 mod ntp;
@@ -74,9 +74,9 @@ async fn main() -> anyhow::Result<()> {
     let args = AgentArgs::par();
 
     {
-        if args.version == true {
+        if args.version {
             let version = NodeGetVersion::get();
-            println!("{}", version.to_string());
+            println!("{version}");
             return Ok(());
         }
     }
@@ -109,7 +109,10 @@ async fn main() -> anyhow::Result<()> {
 
         // 仅在首次启动时查询 NTP 时间偏移，避免热重载时覆盖已有偏移导致时间跳变
         if NTP_INIT_DONE.get().is_none() {
-            let ntp_server = config.ntp_server.as_deref().unwrap_or("time.pool.aliyun.com");
+            let ntp_server = config
+                .ntp_server
+                .as_deref()
+                .unwrap_or("time.pool.aliyun.com");
             let ntp_offset = ntp::fetch_ntp_offset(ntp_server).await;
             println!("NTP time offset: {ntp_offset} ms");
             set_ntp_offset_ms(ntp_offset);

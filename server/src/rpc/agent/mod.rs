@@ -22,7 +22,7 @@ mod delete_static;
 mod query_dynamic;
 mod query_dynamic_avg;
 mod query_dynamic_multi_last;
-pub(crate) mod query_dynamic_summary;
+pub mod query_dynamic_summary;
 mod query_dynamic_summary_avg;
 mod query_dynamic_summary_multi_last;
 mod query_static;
@@ -34,7 +34,7 @@ mod report_static;
 
 /// Shared error counter for avg query error tracking
 static AVG_ERROR_COUNTER: AtomicU64 = AtomicU64::new(0);
-pub(crate) fn generate_avg_error_id() -> u64 {
+pub fn generate_avg_error_id() -> u64 {
     AVG_ERROR_COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 

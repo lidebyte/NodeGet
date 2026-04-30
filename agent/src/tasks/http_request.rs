@@ -30,11 +30,14 @@ pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTa
         let ip = match ip_raw.to_ascii_lowercase().as_str() {
             "ipv4 auto" => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             "ipv6 auto" => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
-            _ => ip_raw.parse().map_err(|e| NodegetError::InvalidInput(format!("Invalid http_request.ip '{ip_raw}': {e}")))?,
+            _ => ip_raw.parse().map_err(|e| {
+                NodegetError::InvalidInput(format!("Invalid http_request.ip '{ip_raw}': {e}"))
+            })?,
         };
         builder = builder.local_address(ip);
     }
-    let client = builder.build()
+    let client = builder
+        .build()
         .map_err(|e| NodegetError::Other(format!("Failed to build HTTP client: {e}")))?;
 
     let mut req = client.request(method, task.url);
@@ -46,38 +49,50 @@ pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTa
         (Some(_), Some(_)) => {
             return Err(NodegetError::InvalidInput(
                 "http_request.body and http_request.body_base64 are mutually exclusive".to_owned(),
-            ).into());
+            )
+            .into());
         }
-        (Some(body), None) => { req = req.body(body.clone()); }
+        (Some(body), None) => {
+            req = req.body(body.clone());
+        }
         (None, Some(b64)) => {
-            let bytes = BASE64_STANDARD.decode(b64)
-                .map_err(|e| NodegetError::InvalidInput(format!("Invalid http_request.body_base64: {e}")))?;
+            let bytes = BASE64_STANDARD.decode(b64).map_err(|e| {
+                NodegetError::InvalidInput(format!("Invalid http_request.body_base64: {e}"))
+            })?;
             req = req.body(bytes);
         }
         (None, None) => {}
     }
 
-    let resp = req.send().await
+    let resp = req
+        .send()
+        .await
         .map_err(|e| NodegetError::Other(format!("HTTP request failed: {e}")))?;
 
     let status = resp.status().as_u16();
 
-    let headers: Vec<BTreeMap<String, String>> = resp.headers().iter().map(|(k, v)| {
-        let mut m = BTreeMap::new();
-        let val = v.to_str().map_or_else(
-            |_| BASE64_STANDARD.encode(v.as_bytes()),
-            |s| s.to_owned(),
-        );
-        m.insert(k.as_str().to_owned(), val);
-        m
-    }).collect();
+    let headers: Vec<BTreeMap<String, String>> = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| {
+            let mut m = BTreeMap::new();
+            let val = v.to_str().map_or_else(
+                |_| BASE64_STANDARD.encode(v.as_bytes()),
+                std::borrow::ToOwned::to_owned,
+            );
+            m.insert(k.as_str().to_owned(), val);
+            m
+        })
+        .collect();
 
-    let bytes = resp.bytes().await
+    let bytes = resp
+        .bytes()
+        .await
         .map_err(|e| NodegetError::Other(format!("Failed to read HTTP response body: {e}")))?;
-    let (body, body_base64) = match String::from_utf8(bytes.to_vec()) {
-        Ok(s) => (Some(s), None),
-        Err(_) => (None, Some(BASE64_STANDARD.encode(&bytes))),
-    };
+    let (body, body_base64) = String::from_utf8(bytes.to_vec()).map_or_else(
+        |_| (None, Some(BASE64_STANDARD.encode(&bytes))),
+        |s| (Some(s), None),
+    );
 
     Ok(HttpRequestTaskResult {
         status,

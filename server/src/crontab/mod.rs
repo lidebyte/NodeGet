@@ -10,7 +10,7 @@ use cache::CrontabCache;
 use chrono::{TimeZone, Utc};
 use nodeget_lib::crontab::{AgentCronType, Cron, CronType, ServerCronType};
 use nodeget_lib::js_runtime::RunType;
-use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, Set};
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{Instrument, debug, error, info, info_span, warn};
@@ -23,7 +23,6 @@ pub async fn delete_crontab_by_name(name: String) -> Result<bool, sea_orm::DbErr
         ))
     })?;
 
-    use sea_orm::{ColumnTrait, QueryFilter};
     let result = crontab::Entity::delete_many()
         .filter(crontab::Column::Name.eq(&name))
         .exec(db)
@@ -52,7 +51,6 @@ pub async fn set_crontab_enable_by_name(
         ))
     })?;
 
-    use sea_orm::{ColumnTrait, QueryFilter};
     let crontab_option = crontab::Entity::find()
         .filter(crontab::Column::Name.eq(&name))
         .one(db)
@@ -73,9 +71,10 @@ pub async fn set_crontab_enable_by_name(
     }
 }
 
+static CRONTAB_WORKER_STARTED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
 pub fn init_crontab_worker() {
     info!(target: "crontab", "initializing crontab worker");
-    static CRONTAB_WORKER_STARTED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
     if CRONTAB_WORKER_STARTED.set(()).is_err() {
         return;
     }
@@ -269,7 +268,12 @@ async fn run_cleanup_database_job(cron_id: i64, cron_name: String) {
     }
 }
 
-async fn run_js_worker_job(cron_id: i64, cron_name: String, js_script_name: String, params: serde_json::Value) {
+async fn run_js_worker_job(
+    cron_id: i64,
+    cron_name: String,
+    js_script_name: String,
+    params: serde_json::Value,
+) {
     info!(target: "crontab", cron_id = cron_id, cron_name = %cron_name, js_script_name = %js_script_name, "running js worker cron job");
     let Some(db) = DB.get() else {
         error!(

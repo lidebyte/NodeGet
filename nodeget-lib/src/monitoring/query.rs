@@ -344,3 +344,26 @@ pub struct DynamicSummaryResponseItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub receive_speed: Option<Value>,
 }
+
+/// Apply /10.0 descaling to known scaled columns in the JSON object.
+///
+/// This is done in application code rather than SQL to work around
+/// `SQLite` limitations with expression aliases in raw query-to-JSON mapping.
+pub fn apply_descaling_to_json_object(obj: &mut serde_json::Map<String, serde_json::Value>) {
+    const SCALED_FIELDS: &[&str] = &["cpu_usage", "load_one", "load_five", "load_fifteen"];
+    for key in SCALED_FIELDS {
+        if let Some(val) = obj.get_mut(*key)
+            && let serde_json::Value::Number(n) = val
+        {
+            if let Some(i) = n.as_i64() {
+                if let Some(scaled) = serde_json::Number::from_f64(i as f64 / 10.0) {
+                    *val = serde_json::Value::Number(scaled);
+                }
+            } else if let Some(f) = n.as_f64()
+                && let Some(scaled) = serde_json::Number::from_f64(f / 10.0)
+            {
+                *val = serde_json::Value::Number(scaled);
+            }
+        }
+    }
+}

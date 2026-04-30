@@ -164,15 +164,13 @@ pub async fn check_super_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<bo
                 .model
                 .username
                 .as_deref()
-                .map(|u| u.as_bytes().ct_eq(username.as_bytes()).into())
-                .unwrap_or(false);
+                .is_some_and(|u| u.as_bytes().ct_eq(username.as_bytes()).into());
             let password_hash = hash_string(password);
             let hash_match = super_entry
                 .model
                 .password_hash
                 .as_deref()
-                .map(|h| h.as_bytes().ct_eq(password_hash.as_bytes()).into())
-                .unwrap_or(false);
+                .is_some_and(|h| h.as_bytes().ct_eq(password_hash.as_bytes()).into());
             let is_super = username_match && hash_match;
             debug!(target: "token", is_super, "Super token check completed (basic auth)");
             Ok(is_super)

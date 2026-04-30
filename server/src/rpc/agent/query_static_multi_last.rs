@@ -99,7 +99,7 @@ pub async fn static_data_multi_last_query(
             statement,
             &field_mappings,
             deduped_uuids.len(),
-            &uuid_cache,
+            uuid_cache,
         )
         .await
     };
@@ -228,15 +228,14 @@ async fn execute_statement_query(
             Ok(mut value) => {
                 if let Some(obj) = value.as_object_mut() {
                     // Translate uuid_id → uuid string
-                    if let Some(uuid_id_val) = obj.remove("uuid_id") {
-                        if let Some(uuid_id) = uuid_id_val.as_i64() {
-                            if let Some(uuid) = uuid_cache.get_uuid(uuid_id as i16).await {
-                                obj.insert(
-                                    "uuid".to_owned(),
-                                    serde_json::Value::String(uuid.to_string()),
-                                );
-                            }
-                        }
+                    if let Some(uuid_id_val) = obj.remove("uuid_id")
+                        && let Some(uuid_id) = uuid_id_val.as_i64()
+                        && let Some(uuid) = uuid_cache.get_uuid(uuid_id as i16).await
+                    {
+                        obj.insert(
+                            "uuid".to_owned(),
+                            serde_json::Value::String(uuid.to_string()),
+                        );
                     }
                     for (old_key, new_key) in field_mappings {
                         rename_and_fix_json(obj, old_key, new_key);

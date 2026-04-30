@@ -1,11 +1,11 @@
 use log::info;
-use sntpc::{get_time, NtpContext, NtpTimestampGenerator};
+use sntpc::{NtpContext, NtpTimestampGenerator, get_time};
 use sntpc_net_tokio::UdpSocketWrapper;
 use tokio::net::UdpSocket;
 use tokio::time::{Duration, timeout};
 
 const DEFAULT_NTP_PORT: u16 = 123;
-const NTP_TIMEOUT: Duration = Duration::from_secs(2);
+const NTP_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Copy, Clone, Default)]
 struct StdTimestampGen {
@@ -31,12 +31,9 @@ impl NtpTimestampGenerator for StdTimestampGen {
 /// 从指定的 NTP 服务器获取本地时间与 NTP 参考时间的偏差（毫秒）。
 /// 连接失败或超时时返回 0，等同于使用本地时间。
 pub async fn fetch_ntp_offset(ntp_server: &str) -> i64 {
-    let addr = match resolve_ntp_addr(ntp_server).await {
-        Some(addr) => addr,
-        None => {
-            info!("Failed to resolve NTP server address for: {ntp_server}");
-            return 0;
-        }
+    let Some(addr) = resolve_ntp_addr(ntp_server).await else {
+        info!("Failed to resolve NTP server address for: {ntp_server}");
+        return 0;
     };
 
     let socket = match UdpSocket::bind("0.0.0.0:0").await {

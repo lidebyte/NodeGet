@@ -212,12 +212,11 @@ async fn execute_query(
                 result_count += 1;
                 if let Some(obj) = v.as_object_mut() {
                     // Translate uuid_id (i16) → uuid (string) for API compatibility
-                    if let Some(Value::Number(n)) = obj.remove("uuid_id") {
-                        if let Some(id) = n.as_i64() {
-                            if let Some(uuid) = uuid_cache.get_uuid(id as i16).await {
-                                obj.insert("uuid".to_string(), Value::String(uuid.to_string()));
-                            }
-                        }
+                    if let Some(Value::Number(n)) = obj.remove("uuid_id")
+                        && let Some(id) = n.as_i64()
+                        && let Some(uuid) = uuid_cache.get_uuid(id as i16).await
+                    {
+                        obj.insert("uuid".to_string(), Value::String(uuid.to_string()));
                     }
                     for (old_key, new_key) in field_mappings {
                         rename_and_fix_json(obj, old_key, new_key);

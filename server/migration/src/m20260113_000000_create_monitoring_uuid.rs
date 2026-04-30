@@ -18,11 +18,7 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(MonitoringUuid::Table)
                     .if_not_exists()
-                    .col(
-                        integer(MonitoringUuid::Id)
-                            .auto_increment()
-                            .primary_key(),
-                    )
+                    .col(integer(MonitoringUuid::Id).auto_increment().primary_key())
                     .col(uuid(MonitoringUuid::Uuid).unique_key())
                     .to_owned(),
             )

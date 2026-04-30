@@ -117,7 +117,7 @@ impl AgentConfig {
             if summary_interval == 0 {
                 return Err("dynamic_summary_report_interval_ms must be greater than 0".into());
             }
-            if dynamic_interval % summary_interval != 0 {
+            if !dynamic_interval.is_multiple_of(summary_interval) {
                 return Err(format!(
                     "dynamic_report_interval_ms ({dynamic_interval}) must be an integer multiple of dynamic_summary_report_interval_ms ({summary_interval})"
                 )

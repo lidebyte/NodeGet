@@ -1,11 +1,13 @@
 # 技术栈
 
 ## 后端
+
 - Rust
 - SQLite / PostgreSQL
 - QuickJS (for js runtime)
 
 ## 前端（Dashboard）
+
 - Vue3
 - TypeScript
 - Tailwind CSS
@@ -13,8 +15,10 @@
 - shadcn
 
 ## 文档
+
 - VitePress
 
 ## bootstrap
+
 - Vanilla JavaScript
 - esbuild

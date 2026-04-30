@@ -1,8 +1,8 @@
 name: Bug 报告
 description: 提交一个 bug 报告
 title: "[Bug]: "
-labels: ["bug", "triage"]
-projects: ["octo-org/1", "octo-org/44"]
+labels: [ "bug", "triage" ]
+projects: [ "octo-org/1", "octo-org/44" ]
 assignees:
   - octocat
 type: bug
@@ -55,7 +55,7 @@ Rustc LLVM Version: 22.1.2
     attributes:
       label: Request body
       description: 如果你在使用 NodeGet Server API 时遇到了问题，请附上请求体
-      placeholder: {"jsonrpc":"2.0","method":"...","params":{},"id":1}
+      placeholder: { "jsonrpc": "2.0","method": "...","params": { },"id": 1 }
     validations:
       required: false
   - type: textarea

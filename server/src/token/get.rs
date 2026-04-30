@@ -172,22 +172,12 @@ fn permission_matches(granted: &Permission, required: &Permission) -> bool {
             Permission::JsResult(JsResult::Delete(pattern)),
             Permission::JsResult(JsResult::Delete(worker_name)),
         ) => wildcard_matches_pattern(worker_name, pattern),
-        (
-            Permission::Task(Task::Create(pattern)),
-            Permission::Task(Task::Create(task_name)),
-        )
-        | (
-            Permission::Task(Task::Read(pattern)),
-            Permission::Task(Task::Read(task_name)),
-        )
-        | (
-            Permission::Task(Task::Write(pattern)),
-            Permission::Task(Task::Write(task_name)),
-        )
-        | (
-            Permission::Task(Task::Delete(pattern)),
-            Permission::Task(Task::Delete(task_name)),
-        ) => wildcard_matches_pattern(task_name, pattern),
+        (Permission::Task(Task::Create(pattern)), Permission::Task(Task::Create(task_name)))
+        | (Permission::Task(Task::Read(pattern)), Permission::Task(Task::Read(task_name)))
+        | (Permission::Task(Task::Write(pattern)), Permission::Task(Task::Write(task_name)))
+        | (Permission::Task(Task::Delete(pattern)), Permission::Task(Task::Delete(task_name))) => {
+            wildcard_matches_pattern(task_name, pattern)
+        }
         _ => false,
     }
 }

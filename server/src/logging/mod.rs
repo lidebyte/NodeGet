@@ -36,7 +36,9 @@ pub fn get_memory_logs() -> Vec<serde_json::Value> {
     MEMORY_LOG_BUFFER
         .get()
         .map(|buf| {
-            let guard = buf.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = buf
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             guard.iter().cloned().collect()
         })
         .unwrap_or_default()
@@ -188,6 +190,7 @@ where
                 {
                     obj["fields"] = serde_json::Value::String(strip_ansi(&fields.to_string()));
                 }
+                drop(ext);
                 obj
             })
             .collect();
@@ -205,7 +208,10 @@ where
 
         // Use unwrap_or_else(into_inner) to recover from Mutex poisoning
         // instead of silently dropping the log entry.
-        let mut guard = self.buffer.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self
+            .buffer
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let cap = MEMORY_LOG_CAPACITY
             .get()
             .copied()
@@ -400,6 +406,7 @@ where
                 } else {
                     write!(writer, "{}", span.name())?;
                 }
+                drop(ext);
             }
             if !first {
                 write!(writer, "]")?;
@@ -449,6 +456,7 @@ where
                 if let Some(fields) = ext.get::<FormattedFields<N>>().filter(|f| !f.is_empty()) {
                     obj["fields"] = serde_json::Value::String(strip_ansi(&fields.to_string()));
                 }
+                drop(ext);
                 obj
             })
             .collect();
@@ -554,7 +562,10 @@ impl StreamLogManager {
         let expanded = expand_virtual_targets(filter_str);
         let filter = StreamFilter::parse(&expanded);
         let subscriber = StreamLogSubscriber { tx, filter };
-        let mut guard = self.subscribers.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self
+            .subscribers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.insert(id, subscriber);
         self.subscriber_count.store(guard.len(), Ordering::Release);
     }
@@ -563,7 +574,10 @@ impl StreamLogManager {
     ///
     /// **WARNING**: Same deadlock caveat as [`add_subscriber`].
     pub fn remove_subscriber(&self, id: &Uuid) {
-        let mut guard = self.subscribers.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self
+            .subscribers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.remove(id);
         self.subscriber_count.store(guard.len(), Ordering::Release);
     }
@@ -624,7 +638,7 @@ impl StreamFilter {
         }
 
         // Sort by target length descending for longest-prefix match
-        targets.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        targets.sort_by_key(|b| std::cmp::Reverse(b.0.len()));
 
         Self {
             default_level,
@@ -722,19 +736,22 @@ where
             .manager
             .subscribers
             .read()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if guard.is_empty() {
             return;
         }
 
         // Pre-filter: collect subscribers interested in this event
-        let interested: Vec<&StreamLogSubscriber> = guard
+        let interested_tx: Vec<tokio::sync::mpsc::Sender<serde_json::Value>> = guard
             .values()
             .filter(|sub| sub.filter.is_enabled(meta))
+            .map(|sub| sub.tx.clone())
             .collect();
 
-        if interested.is_empty() {
+        drop(guard);
+
+        if interested_tx.is_empty() {
             return;
         }
 
@@ -756,6 +773,7 @@ where
                 {
                     obj["fields"] = serde_json::Value::String(strip_ansi(&fields.to_string()));
                 }
+                drop(ext);
                 obj
             })
             .collect();
@@ -772,8 +790,8 @@ where
         });
 
         // Broadcast to all interested subscribers (non-blocking)
-        for sub in interested {
-            let _ = sub.tx.try_send(entry.clone());
+        for tx in interested_tx {
+            let _ = tx.try_send(entry.clone());
         }
     }
 }

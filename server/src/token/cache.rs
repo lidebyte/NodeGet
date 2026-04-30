@@ -8,15 +8,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
 
-/// Pre-parsed token entry: model + parsed token_limit.
-/// Avoids re-parsing serde_json::Value on every auth call.
+/// Pre-parsed token entry: model + parsed `token_limit`.
+/// Avoids re-parsing `serde_json::Value` on every auth call.
 pub struct CachedToken {
     pub model: Arc<token::Model>,
     pub parsed_limits: Vec<Limit>,
 }
 
 struct TokenCacheInner {
-    /// token_key -> cached entry
+    /// `token_key` -> cached entry
     by_key: HashMap<String, Arc<CachedToken>>,
     /// username -> cached entry (only tokens that have a username)
     by_username: HashMap<String, Arc<CachedToken>>,
@@ -45,7 +45,7 @@ impl TokenCache {
 
         let (by_key, by_username, super_token) = Self::build_cache(all_tokens);
 
-        let cache = TokenCache {
+        let cache = Self {
             inner: RwLock::new(TokenCacheInner {
                 by_key,
                 by_username,
@@ -70,7 +70,7 @@ impl TokenCache {
     }
 
     /// Get the global token cache instance.
-    pub fn global() -> &'static TokenCache {
+    pub fn global() -> &'static Self {
         TOKEN_CACHE
             .get()
             .expect("Token cache not initialized — call TokenCache::init() first")
@@ -99,12 +99,13 @@ impl TokenCache {
         guard.by_key = by_key;
         guard.by_username = by_username;
         guard.super_token = super_token;
+        drop(guard);
 
         tracing::debug!(target: "token", "Token cache reloaded");
         Ok(())
     }
 
-    /// Find a cached token by token_key.
+    /// Find a cached token by `token_key`.
     pub async fn find_by_key(&self, key: &str) -> Option<Arc<CachedToken>> {
         let guard = self.inner.read().await;
         guard.by_key.get(key).map(Arc::clone)
@@ -122,7 +123,7 @@ impl TokenCache {
         guard.super_token.as_ref().map(Arc::clone)
     }
 
-    /// Get all cached tokens (for list_all_tokens).
+    /// Get all cached tokens (for `list_all_tokens`).
     pub async fn get_all(&self) -> Vec<Arc<CachedToken>> {
         let guard = self.inner.read().await;
         guard.by_key.values().map(Arc::clone).collect()
@@ -141,8 +142,8 @@ impl TokenCache {
         let mut super_token = None;
 
         for model in all_tokens {
-            let parsed_limits =
-                parse_token_limit_with_compat(model.token_limit.clone()).unwrap_or_else(|e| {
+            let parsed_limits = parse_token_limit_with_compat(model.token_limit.clone())
+                .unwrap_or_else(|e| {
                     tracing::warn!(
                         target: "token",
                         token_key = %model.token_key,

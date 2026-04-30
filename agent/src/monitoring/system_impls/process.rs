@@ -51,6 +51,6 @@ pub fn count_processes() -> u32 {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-pub fn count_processes() -> u32 {
+pub const fn count_processes() -> u32 {
     0 // TODO: MacOS Support
 }

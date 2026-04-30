@@ -19,7 +19,7 @@ use uuid::Uuid;
 /// 与 `create_task` 的区别：
 /// - `create_task` 创建任务后立即返回 `{"id": task_id}`
 /// - `create_task_blocking` 创建任务后等待 agent 上传结果，然后返回完整的任务结果
-/// - 如果超时（timeout_ms），返回错误
+/// - `如果超时（timeout_ms），返回错误`
 pub async fn create_task_blocking(
     manager: &Arc<TaskManager>,
     token: String,

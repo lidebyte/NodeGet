@@ -76,7 +76,7 @@ pub async fn handle_dynamic_monitoring_data_report() {
         .unwrap_or(1000);
 
     // dynamic_interval_ms 是 summary_interval_ms 的整数倍（已在配置解析时校验）
-    let ticks_per_dynamic = (dynamic_interval_ms / summary_interval_ms) as u64;
+    let ticks_per_dynamic = dynamic_interval_ms / summary_interval_ms ;
 
     let mut ticker = interval(Duration::from_millis(summary_interval_ms));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);

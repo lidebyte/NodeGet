@@ -39,7 +39,7 @@ impl MonitoringUuidCache {
         }
 
         let count = all.len();
-        let cache = MonitoringUuidCache {
+        let cache = Self {
             inner: RwLock::new(MonitoringUuidCacheInner { by_uuid, by_id }),
         };
 
@@ -54,7 +54,7 @@ impl MonitoringUuidCache {
     }
 
     /// Get the global cache instance.
-    pub fn global() -> &'static MonitoringUuidCache {
+    pub fn global() -> &'static Self {
         CACHE
             .get()
             .expect("MonitoringUuidCache not initialized — call init() first")
@@ -84,6 +84,7 @@ impl MonitoringUuidCache {
         let mut guard = cache.inner.write().await;
         guard.by_uuid = by_uuid;
         guard.by_id = by_id;
+        drop(guard);
 
         debug!(target: "monitoring", "MonitoringUuidCache reloaded");
         Ok(())
@@ -134,31 +135,28 @@ impl MonitoringUuidCache {
                 id: ActiveValue::default(),
                 uuid: Set(uuid),
             };
-            match monitoring_uuid::Entity::insert(new_model).exec(db).await {
-                Ok(result) => {
-                    debug!(target: "monitoring", %uuid, id = result.last_insert_id, "New monitoring UUID registered");
-                    result.last_insert_id as i16
-                }
-                Err(_) => {
-                    // UNIQUE constraint violation — another thread inserted concurrently
-                    // Re-query to get the id
-                    let model = monitoring_uuid::Entity::find()
-                        .filter(monitoring_uuid::Column::Uuid.eq(uuid))
-                        .one(db)
-                        .await
-                        .map_err(|e| {
-                            NodegetError::DatabaseError(format!(
-                                "Failed to re-query monitoring_uuid after conflict: {e}"
-                            ))
-                        })?
-                        .ok_or_else(|| {
-                            NodegetError::DatabaseError(
-                                "monitoring_uuid row disappeared after insert conflict".to_owned(),
-                            )
-                        })?;
-                    debug!(target: "monitoring", %uuid, id = model.id, "Monitoring UUID resolved after concurrent insert");
-                    model.id as i16
-                }
+            if let Ok(result) = monitoring_uuid::Entity::insert(new_model).exec(db).await {
+                debug!(target: "monitoring", %uuid, id = result.last_insert_id, "New monitoring UUID registered");
+                result.last_insert_id as i16
+            } else {
+                // UNIQUE constraint violation — another thread inserted concurrently
+                // Re-query to get the id
+                let model = monitoring_uuid::Entity::find()
+                    .filter(monitoring_uuid::Column::Uuid.eq(uuid))
+                    .one(db)
+                    .await
+                    .map_err(|e| {
+                        NodegetError::DatabaseError(format!(
+                            "Failed to re-query monitoring_uuid after conflict: {e}"
+                        ))
+                    })?
+                    .ok_or_else(|| {
+                        NodegetError::DatabaseError(
+                            "monitoring_uuid row disappeared after insert conflict".to_owned(),
+                        )
+                    })?;
+                debug!(target: "monitoring", %uuid, id = model.id, "Monitoring UUID resolved after concurrent insert");
+                model.id as i16
             }
         };
 

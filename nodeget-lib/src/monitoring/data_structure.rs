@@ -26,6 +26,10 @@ impl StaticMonitoringData {
     /// 内部将三个字段各自序列化为 `serde_json::Value`，再递归排序所有 object key，
     /// 拼接为一个确定性字符串后取 SHA-256。
     /// 同一组数据无论 JSON 序列化时 key 顺序如何，都会得到相同的哈希值。
+    ///
+    /// # Panics
+    /// Panics if serializing any of the fields fails (should never happen with valid data).
+    #[must_use]
     pub fn compute_data_hash(
         cpu: &StaticCPUData,
         system: &StaticSystemData,
@@ -52,7 +56,7 @@ impl StaticMonitoringData {
         let sys_val = canonicalize(&serde_json::to_value(system).unwrap());
         let gpu_val = canonicalize(&serde_json::to_value(gpu).unwrap());
 
-        let canonical = format!("{}\n{}\n{}", cpu_val, sys_val, gpu_val);
+        let canonical = format!("{cpu_val}\n{sys_val}\n{gpu_val}");
 
         let hash = Sha256::digest(canonical.as_bytes());
         // 取前 16 字节 (128 bit) 足够去重
@@ -153,18 +157,23 @@ impl From<&DynamicMonitoringData> for DynamicMonitoringSummaryData {
             uuid: data.uuid.clone(),
             time: data.time,
             cpu_usage: Some(
-                (data.cpu.total_cpu_usage * 10.0).clamp(i16::MIN as f64, i16::MAX as f64) as i16,
+                (data.cpu.total_cpu_usage * 10.0).clamp(f64::from(i16::MIN), f64::from(i16::MAX))
+                    as i16,
             ),
-            gpu_usage: data.gpu.first().map(|g| g.utilization_gpu as i16),
+            gpu_usage: data.gpu.first().map(|g| i16::from(g.utilization_gpu)),
             used_swap: Some(data.ram.used_swap as i64),
             total_swap: Some(data.ram.total_swap as i64),
             used_memory: Some(data.ram.used_memory as i64),
             total_memory: Some(data.ram.total_memory as i64),
             available_memory: Some(data.ram.available_memory as i64),
-            load_one: Some((data.load.one * 10.0).clamp(i16::MIN as f64, i16::MAX as f64) as i16),
-            load_five: Some((data.load.five * 10.0).clamp(i16::MIN as f64, i16::MAX as f64) as i16),
+            load_one: Some(
+                (data.load.one * 10.0).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16,
+            ),
+            load_five: Some(
+                (data.load.five * 10.0).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16,
+            ),
             load_fifteen: Some(
-                (data.load.fifteen * 10.0).clamp(i16::MIN as f64, i16::MAX as f64) as i16,
+                (data.load.fifteen * 10.0).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16,
             ),
             uptime: Some(data.system.uptime as i32),
             boot_time: Some(data.system.boot_time as i64),

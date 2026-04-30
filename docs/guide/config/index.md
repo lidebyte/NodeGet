@@ -18,5 +18,6 @@ nodeget-server roll-super-token -c ./config.toml
 `-c/--config` 为必填参数；若配置文件无法读取将会 Panic 退出。
 
 ## 详细的配置参考
+
 - [Agent](./agent.md)
 - [Server](./server.md)

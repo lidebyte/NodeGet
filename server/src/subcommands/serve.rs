@@ -350,15 +350,14 @@ async fn handle_js_worker_route(
         }
     };
 
-    let db = match crate::DB.get() {
-        Some(db) => db.clone(),
-        None => {
-            error!(target: "js_worker", route_name = %route_name, "DB not initialized for route request");
-            return build_http_error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Database is not initialized",
-            );
-        }
+    let db = if let Some(db) = crate::DB.get() {
+        db.clone()
+    } else {
+        error!(target: "js_worker", route_name = %route_name, "DB not initialized for route request");
+        return build_http_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Database is not initialized",
+        );
     };
 
     let model = match js_worker::Entity::find()
@@ -507,7 +506,7 @@ async fn cleanup_unix_socket_file(path: Option<&str>) {
         Ok(()) => {}
         Err(e) if e.kind() == ErrorKind::NotFound => {}
         Err(e) => {
-            tracing::warn!(target: "server", path = %path, error = %e, "Failed to remove unix socket file")
+            tracing::warn!(target: "server", path = %path, error = %e, "Failed to remove unix socket file");
         }
     }
 }

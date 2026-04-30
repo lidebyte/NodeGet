@@ -12,8 +12,8 @@ use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::error_message::anyhow_error_to_raw;
 use sea_orm::sea_query::{Alias, Expr, Query, SelectStatement, UnionType};
 use sea_orm::{
-    ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, ExprTrait, FromQueryResult, Order, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait, Statement, StatementBuilder,
+    ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, ExprTrait, FromQueryResult,
+    Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, StatementBuilder,
 };
 use serde_json::value::RawValue;
 use std::collections::HashSet;
@@ -105,7 +105,7 @@ pub async fn dynamic_summary_multi_last_query(
 
         let statement = build_union_last_statement(&uuid_id_pairs, &fields, db)?;
 
-        execute_statement_query(db, statement, deduped_uuids.len(), &uuid_cache).await
+        execute_statement_query(db, statement, deduped_uuids.len(), uuid_cache).await
     };
 
     match process_logic.await {
@@ -154,13 +154,13 @@ fn build_union_last_statement(
 
     let mut union_query = build_single_last_select(first_pair.1, fields, backend);
     for pair in pair_iter {
-        union_query.union(UnionType::All, build_single_last_select(pair.1, fields, backend));
+        union_query.union(
+            UnionType::All,
+            build_single_last_select(pair.1, fields, backend),
+        );
     }
 
-    Ok(StatementBuilder::build(
-        &union_query,
-        &backend,
-    ))
+    Ok(StatementBuilder::build(&union_query, &backend))
 }
 
 /// Column names that are stored as *10 scaled integers and need /10.0 on read
@@ -228,7 +228,10 @@ fn build_single_last_select(
     let col_names: Vec<&str> = if fields.is_empty() {
         ALL_SUMMARY_COLUMNS.to_vec()
     } else {
-        fields.iter().map(|f| f.column_name()).collect()
+        fields
+            .iter()
+            .map(nodeget_lib::monitoring::query::DynamicSummaryQueryField::column_name)
+            .collect()
     };
 
     if backend == DatabaseBackend::Postgres {
@@ -285,18 +288,17 @@ async fn execute_statement_query(
                 result_count += 1;
                 // Translate uuid_id → uuid string
                 if let Some(obj) = value.as_object_mut() {
-                    if let Some(uuid_id_val) = obj.remove("uuid_id") {
-                        if let Some(uuid_id) = uuid_id_val.as_i64() {
-                            if let Some(uuid) = uuid_cache.get_uuid(uuid_id as i16).await {
-                                obj.insert(
-                                    "uuid".to_owned(),
-                                    serde_json::Value::String(uuid.to_string()),
-                                );
-                            }
-                        }
+                    if let Some(uuid_id_val) = obj.remove("uuid_id")
+                        && let Some(uuid_id) = uuid_id_val.as_i64()
+                        && let Some(uuid) = uuid_cache.get_uuid(uuid_id as i16).await
+                    {
+                        obj.insert(
+                            "uuid".to_owned(),
+                            serde_json::Value::String(uuid.to_string()),
+                        );
                     }
                     if needs_app_descaling {
-                        apply_descaling(obj);
+                        nodeget_lib::monitoring::query::apply_descaling_to_json_object(obj);
                     }
                 }
                 if first {
@@ -337,44 +339,15 @@ async fn execute_statement_query(
     Ok(raw_value)
 }
 
-/// Apply /10.0 descaling to known scaled columns in the JSON object.
-/// This is done in application code rather than SQL to work around
-/// SQLite limitations with expression aliases in raw `find_by_statement` queries.
-fn apply_descaling(obj: &mut serde_json::Map<String, serde_json::Value>) {
-    const SCALED_FIELDS: &[&str] = &["cpu_usage", "load_one", "load_five", "load_fifteen"];
-    for key in SCALED_FIELDS {
-        if let Some(val) = obj.get_mut(*key) {
-            match val {
-                serde_json::Value::Number(n) => {
-                    if let Some(i) = n.as_i64() {
-                        if let Some(scaled) = serde_json::Number::from_f64(i as f64 / 10.0) {
-                            *val = serde_json::Value::Number(scaled);
-                        }
-                    } else if let Some(f) = n.as_f64() {
-                        if let Some(scaled) = serde_json::Number::from_f64(f / 10.0) {
-                            *val = serde_json::Value::Number(scaled);
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::{
-        ConnectionTrait, Database, DatabaseBackend, Schema, StatementBuilder,
-    };
+    use sea_orm::{ConnectionTrait, Database, DatabaseBackend, Schema, StatementBuilder};
     use serde_json::Value;
 
     #[tokio::test]
     async fn test_multi_last_sqlite_scaled_fields_present() {
-        let db = Database::connect("sqlite::memory:")
-            .await
-            .expect("connect");
+        let db = Database::connect("sqlite::memory:").await.expect("connect");
 
         let schema = Schema::new(DatabaseBackend::Sqlite);
         let stmt = schema
@@ -386,28 +359,28 @@ mod tests {
         let row = dynamic_monitoring_summary::ActiveModel {
             id: sea_orm::ActiveValue::NotSet,
             uuid_id: sea_orm::ActiveValue::Set(1i16),
-            timestamp: sea_orm::ActiveValue::Set(1777463543359i64),
+            timestamp: sea_orm::ActiveValue::Set(1_777_463_543_359i64),
             cpu_usage: sea_orm::ActiveValue::Set(Some(50i16)),
             gpu_usage: sea_orm::ActiveValue::Set(None),
             used_swap: sea_orm::ActiveValue::Set(Some(0i64)),
             total_swap: sea_orm::ActiveValue::Set(Some(0i64)),
-            used_memory: sea_orm::ActiveValue::Set(Some(650596352i64)),
-            total_memory: sea_orm::ActiveValue::Set(Some(16734150656i64)),
-            available_memory: sea_orm::ActiveValue::Set(Some(16083554304i64)),
+            used_memory: sea_orm::ActiveValue::Set(Some(650_596_352i64)),
+            total_memory: sea_orm::ActiveValue::Set(Some(16_734_150_656i64)),
+            available_memory: sea_orm::ActiveValue::Set(Some(16_083_554_304i64)),
             load_one: sea_orm::ActiveValue::Set(Some(5i16)),
             load_five: sea_orm::ActiveValue::Set(Some(3i16)),
             load_fifteen: sea_orm::ActiveValue::Set(Some(1i16)),
             uptime: sea_orm::ActiveValue::Set(Some(14043i32)),
-            boot_time: sea_orm::ActiveValue::Set(Some(1777449499i64)),
+            boot_time: sea_orm::ActiveValue::Set(Some(1_777_449_499i64)),
             process_count: sea_orm::ActiveValue::Set(Some(135i32)),
-            total_space: sea_orm::ActiveValue::Set(Some(64353267200i64)),
-            available_space: sea_orm::ActiveValue::Set(Some(61662812160i64)),
+            total_space: sea_orm::ActiveValue::Set(Some(64_353_267_200i64)),
+            available_space: sea_orm::ActiveValue::Set(Some(61_662_812_160i64)),
             read_speed: sea_orm::ActiveValue::Set(Some(0i64)),
             write_speed: sea_orm::ActiveValue::Set(Some(35902i64)),
             tcp_connections: sea_orm::ActiveValue::Set(Some(14i32)),
             udp_connections: sea_orm::ActiveValue::Set(Some(2i32)),
-            total_received: sea_orm::ActiveValue::Set(Some(52957882012i64)),
-            total_transmitted: sea_orm::ActiveValue::Set(Some(60236401467i64)),
+            total_received: sea_orm::ActiveValue::Set(Some(52_957_882_012i64)),
+            total_transmitted: sea_orm::ActiveValue::Set(Some(60_236_401_467i64)),
             transmit_speed: sea_orm::ActiveValue::Set(Some(8391i64)),
             receive_speed: sea_orm::ActiveValue::Set(Some(7160i64)),
         };
@@ -478,14 +451,26 @@ mod tests {
         assert_eq!(obj["load_fifteen"], Value::Number(1i64.into()));
 
         // Apply descaling and verify
-        apply_descaling(&mut obj);
-        assert_eq!(obj["cpu_usage"], Value::Number(serde_json::Number::from_f64(5.0).unwrap()));
-        assert_eq!(obj["load_one"], Value::Number(serde_json::Number::from_f64(0.5).unwrap()));
-        assert_eq!(obj["load_five"], Value::Number(serde_json::Number::from_f64(0.3).unwrap()));
-        assert_eq!(obj["load_fifteen"], Value::Number(serde_json::Number::from_f64(0.1).unwrap()));
+        nodeget_lib::monitoring::query::apply_descaling_to_json_object(&mut obj);
+        assert_eq!(
+            obj["cpu_usage"],
+            Value::Number(serde_json::Number::from_f64(5.0).unwrap())
+        );
+        assert_eq!(
+            obj["load_one"],
+            Value::Number(serde_json::Number::from_f64(0.5).unwrap())
+        );
+        assert_eq!(
+            obj["load_five"],
+            Value::Number(serde_json::Number::from_f64(0.3).unwrap())
+        );
+        assert_eq!(
+            obj["load_fifteen"],
+            Value::Number(serde_json::Number::from_f64(0.1).unwrap())
+        );
 
         // Verify other fields are unaffected
-        assert_eq!(obj["used_memory"], Value::Number(650596352i64.into()));
+        assert_eq!(obj["used_memory"], Value::Number(650_596_352i64.into()));
     }
 
     #[test]
@@ -501,18 +486,15 @@ mod tests {
 
         assert!(
             sql.contains(r#""cpu_usage" / 10 AS "cpu_usage""#),
-            "PostgreSQL SQL should descale cpu_usage in SQL: {}",
-            sql
+            "PostgreSQL SQL should descale cpu_usage in SQL: {sql}"
         );
         assert!(
             sql.contains(r#""load_one" / 10 AS "load_one""#),
-            "PostgreSQL SQL should descale load_one in SQL: {}",
-            sql
+            "PostgreSQL SQL should descale load_one in SQL: {sql}"
         );
         assert!(
             !sql.contains(r#""used_memory" / 10"#),
-            "PostgreSQL SQL should NOT descale used_memory in SQL: {}",
-            sql
+            "PostgreSQL SQL should NOT descale used_memory in SQL: {sql}"
         );
     }
 
@@ -529,8 +511,7 @@ mod tests {
 
         assert!(
             !sql.contains("/ 10"),
-            "SQLite SQL should NOT contain / 10 expressions: {}",
-            sql
+            "SQLite SQL should NOT contain / 10 expressions: {sql}"
         );
     }
 }

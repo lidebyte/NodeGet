@@ -101,7 +101,7 @@ pub fn init(config: Option<&MonitoringBufferConfig>) {
 
 /// 刷新所有缓冲区并等待完成（用于 graceful shutdown）
 ///
-/// Drop 掉所有 sender 使 channel 关闭，flush_loop 的 `rx.recv()` 返回 `None`，
+/// Drop 掉所有 sender 使 channel `关闭，flush_loop` 的 `rx.recv()` 返回 `None`，
 /// 触发最后一次 flush 后退出。等待足够时间让 flush 完成。
 pub async fn flush_and_shutdown() {
     let Some(buffers) = BUFFERS.get() else {
@@ -123,19 +123,25 @@ pub struct BufferSender<T> {
 }
 
 impl<T> BufferSender<T> {
-    /// 将一条 ActiveModel 送入缓冲区（非阻塞，满则丢弃并告警）
+    /// 将一条 `ActiveModel` 送入缓冲区（非阻塞，满则丢弃并告警）
     pub fn send(&self, item: T) {
-        let guard = self.tx.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(tx) = guard.as_ref() {
-            if let Err(_e) = tx.try_send(item) {
-                warn!(target: "monitoring", "Buffer channel full or closed, dropping item");
-            }
+        let guard = self
+            .tx
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(tx) = guard.as_ref()
+            && let Err(_e) = tx.try_send(item)
+        {
+            warn!(target: "monitoring", "Buffer channel full or closed, dropping item");
         }
     }
 
     /// 关闭 sender（drop 内部的 Sender）
     fn close(&self) {
-        let mut guard = self.tx.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self
+            .tx
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         debug!(target: "monitoring", "Closing buffer sender");
         guard.take(); // drop the sender, closing the channel
     }
@@ -161,25 +167,22 @@ async fn flush_loop<E, A>(
         tokio::select! {
             _ = ticker.tick() => {}
             item = rx.recv() => {
-                match item {
-                    Some(model) => {
-                        buf.push(model);
-                        // drain 所有立即可用的消息
-                        while buf.len() < max_batch_size {
-                            match rx.try_recv() {
-                                Ok(m) => buf.push(m),
-                                Err(_) => break,
-                            }
+                if let Some(model) = item {
+                    buf.push(model);
+                    // drain 所有立即可用的消息
+                    while buf.len() < max_batch_size {
+                        match rx.try_recv() {
+                            Ok(m) => buf.push(m),
+                            Err(_) => break,
                         }
                     }
-                    None => {
-                        // channel 关闭，flush 剩余数据后退出
-                        if !buf.is_empty() {
-                            do_flush::<E, A>(table_name, &mut buf).await;
-                        }
-                        debug!(target: "monitoring", table = table_name, "Flush loop exiting");
-                        return;
+                } else {
+                    // channel 关闭，flush 剩余数据后退出
+                    if !buf.is_empty() {
+                        do_flush::<E, A>(table_name, &mut buf).await;
                     }
+                    debug!(target: "monitoring", table = table_name, "Flush loop exiting");
+                    return;
                 }
             }
         }

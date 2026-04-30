@@ -91,7 +91,7 @@ impl RuntimeWorkerHandle {
         match get_local_timestamp_ms_i64() {
             Ok(now) => self.last_used_ms.store(now, Ordering::Relaxed),
             Err(e) => {
-                warn!(target: "js_runtime", error = %e, "Failed to read local timestamp for runtime worker")
+                warn!(target: "js_runtime", error = %e, "Failed to read local timestamp for runtime worker");
             }
         }
         self.active_requests.fetch_sub(1, Ordering::SeqCst);
@@ -116,6 +116,8 @@ impl JsRuntimePool {
         }
     }
 
+    /// # Errors
+    /// Returns an error if the worker channel is closed or script execution fails.
     pub async fn execute_script(
         &self,
         script_name: &str,
@@ -338,13 +340,13 @@ fn spawn_worker(script_name: &str) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
 
     std::thread::Builder::new()
         .name(format!("js-rt-{script_name}"))
-        .spawn(move || worker_loop(script_name, rx))
+        .spawn(move || worker_loop(&script_name, rx))
         .map_err(|e| anyhow::anyhow!("Failed to spawn JS runtime worker thread: {e}"))?;
 
     Ok(handle)
 }
 
-fn worker_loop(script_name: String, receiver: std::sync::mpsc::Receiver<WorkerCommand>) {
+fn worker_loop(script_name: &str, receiver: std::sync::mpsc::Receiver<WorkerCommand>) {
     trace!(target: "js_runtime", script_name = %script_name, "worker loop started");
     let host_rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -378,7 +380,7 @@ fn worker_loop(script_name: String, receiver: std::sync::mpsc::Receiver<WorkerCo
                 let exec_result = host_rt.block_on(async {
                     execute_on_worker(
                         &mut runtime_state,
-                        script_name.as_str(),
+                        script_name,
                         bytecode,
                         bytecode_hash,
                         run_type,
@@ -415,59 +417,75 @@ async fn execute_on_worker(
         .ok_or_else(|| js_error("js_runtime", "Runtime state is missing"))?;
 
     if state.loaded_bytecode_hash != Some(bytecode_hash) {
-        let load_result: Result<(), Error> = state.ctx.async_with(async |ctx| {
-            let declared_module = enrich_exception(&ctx, "js_load", unsafe {
-                Module::load(ctx.clone(), &bytecode)
-            })?;
+        let load_result: Result<(), Error> = state
+            .ctx
+            .async_with(async |ctx| {
+                let declared_module = enrich_exception(&ctx, "js_load", unsafe {
+                    Module::load(ctx.clone(), &bytecode)
+                })?;
 
-            let (module, module_eval_promise) =
-                enrich_exception(&ctx, "js_eval", declared_module.eval())?;
-            let _eval_result = enrich_exception(
-                &ctx,
-                "js_eval",
-                module_eval_promise.into_future::<JsValue<'_>>().await,
-            )?;
+                let (module, module_eval_promise) =
+                    enrich_exception(&ctx, "js_eval", declared_module.eval())?;
+                let _eval_result = enrich_exception(
+                    &ctx,
+                    "js_eval",
+                    module_eval_promise.into_future::<JsValue<'_>>().await,
+                )?;
 
-            let namespace = enrich_exception(&ctx, "js_namespace", module.namespace())?;
-            let entry_value: JsValue<'_> =
-                enrich_exception(&ctx, "js_namespace", namespace.get("default"))?;
-            ctx.globals().set("__nodeget_entry", entry_value)?;
+                let namespace = enrich_exception(&ctx, "js_namespace", module.namespace())?;
+                let entry_value: JsValue<'_> =
+                    enrich_exception(&ctx, "js_namespace", namespace.get("default"))?;
+                ctx.globals().set("__nodeget_entry", entry_value)?;
 
-            Ok(())
-        })
-        .await;
+                Ok(())
+            })
+            .await;
 
         state.rt.idle().await;
         load_result?;
         state.loaded_bytecode_hash = Some(bytecode_hash);
     }
 
-    let run_result: Result<Value, Error> = state.ctx.async_with(async |ctx| {
-        let run_type_handler = run_type.handler_name().to_owned();
-        ctx.globals().set("__nodeget_run_handler", run_type_handler)?;
+    let run_result: Result<Value, Error> = state
+        .ctx
+        .async_with(async |ctx| {
+            let run_type_handler = run_type.handler_name().to_owned();
+            ctx.globals()
+                .set("__nodeget_run_handler", run_type_handler)?;
 
-        let input_json = serde_json::to_string(&params)
-            .map_err(|e| js_error("js_runner", format!("Failed to serialize input params: {e}")))?;
-        let input_js = ctx
-            .json_parse(input_json)
-            .map_err(|e| js_error("js_runner", format!("Failed to build input params in JS: {e}")))?;
-        ctx.globals().set("__nodeget_run_params", input_js)?;
+            let input_json = serde_json::to_string(&params).map_err(|e| {
+                js_error(
+                    "js_runner",
+                    format!("Failed to serialize input params: {e}"),
+                )
+            })?;
+            let input_js = ctx.json_parse(input_json).map_err(|e| {
+                js_error(
+                    "js_runner",
+                    format!("Failed to build input params in JS: {e}"),
+                )
+            })?;
+            ctx.globals().set("__nodeget_run_params", input_js)?;
 
-        let env_json = serde_json::to_string(&env)
-            .map_err(|e| js_error("js_runner", format!("Failed to serialize env: {e}")))?;
-        let env_js = ctx
-            .json_parse(env_json)
-            .map_err(|e| js_error("js_runner", format!("Failed to build env in JS: {e}")))?;
-        ctx.globals().set("__nodeget_env", env_js)?;
+            let env_json = serde_json::to_string(&env)
+                .map_err(|e| js_error("js_runner", format!("Failed to serialize env: {e}")))?;
+            let env_js = ctx
+                .json_parse(env_json)
+                .map_err(|e| js_error("js_runner", format!("Failed to build env in JS: {e}")))?;
+            ctx.globals().set("__nodeget_env", env_js)?;
 
-        ctx.globals()
-            .set("__nodeget_current_script_name", script_name.to_owned())?;
-        let inline_caller_js = ctx
-            .json_parse("null")
-            .map_err(|e| js_error("js_runner", format!("Failed to set inline caller in JS: {e}")))?;
-        ctx.globals().set("__nodeget_inline_caller", inline_caller_js)?;
+            ctx.globals()
+                .set("__nodeget_current_script_name", script_name.to_owned())?;
+            let inline_caller_js = ctx.json_parse("null").map_err(|e| {
+                js_error(
+                    "js_runner",
+                    format!("Failed to set inline caller in JS: {e}"),
+                )
+            })?;
+            ctx.globals()
+                .set("__nodeget_inline_caller", inline_caller_js)?;
 
-        let invoke_script = r#"
+            let invoke_script = r#"
             (async () => {
                 const entry = globalThis.__nodeget_entry;
                 const runHandler = globalThis.__nodeget_run_handler;
@@ -571,40 +589,40 @@ async fn execute_on_worker(
             })()
         "#;
 
-        let invoke_promise: Promise<'_> =
-            enrich_exception(&ctx, "js_invoke", ctx.eval(invoke_script))?;
-        let js_value: JsValue<'_> = enrich_exception(
-            &ctx,
-            "js_invoke",
-            invoke_promise.into_future::<JsValue<'_>>().await,
-        )?;
+            let invoke_promise: Promise<'_> =
+                enrich_exception(&ctx, "js_invoke", ctx.eval(invoke_script))?;
+            let js_value: JsValue<'_> = enrich_exception(
+                &ctx,
+                "js_invoke",
+                invoke_promise.into_future::<JsValue<'_>>().await,
+            )?;
 
-        if js_value.is_undefined() {
-            return Err(js_error(
-                "json_parse",
-                "Script must return a JSON-serializable value",
-            ));
-        }
+            if js_value.is_undefined() {
+                return Err(js_error(
+                    "json_parse",
+                    "Script must return a JSON-serializable value",
+                ));
+            }
 
-        let raw_json = if let Some(js_string) = js_value.as_string() {
-            js_string.to_string()?
-        } else {
-            let js_json_string = ctx.json_stringify(js_value)?.ok_or_else(|| {
+            let raw_json = if let Some(js_string) = js_value.as_string() {
+                js_string.to_string()?
+            } else {
+                let js_json_string = ctx.json_stringify(js_value)?.ok_or_else(|| {
+                    js_error(
+                        "json_parse",
+                        "Script return is not JSON-serializable (got function/symbol)",
+                    )
+                })?;
+                js_json_string.to_string()?
+            };
+
+            serde_json::from_str(&raw_json).map_err(|e| {
                 js_error(
                     "json_parse",
-                    "Script return is not JSON-serializable (got function/symbol)",
+                    format!("Script return is not valid JSON: {e}"),
                 )
-            })?;
-            js_json_string.to_string()?
-        };
-
-        serde_json::from_str(&raw_json).map_err(|e| {
-            js_error(
-                "json_parse",
-                format!("Script return is not valid JSON: {e}"),
-            )
+            })
         })
-    })
         .await;
 
     state.rt.idle().await;
@@ -618,10 +636,9 @@ async fn create_runtime_state() -> Result<RuntimeState, Error> {
     rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
     let ctx = AsyncContext::full(&rt).await?;
 
-    let init_result: Result<(), Error> = ctx.async_with(async |ctx| {
-        init_js_runtime_globals(&ctx)
-    })
-    .await;
+    let init_result: Result<(), Error> = ctx
+        .async_with(async |ctx| init_js_runtime_globals(&ctx))
+        .await;
 
     rt.idle().await;
     init_result?;

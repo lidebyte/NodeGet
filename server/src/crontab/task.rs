@@ -170,5 +170,5 @@ pub async fn crontab_task(
         }
     }
     .instrument(span)
-    .await
+    .await;
 }

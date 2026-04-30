@@ -8,8 +8,8 @@
 )]
 
 use nodeget_lib::args_parse::server::{ServerArgs, ServerCommand};
-use tracing::info;
 use nodeget_lib::utils::version::NodeGetVersion;
+use tracing::info;
 
 // 数据库连接模块
 mod db_connection;
@@ -26,8 +26,8 @@ mod kv;
 mod logging;
 pub(crate) mod monitoring_buffer;
 pub(crate) mod monitoring_uuid_cache;
-pub(crate) mod static_hash_cache;
 mod rpc_timing;
+pub(crate) mod static_hash_cache;
 mod subcommands;
 mod token;
 
@@ -56,7 +56,7 @@ async fn main() {
     {
         if args.command == ServerCommand::Version {
             let version = NodeGetVersion::get();
-            println!("{}", version.to_string());
+            println!("{version}");
             return;
         }
     }
@@ -133,7 +133,7 @@ async fn main() {
         }
         ServerCommand::Version => {
             let version = NodeGetVersion::get();
-            println!("{}", version.to_string());
+            println!("{version}");
         }
     }
 }

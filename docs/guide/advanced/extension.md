@@ -70,9 +70,11 @@ demo-extension
 - 获取到所有文件，读取 `app.json`，弹出确认创建指定权限 Token 的提示框
 - 用户确认后**创建对应的 Token**
 - 生成一个随机的 UUID 代表扩展的 ID，这里暂定为 `Extension_UUID`
-- 把 `resources` 目录下的静态文件利用后文提到的**静态文件服务上传**到 `https://主控域名/worker-route/static-worker-route/Extension_UUID/` 路由下
+- 把 `resources` 目录下的静态文件利用后文提到的**静态文件服务上传**到
+  `https://主控域名/worker-route/static-worker-route/Extension_UUID/` 路由下
 - 动态注册前端路由
-- 把 `app.json` 和 `Extension_UUID`、Token 等信息**储存到 Kv 内**，namespace 为 `extension-infomation`，key 是 `Extension_UUID`
+- 把 `app.json` 和 `Extension_UUID`、Token 等信息**储存到 Kv 内**，namespace 为 `extension-infomation`，key 是
+  `Extension_UUID`
 
 ## 静态文件托管 Worker
 
