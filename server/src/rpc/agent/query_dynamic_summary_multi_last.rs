@@ -298,7 +298,7 @@ async fn execute_statement_query(
                         );
                     }
                     if needs_app_descaling {
-                        apply_descaling(obj);
+                        nodeget_lib::monitoring::query::apply_descaling_to_json_object(obj);
                     }
                 }
                 if first {
@@ -337,27 +337,6 @@ async fn execute_statement_query(
     debug!(target: "monitoring", result_count = result_count, "Dynamic monitoring summary multi-last query completed");
 
     Ok(raw_value)
-}
-
-/// Apply /10.0 descaling to known scaled columns in the JSON object.
-/// This is done in application code rather than SQL to work around
-/// `SQLite` limitations with expression aliases in raw `find_by_statement` queries.
-fn apply_descaling(obj: &mut serde_json::Map<String, serde_json::Value>) {
-    const SCALED_FIELDS: &[&str] = &["cpu_usage", "load_one", "load_five", "load_fifteen"];
-    for key in SCALED_FIELDS {
-        if let Some(val) = obj.get_mut(*key)
-            && let serde_json::Value::Number(n) = val {
-                if let Some(i) = n.as_i64() {
-                    if let Some(scaled) = serde_json::Number::from_f64(i as f64 / 10.0) {
-                        *val = serde_json::Value::Number(scaled);
-                    }
-                } else if let Some(f) = n.as_f64()
-                    && let Some(scaled) = serde_json::Number::from_f64(f / 10.0)
-                {
-                    *val = serde_json::Value::Number(scaled);
-                }
-            }
-    }
 }
 
 #[cfg(test)]
@@ -472,7 +451,7 @@ mod tests {
         assert_eq!(obj["load_fifteen"], Value::Number(1i64.into()));
 
         // Apply descaling and verify
-        apply_descaling(&mut obj);
+        nodeget_lib::monitoring::query::apply_descaling_to_json_object(&mut obj);
         assert_eq!(
             obj["cpu_usage"],
             Value::Number(serde_json::Number::from_f64(5.0).unwrap())
