@@ -178,6 +178,7 @@ pub async fn run_inline_call_and_record_result(
             env,
             Some(target_script_name),
             inline_caller,
+            timeout_duration,
         )
         .map_err(|e| {
             NodegetError::Other(format!(
@@ -188,26 +189,11 @@ pub async fn run_inline_call_and_record_result(
         })
     });
 
-    let run_outcome: anyhow::Result<Value> = if let Some(duration) = timeout_duration {
-        match tokio::time::timeout(duration, run_task).await {
-            Ok(join_result) => join_result.map_err(|e| {
-                anyhow::Error::from(NodegetError::Other(format!(
-                    "inline_call task join failed: {e}"
-                )))
-            })?,
-            Err(_) => Err(NodegetError::Other(format!(
-                "inline_call timed out after {:.3} seconds",
-                duration.as_secs_f64()
-            ))
-            .into()),
-        }
-    } else {
-        run_task.await.map_err(|e| {
-            anyhow::Error::from(NodegetError::Other(format!(
-                "inline_call task join failed: {e}"
-            )))
-        })?
-    };
+    let run_outcome: anyhow::Result<Value> = run_task.await.map_err(|e| {
+        anyhow::Error::from(NodegetError::Other(format!(
+            "inline_call task join failed: {e}"
+        )))
+    })?;
 
     let finish_time = get_local_timestamp_ms_i64().unwrap_or(start_time);
     let duration_ms = finish_time - start_time;
@@ -297,7 +283,14 @@ pub async fn enqueue_source_js_worker_run(
     tokio::spawn(async move {
         let worker_name_in_spawn = worker_name_for_log.clone();
         let run_outcome: Result<Value, String> = match tokio::task::spawn_blocking(move || {
-            js_runner_source_mode(&source_code, &worker_name, run_type, params, resolved_env)
+            js_runner_source_mode(
+                &source_code,
+                &worker_name,
+                run_type,
+                params,
+                resolved_env,
+                Some(std::time::Duration::from_secs(300)),
+            )
         })
         .await
         {

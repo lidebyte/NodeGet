@@ -190,6 +190,7 @@ pub fn js_runner(
     env_value: Value,
     current_script_name: Option<String>,
     inline_caller: Option<String>,
+    execution_timeout: Option<std::time::Duration>,
 ) -> Result<Value, Error> {
     debug!(target: "js_runtime", run_type = ?run_type, has_inline_caller = inline_caller.is_some(), "executing JS runner");
     let host_rt = tokio::runtime::Builder::new_current_thread()
@@ -201,11 +202,12 @@ pub fn js_runner(
         })?;
 
     host_rt.block_on(async move {
-        let rt = AsyncRuntime::new()?;
-        rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
-        let ctx = AsyncContext::full(&rt).await?;
+        let execute = async {
+            let rt = AsyncRuntime::new()?;
+            rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
+            let ctx = AsyncContext::full(&rt).await?;
 
-        let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
+            let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
             init_js_runtime_globals(&ctx)?;
             let global = ctx.globals();
 
@@ -426,6 +428,15 @@ pub fn js_runner(
 
         rt.idle().await;
         js_result
+        };
+
+        match execution_timeout {
+            Some(duration) => match tokio::time::timeout(duration, execute).await {
+                Ok(result) => result,
+                Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
+            },
+            None => execute.await,
+        }
     })
 }
 
@@ -437,6 +448,7 @@ pub fn js_runner_source_mode(
     run_type: RunType,
     input_params: Value,
     env_value: Value,
+    execution_timeout: Option<std::time::Duration>,
 ) -> Result<Value, Error> {
     debug!(target: "js_runtime", script_name = %script_name, run_type = ?run_type, "executing JS runner in source mode");
     let host_rt = tokio::runtime::Builder::new_current_thread()
@@ -445,13 +457,14 @@ pub fn js_runner_source_mode(
         .map_err(|e| js_error("js_runner", format!("Failed to build host runtime: {e}")))?;
 
     host_rt.block_on(async move {
-        let rt = AsyncRuntime::new()?;
-        rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
-        let ctx = AsyncContext::full(&rt).await?;
+        let execute = async {
+            let rt = AsyncRuntime::new()?;
+            rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
+            let ctx = AsyncContext::full(&rt).await?;
 
-        let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
-            init_js_runtime_globals(&ctx)?;
-            let global = ctx.globals();
+            let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
+                init_js_runtime_globals(&ctx)?;
+                let global = ctx.globals();
 
             let run_type_handler = run_type.handler_name().to_owned();
             global.set("__nodeget_run_handler", run_type_handler)?;
@@ -647,5 +660,14 @@ pub fn js_runner_source_mode(
 
         rt.idle().await;
         js_result
+        };
+
+        match execution_timeout {
+            Some(duration) => match tokio::time::timeout(duration, execute).await {
+                Ok(result) => result,
+                Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
+            },
+            None => execute.await,
+        }
     })
 }

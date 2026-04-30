@@ -104,7 +104,9 @@ pub async fn create_task_blocking(
         debug!(target: "task", task_id = task_id_u64, timeout_ms = timeout_ms, "waiting for agent result");
 
         // 等待结果或超时
-        let timeout_duration = std::time::Duration::from_millis(timeout_ms);
+        const MAX_TIMEOUT_MS: u64 = 300_000;
+        let clamped_timeout_ms = timeout_ms.min(MAX_TIMEOUT_MS);
+        let timeout_duration = std::time::Duration::from_millis(clamped_timeout_ms);
         match tokio::time::timeout(timeout_duration, rx).await {
             Ok(Ok(response)) => {
                 debug!(target: "task", task_id = task_id_u64, success = response.success, "blocking task completed");

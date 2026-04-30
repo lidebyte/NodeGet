@@ -29,9 +29,14 @@ export default [
                 link: '/guide/install/manual-install.md'
             },
             {
-                text: 'docker',
+                text: 'Docker',
                 link: '/guide/install/docker.md'
             },
+            {
+                text: '部署 Status Show (公共前端)',
+                link: '/guide/install/status-show.md'
+            },
+
         ]
     },
     {
