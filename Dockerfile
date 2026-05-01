@@ -67,12 +67,12 @@ RUN chmod 0755 /usr/local/bin/nodeget-entrypoint
 
 WORKDIR /var/lib/nodeget
 
-ENV NODEGET_PORT="3000" \
+ENV NODEGET_PORT="2211" \
     NODEGET_SERVER_UUID="auto_gen" \
     NODEGET_LOG_FILTER="info" \
     NODEGET_DATABASE_URL="sqlite:///var/lib/nodeget/nodeget.db?mode=rwc"
 
-EXPOSE 3000
+EXPOSE 2211
 
 ENTRYPOINT ["/usr/local/bin/nodeget-entrypoint"]
 CMD ["serve"]
