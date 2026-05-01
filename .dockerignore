@@ -1,0 +1,12 @@
+.github
+target
+**/target
+node_modules
+docs/.vitepress/cache
+*.db
+*.sqlite
+*.sqlite3
+Dockerfile
+docker-compose*.yml
+README.md
+CONTRIBUTING.md
