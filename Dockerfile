@@ -6,7 +6,7 @@ ARG RUST_IMAGE=rustlang/rust:nightly-alpine3.22
 FROM alpine:${ALPINE_VERSION} AS release-binary
 
 ARG NODEGET_VERSION=latest
-ARG NODEGET_RELEASE_REPO=NodeSeekDev/NodeGet
+ARG NODEGET_RELEASE_REPO=GenshinMinecraft/NodeGet
 ARG TARGETARCH
 ARG TARGETVARIANT
 
@@ -54,7 +54,7 @@ FROM alpine:${ALPINE_VERSION} AS runtime-base
 
 LABEL org.opencontainers.image.title="NodeGet Server"
 LABEL org.opencontainers.image.description="NodeGet server runtime image based on Alpine Linux"
-LABEL org.opencontainers.image.source="https://github.com/NodeSeekDev/NodeGet"
+LABEL org.opencontainers.image.source="https://github.com/GenshinMinecraft/NodeGet"
 LABEL org.opencontainers.image.licenses="AGPL-3.0"
 
 RUN apk add --no-cache ca-certificates tzdata \

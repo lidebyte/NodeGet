@@ -15,7 +15,7 @@ services:
       retries: 20
 
   nodeget:
-    image: "${NODEGET_IMAGE:-ghcr.io/nodeseekdev/nodeget-server:latest}"
+    image: "${NODEGET_IMAGE:-genshinmc/nodeget:latest}"
     restart: unless-stopped
     depends_on:
       postgres:

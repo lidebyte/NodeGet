@@ -2,10 +2,10 @@
 
 ## 安装 Server
 
-官方 Docker 镜像由 CI 从源码编译并推送到 GHCR：
+官方 Docker 镜像由 CI 从源码编译并推送到 Docker Hub：
 
-- `ghcr.io/nodeseekdev/nodeget-server:latest`：最新发布版本镜像
-- `ghcr.io/nodeseekdev/nodeget-server:vX.Y.Z`：Release tag 镜像
+- `genshinmc/nodeget:latest`：最新发布版本镜像
+- `genshinmc/nodeget:vX.Y.Z`：Release tag 镜像
 
 ### PostgreSQL + NodeGet
 
@@ -40,7 +40,7 @@ PostgreSQL 部署时如需修改数据库密码，设置 `POSTGRES_PASSWORD` 即
 如需使用指定镜像 tag：
 
 ```shell
-NODEGET_IMAGE=ghcr.io/nodeseekdev/nodeget-server:v0.0.6 docker compose up -d
+NODEGET_IMAGE=genshinmc/nodeget:v0.0.6 docker compose up -d
 ```
 
 Compose 示例只持久化 `./nodeget/config.toml`。若希望完全手动维护配置文件，可以取消 `NODEGET_CONFIG_FROM_ENV=true`，直接编辑 `./nodeget/config.toml`。

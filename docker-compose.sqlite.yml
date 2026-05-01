@@ -2,7 +2,7 @@ name: nodeget-sqlite
 
 services:
   nodeget:
-    image: "${NODEGET_IMAGE:-ghcr.io/nodeseekdev/nodeget-server:latest}"
+    image: "${NODEGET_IMAGE:-genshinmc/nodeget:latest}"
     restart: unless-stopped
     environment:
       NODEGET_CONFIG_FROM_ENV: "true"
