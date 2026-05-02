@@ -555,42 +555,28 @@ mod list_all_agent_uuid {
         Ok(AgentUuidListPermission::Scoped(allowed_scoped_uuids))
     }
 
-    #[derive(FromQueryResult)]
-    struct UuidIdRow {
-        uuid_id: i16,
-    }
-
     async fn fetch_all_agent_uuids(db: &sea_orm::DatabaseConnection) -> anyhow::Result<Vec<Uuid>> {
         debug!(target: "server", "fetching all agent uuids");
 
         let db_backend = db.get_database_backend();
 
-        // Use UNION to collect all uuid_ids from monitoring tables in a single query
+        // Use EXISTS with indexed lookups on uuid_id instead of full-table UNION scan.
+        // Each subquery hits the (uuid_id, timestamp) composite index, O(agent_count × 3 index hits).
         let sql = r"
-            SELECT uuid_id FROM static_monitoring
-            UNION
-            SELECT uuid_id FROM dynamic_monitoring
-            UNION
-            SELECT uuid_id FROM dynamic_monitoring_summary
+            SELECT uuid FROM monitoring_uuid WHERE
+              EXISTS (SELECT 1 FROM static_monitoring WHERE uuid_id = monitoring_uuid.id LIMIT 1) OR
+              EXISTS (SELECT 1 FROM dynamic_monitoring WHERE uuid_id = monitoring_uuid.id LIMIT 1) OR
+              EXISTS (SELECT 1 FROM dynamic_monitoring_summary WHERE uuid_id = monitoring_uuid.id LIMIT 1)
         ";
         let rows =
-            UuidIdRow::find_by_statement(Statement::from_string(db_backend, sql.to_string()))
+            UuidRow::find_by_statement(Statement::from_string(db_backend, sql.to_string()))
                 .all(db)
                 .await
                 .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
-        let mut uuid_id_set = std::collections::BTreeSet::<i16>::new();
-        for row in rows {
-            uuid_id_set.insert(row.uuid_id);
-        }
-
-        // Map uuid_id to Uuid via monitoring_uuid cache
-        let uuid_cache = crate::monitoring_uuid_cache::MonitoringUuidCache::global();
         let mut uuid_set = std::collections::BTreeSet::<Uuid>::new();
-        for id in &uuid_id_set {
-            if let Some(uuid) = uuid_cache.get_uuid(*id).await {
-                uuid_set.insert(uuid);
-            }
+        for row in rows {
+            uuid_set.insert(row.uuid);
         }
 
         // Also include UUIDs from task table (not covered by monitoring tables)
