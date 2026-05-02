@@ -1,6 +1,6 @@
 [package]
 name = "nodeget-agent"
-version = "0.0.11"
+version = "0.0.12"
 edition = "2024"
 
 [dependencies]
@@ -19,14 +19,14 @@ log = { version = "0.4.29", default-features = false, features = ["std"] }
 simple_logger = { version = "5.1.0", default-features = false, features = ["threads", "time", "timestamps", "colored", "colors"] }
 
 # Http Client
-reqwest = { version = "0.12.24", default-features = false, features = ["rustls-tls-webpki-roots-no-provider"] }
+reqwest = { version = "0.13.3", default-features = false, features = ["rustls-no-provider"] }
 rustls = { version = "0.23.28", default-features = false, features = ["std", "ring"] }
-tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["rustls-tls-webpki-roots", "connect"] }
+tokio-tungstenite = { version = "0.29.0", default-features = false, features = ["rustls-tls-webpki-roots", "connect"] }
 
 # parser
 serde = { version = "1.0.228", default-features = false, features = ["std", "derive"] }
 serde_json = { version = "1.0.149", default-features = false, features = ["std"] }
-toml = { version = "0.9.11", default-features = false, features = ["std", "serde", "parse"] }
+toml = { version = "1.1.2", default-features = false, features = ["std", "serde", "parse"] }
 url = { version = "2.5.8", default-features = false, features = ["std", "serde"] }
 base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
 
@@ -46,17 +46,17 @@ portable-pty = "0.9.0"
 # Dependency for system information
 ## Main cross-platform library (Linux/macOS features)
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-sysinfo = { version = "0.37.2", default-features = false, features = ["multithread", "disk", "network", "system"] }
+sysinfo = { version = "0.38.4", default-features = false, features = ["multithread", "disk", "network", "system"] }
 # Raw bindings to libc functions (for reading information)
 libc = "0.2.175"
 # Virtualization detection
 heim-virt = "0.1.0-alpha.1"
 ## Nvidia GPU Support
-nvml-wrapper = "0.11.0"
+nvml-wrapper = "0.12.1"
 
 ## Windows-specific features
 [target.'cfg(target_os = "windows")'.dependencies]
-sysinfo = { version = "0.37.2", default-features = false, features = ["multithread", "windows", "disk", "network", "system"] }
+sysinfo = { version = "0.38.4", default-features = false, features = ["multithread", "windows", "disk", "network", "system"] }
 # Virtualization detection
 raw-cpuid = "11.5.0"
 # Network Connections
@@ -64,4 +64,4 @@ netstat2 = "0.11.2"
 # Windows system calls
 windows-sys = { version = "0.61.2", default-features = false, features = ["Win32_Foundation", "Win32_System_ProcessStatus"] }
 ## Nvidia GPU Support
-nvml-wrapper = "0.11.0"
+nvml-wrapper = "0.12.1"
