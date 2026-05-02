@@ -111,7 +111,7 @@ impl TaskEventType {
     /// 当任务类型不是 Ping/TcpPing/HttpPing 时会 panic
     #[must_use]
     pub fn result_from_duration(&self, duration: Duration) -> TaskEventResult {
-        let millis = duration.as_millis_f64();
+        let millis = duration.as_secs_f64() * 1000.0;
         match self {
             Self::Ping(_) => TaskEventResult::Ping(millis),
             Self::TcpPing(_) => TaskEventResult::TcpPing(millis),
@@ -208,9 +208,9 @@ impl TaskEventResult {
     #[must_use]
     pub const fn from_duration(task_type: &TaskEventType, duration: Duration) -> Option<Self> {
         match task_type {
-            TaskEventType::Ping(_) => Some(Self::Ping(duration.as_millis_f64())),
-            TaskEventType::TcpPing(_) => Some(Self::TcpPing(duration.as_millis_f64())),
-            TaskEventType::HttpPing(_) => Some(Self::HttpPing(duration.as_millis_f64())),
+            TaskEventType::Ping(_) => Some(Self::Ping(duration.as_secs_f64() * 1000.0)),
+            TaskEventType::TcpPing(_) => Some(Self::TcpPing(duration.as_secs_f64() * 1000.0)),
+            TaskEventType::HttpPing(_) => Some(Self::HttpPing(duration.as_secs_f64() * 1000.0)),
             _ => None,
         }
     }

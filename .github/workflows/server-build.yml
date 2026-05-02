@@ -62,7 +62,7 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-system
         with:
-          toolchain: nightly
+          toolchain: stable
           components: clippy
 
       - name: Install Cross
@@ -165,7 +165,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly
+          toolchain: stable
           targets: ${{ matrix.platform.target }}
 
       - name: Build binary
@@ -200,7 +200,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly
+          toolchain: stable
           targets: ${{ matrix.platform.target }}
 
       - name: Build binary

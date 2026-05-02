@@ -29,7 +29,7 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-system
         with:
-          toolchain: nightly
+          toolchain: stable
           components: clippy
 
       - name: Cargo clippy
@@ -46,7 +46,7 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-system
         with:
-          toolchain: nightly
+          toolchain: stable
           components: clippy
 
       - name: Cargo clippy
