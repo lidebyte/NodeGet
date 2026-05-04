@@ -2,6 +2,7 @@ use crate::entity::task;
 use crate::rpc::RpcHelper;
 use crate::rpc::task::TaskManager;
 use crate::token::get::{check_token_limit, get_token};
+use crate::token::super_token::check_super_token;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::data_structure::{Permission, Scope, Task};
@@ -26,26 +27,32 @@ pub async fn upload_task_result(
 
         // 先进行权限预检，防止无权限调用者通过数据库查询差异探测任务存在性（时序攻击）
         // 预检逻辑：检查 token 是否对目标 Agent 持有任意 Task::Write 权限（不限具体 pattern）
-        let token = get_token(&token_or_auth)
+        let is_super = check_super_token(&token_or_auth)
             .await
             .map_err(|e| NodegetError::PermissionDenied(format!("{e}")))?;
-        let has_any_task_write = token.token_limit.iter().any(|limit| {
-            let scope_ok = limit.scopes.iter().any(|s| {
-                matches!(s, Scope::Global)
-                    || matches!(s, Scope::AgentUuid(uuid) if *uuid == task_response.agent_uuid)
-            });
-            let perm_ok = limit
-                .permissions
-                .iter()
-                .any(|p| matches!(p, Permission::Task(Task::Write(_))));
-            scope_ok && perm_ok
-        });
 
-        if !has_any_task_write {
-            return Err(NodegetError::PermissionDenied(
-                "Permission Denied: Missing Task Write permission for this Agent".to_owned(),
-            )
-            .into());
+        if !is_super {
+            let token = get_token(&token_or_auth)
+                .await
+                .map_err(|e| NodegetError::PermissionDenied(format!("{e}")))?;
+            let has_any_task_write = token.token_limit.iter().any(|limit| {
+                let scope_ok = limit.scopes.iter().any(|s| {
+                    matches!(s, Scope::Global)
+                        || matches!(s, Scope::AgentUuid(uuid) if *uuid == task_response.agent_uuid)
+                });
+                let perm_ok = limit
+                    .permissions
+                    .iter()
+                    .any(|p| matches!(p, Permission::Task(Task::Write(_))));
+                scope_ok && perm_ok
+            });
+
+            if !has_any_task_write {
+                return Err(NodegetError::PermissionDenied(
+                    "Permission Denied: Missing Task Write permission for this Agent".to_owned(),
+                )
+                .into());
+            }
         }
 
         let db = <super::TaskRpcImpl as RpcHelper>::get_db()?;

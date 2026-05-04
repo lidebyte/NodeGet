@@ -221,6 +221,13 @@ pub async fn handle_task() {
                         let should_restart = matches!(task_type, TaskEventType::EditConfig(_))
                             && matches!(&task_result, Ok(TaskEventResult::EditConfig(true)));
 
+                        let should_self_update_restart =
+                            matches!(task_type, TaskEventType::SelfUpdate(_))
+                                && matches!(
+                                    &task_result,
+                                    Ok(TaskEventResult::SelfUpdate(true))
+                                );
+
                         let timestamp = get_local_timestamp_ms().unwrap_or(0);
 
                         let agent_uuid = match get_agent_config() {
@@ -290,6 +297,14 @@ pub async fn handle_task() {
                             } else {
                                 error!("Reload notify is not initialized");
                             }
+                        }
+
+                        if should_self_update_restart {
+                            info!(
+                                "[{server_name}] Self-update successful, restarting agent..."
+                            );
+                            time::sleep(Duration::from_millis(300)).await;
+                            crate::tasks::self_update::restart_process_with_exec_v();
                         }
                     });
                 }
