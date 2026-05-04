@@ -1,4 +1,3 @@
-use libc::if_data;
 use nodeget_lib::utils::version::NodeGetVersion;
 use std::fmt::Display;
 
