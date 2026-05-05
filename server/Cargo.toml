@@ -40,6 +40,9 @@ serde = "1.0.228"
 serde_json = "1.0.149"
 toml = { version = "1.1.2", default-features = false, features = ["std", "serde", "parse"] }
 
+# HTTP Client
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
+
 # 日志
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt", "chrono", "tracing-log"] }

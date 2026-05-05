@@ -41,6 +41,9 @@ pub trait Rpc {
 
     #[subscription(name = "stream_log", item = Value, unsubscribe = "unsubscribe_stream_log")]
     async fn stream_log(&self, token: String, log_filter: String) -> SubscriptionResult;
+
+    #[method(name = "self_update")]
+    async fn self_update(&self, token: String) -> RpcResult<()>;
 }
 
 #[derive(Clone)]
@@ -239,6 +242,17 @@ impl RpcServer for NodegetServerRpcImpl {
         }.instrument(forward_span));
 
         Ok(())
+    }
+
+    async fn self_update(&self, token: String) -> RpcResult<()> {
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "server", "nodeget-server::self_update", token_key = tk, username = un);
+        async {
+            todo!()
+            Ok(())
+        }
+        .instrument(span)
+        .await
     }
 }
 
