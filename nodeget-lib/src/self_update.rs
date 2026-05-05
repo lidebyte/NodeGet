@@ -138,7 +138,18 @@ fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
 }
 
 fn should_update(target: (u32, u32, u32), current: (u32, u32, u32)) -> bool {
-    true
+    target != current
+}
+
+/// 获取当前进程对应的“原”二进制路径：
+/// 如果 current_exe() 因为之前的 self_update rename 而指向 .old / .old.old …
+/// 则把所有末尾的 .old extension 剥掉，确保始终指向用户真正启动的那个文件。
+pub fn canonical_exe_path() -> Option<std::path::PathBuf> {
+    let mut path = std::env::current_exe().ok()?;
+    while path.extension() == Some(std::ffi::OsStr::new("old")) {
+        path = path.with_extension("");
+    }
+    Some(path)
 }
 
 pub fn check_if_update_needed(tag: &str) -> ((u32, u32, u32),(u32, u32, u32), bool) {
@@ -199,11 +210,9 @@ pub fn get_server_url(tag: &str) -> Option<String> {
 }
 
 pub fn replace_binary(binary: Vec<u8>) -> bool {
-    let current = match std::env::current_exe() {
-        Ok(p) => p,
-        Err(_) => {
-            return false;
-        }
+    let current = match canonical_exe_path() {
+        Some(p) => p,
+        None => return false,
     };
 
     let mut backup = current.as_os_str().to_os_string();
@@ -225,8 +234,8 @@ pub fn replace_binary(binary: Vec<u8>) -> bool {
 
 #[cfg(not(unix))]
 pub fn restart_process() -> ! {
-    let current = std::env::current_exe().unwrap_or_else(|e| {
-        eprintln!("Failed to get current exe path: {e}");
+    let current = canonical_exe_path().unwrap_or_else(|| {
+        eprintln!("Failed to get canonical exe path");
         std::process::exit(1);
     });
 
@@ -250,8 +259,8 @@ pub fn restart_process_with_exec_v() -> ! {
     use std::os::raw::c_char;
     use std::ptr;
 
-    let current = std::env::current_exe().unwrap_or_else(|e| {
-        eprintln!("Failed to get current exe path: {e}");
+    let current = canonical_exe_path().unwrap_or_else(|| {
+        eprintln!("Failed to get canonical exe path");
         std::process::exit(1);
     });
 

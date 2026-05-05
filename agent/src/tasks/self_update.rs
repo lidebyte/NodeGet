@@ -1,8 +1,8 @@
-use nodeget_lib::self_update::{check_if_update_needed, get_url, replace_binary};
+use nodeget_lib::self_update::{canonical_exe_path, check_if_update_needed, get_url, replace_binary};
 
 pub async fn self_update(tag: &str) -> bool {
-    let current = std::env::current_exe().unwrap_or_else(|e| {
-        eprintln!("Failed to get current exe path: {e}");
+    let current = canonical_exe_path().unwrap_or_else(|| {
+        eprintln!("Failed to get canonical exe path");
         std::process::exit(1);
     });
 
