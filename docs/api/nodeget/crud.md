@@ -650,7 +650,7 @@
 
 ### 方法
 
-调用方法名为 `nodeget-server_self_update`，仅需传入 super token。
+调用方法名为 `nodeget-server_self_update`，需要传入 super token 和目标版本号 tag（格式 `vX.Y.Z`，支持升级和降级，仅做格式校验）。
 
 ### 权限要求
 
@@ -658,7 +658,7 @@
 
 ### 返回值
 
-- 当前已是最新版本：返回 `null`
+- 当前版本与目标 tag 相同：返回 `null`
 - 开始更新：返回 `null`，服务端在响应发出后 **3 秒** 自动重启
 - 失败：返回 JSON-RPC error object
 
@@ -672,7 +672,7 @@ curl -X POST http://127.0.0.1:2211/jsonrpc \
   -d '{
     "jsonrpc": "2.0",
     "method": "nodeget-server_self_update",
-    "params": ["<super-token>"],
+    "params": ["<super-token>", "v0.0.14"],
     "id": 1
   }'
 ```

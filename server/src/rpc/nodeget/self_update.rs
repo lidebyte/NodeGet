@@ -3,7 +3,7 @@ use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 
-pub async fn self_update(token: String) -> RpcResult<()> {
+pub async fn self_update(token: String, tag: String) -> RpcResult<()> {
     let process_logic = async {
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
@@ -19,27 +19,9 @@ pub async fn self_update(token: String) -> RpcResult<()> {
         }
         tracing::debug!(target: "server", "Super token verified for self_update");
 
-        // 1. Fetch latest release tag from GitHub
-        let client = reqwest::Client::new();
-        let release: serde_json::Value = client
-            .get("https://api.github.com/repos/NodeSeekDev/NodeGet/releases/latest")
-            .header("User-Agent", "NodeGet-Server")
-            .send()
-            .await
-            .map_err(|e| NodegetError::Other(format!("Failed to fetch latest release: {e}")))?
-            .json()
-            .await
-            .map_err(|e| NodegetError::Other(format!("Failed to parse release response: {e}")))?;
-
-        let tag = release["tag_name"]
-            .as_str()
-            .ok_or_else(|| NodegetError::Other("Missing tag_name in release response".to_owned()))?;
-
-        tracing::info!(target: "server", tag = tag, "Latest release fetched");
-
-        // 2. Check if update needed
+        // 1. Check if update needed
         let (current_version, target_version, should_update) =
-            nodeget_lib::self_update::check_if_update_needed(tag);
+            nodeget_lib::self_update::check_if_update_needed(&tag);
 
         if !should_update {
             tracing::info!(
@@ -59,13 +41,14 @@ pub async fn self_update(token: String) -> RpcResult<()> {
         );
 
         // 3. Get download URL
-        let url = nodeget_lib::self_update::get_server_url(tag).ok_or_else(|| {
+        let url = nodeget_lib::self_update::get_server_url(&tag).ok_or_else(|| {
             NodegetError::Other(format!("Failed to get download URL for tag: {tag}"))
         })?;
 
         tracing::info!(target: "server", url = %url, "Downloading update");
 
         // 4. Download binary
+        let client = reqwest::Client::new();
         let response = client
             .get(&url)
             .header("User-Agent", "NodeGet-Server")
