@@ -104,8 +104,8 @@ pub async fn self_update(token: String) -> RpcResult<()> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let current = std::env::current_exe()
-                .map_err(|e| NodegetError::Other(format!("Failed to get current exe path: {e}")))?;
+            let current = nodeget_lib::self_update::canonical_exe_path()
+                .ok_or_else(|| NodegetError::Other("Failed to get canonical exe path".to_owned()))?;
             let perms = std::fs::Permissions::from_mode(0o755);
             if let Err(e) = std::fs::set_permissions(&current, perms) {
                 tracing::warn!(target: "server", error = %e, "Failed to set executable permission");
