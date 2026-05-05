@@ -31,3 +31,4 @@ pub mod js_result;
 pub mod js_runtime;
 pub mod kv;
 pub mod utils;
+pub mod self_update;

@@ -306,10 +306,10 @@ pub async fn handle_task() {
                             time::sleep(Duration::from_millis(300)).await;
                             #[cfg(target_os = "windows")]
                             {
-                                crate::tasks::self_update::restart_process();
+                                nodeget_lib::self_update::restart_process();
                             }
                             #[cfg(not(target_os = "windows"))]{
-                                crate::tasks::self_update::restart_process_with_exec_v();
+                                nodeget_lib::self_update::restart_process_with_exec_v();
                             }
                         }
                     });

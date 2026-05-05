@@ -1,6 +1,6 @@
 [package]
 name = "nodeget-server"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Next-generation server monitoring and management tools"
 license = "AGPL-3"
@@ -39,6 +39,9 @@ tower = { version = "0.5.3", default-features = false }
 serde = "1.0.228"
 serde_json = "1.0.149"
 toml = { version = "1.1.2", default-features = false, features = ["std", "serde", "parse"] }
+
+# HTTP Client
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 
 # 日志
 tracing = "0.1"
