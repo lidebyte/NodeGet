@@ -153,6 +153,59 @@ fn is_excluded_mount(mount_point: &str) -> bool {
         .any(|prefix| mount_point.starts_with(prefix))
 }
 
+/// Scale a percent value in the expected range `[0.0, 100.0]` by `10` and
+/// encode it as the `i16` shape used by `dynamic_monitoring_summary.cpu_usage`.
+///
+/// The column semantically holds a percentage with one decimal place
+/// (`value/10.0` on read). This helper is the single place that enforces
+/// that invariant on the write side and guards against two classes of
+/// upstream corruption that the previous `clamp(i16::MIN..=i16::MAX)` did
+/// **not** catch:
+///
+/// * **`NaN` / `±Infinity`** — `f64::clamp` is a no-op on `NaN`, and
+///   `f64 as i16` then silently folds the result to `0`, which would show
+///   up as "0% CPU" on the dashboard. We return `None` instead so the
+///   server records a gap rather than fabricated zeroes.
+/// * **Out-of-range percentages (e.g. sysinfo returning `> 100.0` on a
+///   container first-sample edge case)** — the previous clamp allowed up
+///   to `i16::MAX = 32767` (i.e. 3276.7%), which propagated straight into
+///   the database. We now clamp to `[0, 1000]` so the summary is always in
+///   the documented `[0.0, 100.0]` range post-descaling.
+#[must_use]
+fn scale_cpu_percent_to_i16(percent: f64) -> Option<i16> {
+    if !percent.is_finite() {
+        return None;
+    }
+    // 10.0 * percent with clamp to [0, 1000] — one decimal place precision,
+    // maximum 100.0%. Negative sysinfo values (should never happen but
+    // defend anyway) are folded to 0 rather than negative CPU.
+    let scaled = (percent * 10.0).clamp(0.0, 1000.0);
+    // `scaled` is now a finite f64 in [0, 1000]; `as i16` is lossy only in
+    // the fractional bits, which is the intended truncation.
+    #[allow(clippy::cast_possible_truncation)]
+    let v = scaled as i16;
+    Some(v)
+}
+
+/// Scale a 1/5/15-minute load average by `10` and encode as `i16`, matching
+/// the `load_one` / `load_five` / `load_fifteen` column shape.
+///
+/// Unlike CPU percent, load averages can legitimately exceed 100 on heavily
+/// contended systems (e.g. load of 200 on a 256-thread machine). We still
+/// clamp to `i16` range to avoid silent `as i16` wrap-around, but the upper
+/// bound is `i16::MAX` rather than `1000`. `NaN` is again represented as
+/// `None` (missing datum) instead of being folded to `0`.
+#[must_use]
+fn scale_load_to_i16(load: f64) -> Option<i16> {
+    if !load.is_finite() {
+        return None;
+    }
+    let scaled = (load * 10.0).clamp(f64::from(i16::MIN), f64::from(i16::MAX));
+    #[allow(clippy::cast_possible_truncation)]
+    let v = scaled as i16;
+    Some(v)
+}
+
 impl From<&DynamicMonitoringData> for DynamicMonitoringSummaryData {
     fn from(data: &DynamicMonitoringData) -> Self {
         let disks: Vec<_> = data
@@ -179,25 +232,16 @@ impl From<&DynamicMonitoringData> for DynamicMonitoringSummaryData {
         Self {
             uuid: data.uuid.clone(),
             time: data.time,
-            cpu_usage: Some(
-                (data.cpu.total_cpu_usage * 10.0).clamp(f64::from(i16::MIN), f64::from(i16::MAX))
-                    as i16,
-            ),
+            cpu_usage: scale_cpu_percent_to_i16(data.cpu.total_cpu_usage),
             gpu_usage: data.gpu.first().map(|g| i16::from(g.utilization_gpu)),
             used_swap: Some(data.ram.used_swap as i64),
             total_swap: Some(data.ram.total_swap as i64),
             used_memory: Some(data.ram.used_memory as i64),
             total_memory: Some(data.ram.total_memory as i64),
             available_memory: Some(data.ram.available_memory as i64),
-            load_one: Some(
-                (data.load.one * 10.0).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16,
-            ),
-            load_five: Some(
-                (data.load.five * 10.0).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16,
-            ),
-            load_fifteen: Some(
-                (data.load.fifteen * 10.0).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16,
-            ),
+            load_one: scale_load_to_i16(data.load.one),
+            load_five: scale_load_to_i16(data.load.five),
+            load_fifteen: scale_load_to_i16(data.load.fifteen),
             uptime: Some(data.system.uptime as i32),
             boot_time: Some(data.system.boot_time as i64),
             process_count: Some(data.system.process_count as i32),
@@ -417,4 +461,57 @@ pub struct DynamicGpuData {
     pub utilization_memory: u8,
     // 温度（摄氏度）
     pub temperature: u8,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{scale_cpu_percent_to_i16, scale_load_to_i16};
+
+    #[test]
+    fn cpu_percent_scales_normal_values() {
+        assert_eq!(scale_cpu_percent_to_i16(53.4), Some(534));
+        assert_eq!(scale_cpu_percent_to_i16(0.0), Some(0));
+        assert_eq!(scale_cpu_percent_to_i16(100.0), Some(1000));
+        assert_eq!(scale_cpu_percent_to_i16(99.95), Some(999));
+    }
+
+    #[test]
+    fn cpu_percent_clamps_out_of_range() {
+        // Values above 100% (e.g. sysinfo container edge cases) must not
+        // propagate to storage; they should be clamped to 1000 (== 100.0%).
+        assert_eq!(scale_cpu_percent_to_i16(150.0), Some(1000));
+        assert_eq!(scale_cpu_percent_to_i16(1e9), Some(1000));
+        // Negative values clamp to 0, not to i16::MIN * 10.
+        assert_eq!(scale_cpu_percent_to_i16(-5.0), Some(0));
+    }
+
+    #[test]
+    fn cpu_percent_nan_returns_none() {
+        // Previous code did `NaN.clamp(...) as i16 = 0`, hiding data loss
+        // as "0% CPU". We must now record the gap as a None datum.
+        assert_eq!(scale_cpu_percent_to_i16(f64::NAN), None);
+        assert_eq!(scale_cpu_percent_to_i16(f64::INFINITY), None);
+        assert_eq!(scale_cpu_percent_to_i16(f64::NEG_INFINITY), None);
+    }
+
+    #[test]
+    fn load_scales_normal_values() {
+        assert_eq!(scale_load_to_i16(0.0), Some(0));
+        assert_eq!(scale_load_to_i16(1.5), Some(15));
+        assert_eq!(scale_load_to_i16(123.4), Some(1234));
+    }
+
+    #[test]
+    fn load_clamps_to_i16_range() {
+        // Load can legitimately exceed 100 on huge machines; clamp only
+        // at the storage boundary (i16::MAX = 32767 → displayed as 3276.7).
+        assert_eq!(scale_load_to_i16(1e9), Some(i16::MAX));
+        assert_eq!(scale_load_to_i16(-1e9), Some(i16::MIN));
+    }
+
+    #[test]
+    fn load_nan_returns_none() {
+        assert_eq!(scale_load_to_i16(f64::NAN), None);
+        assert_eq!(scale_load_to_i16(f64::INFINITY), None);
+    }
 }

@@ -12,7 +12,6 @@ use nodeget_lib::monitoring::query::{
 use nodeget_lib::permission::data_structure::{DynamicMonitoringSummary, Permission, Scope};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::error_message::anyhow_error_to_raw;
-use sea_orm::prelude::Expr;
 use sea_orm::{
     ColumnTrait, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect, SelectModel,
     Selector,
@@ -64,9 +63,6 @@ pub async fn query_dynamic_summary(
         debug!(target: "monitoring", conditions_count = query_data.condition.len(), fields_count = query_data.fields.len(), "Dynamic summary query permission check passed");
 
         let db = AgentRpcImpl::get_db()?;
-        let backend = db.get_database_backend();
-        let needs_app_descaling = backend != sea_orm::DatabaseBackend::Postgres;
-
         let uuid_cache = MonitoringUuidCache::global();
 
         let query = dynamic_monitoring_summary::Entity::find()
@@ -74,76 +70,40 @@ pub async fn query_dynamic_summary(
             .column(dynamic_monitoring_summary::Column::UuidId)
             .column(dynamic_monitoring_summary::Column::Timestamp);
 
+        // All scaled (*10) columns are descaled in application code after the
+        // stream yields each row, so the SQL itself is always the same
+        // regardless of backend. This avoids `sea_query` lowering `.div(10.0)`
+        // into an integer `/ 10` (which truncates) on PostgreSQL.
         let query = if query_data.fields.is_empty() {
-            if needs_app_descaling {
-                // SQLite: select raw columns and descale in Rust
-                query
-                    .column(dynamic_monitoring_summary::Column::CpuUsage)
-                    .column(dynamic_monitoring_summary::Column::GpuUsage)
-                    .column(dynamic_monitoring_summary::Column::UsedSwap)
-                    .column(dynamic_monitoring_summary::Column::TotalSwap)
-                    .column(dynamic_monitoring_summary::Column::UsedMemory)
-                    .column(dynamic_monitoring_summary::Column::TotalMemory)
-                    .column(dynamic_monitoring_summary::Column::AvailableMemory)
-                    .column(dynamic_monitoring_summary::Column::LoadOne)
-                    .column(dynamic_monitoring_summary::Column::LoadFive)
-                    .column(dynamic_monitoring_summary::Column::LoadFifteen)
-                    .column(dynamic_monitoring_summary::Column::Uptime)
-                    .column(dynamic_monitoring_summary::Column::BootTime)
-                    .column(dynamic_monitoring_summary::Column::ProcessCount)
-                    .column(dynamic_monitoring_summary::Column::TotalSpace)
-                    .column(dynamic_monitoring_summary::Column::AvailableSpace)
-                    .column(dynamic_monitoring_summary::Column::ReadSpeed)
-                    .column(dynamic_monitoring_summary::Column::WriteSpeed)
-                    .column(dynamic_monitoring_summary::Column::TcpConnections)
-                    .column(dynamic_monitoring_summary::Column::UdpConnections)
-                    .column(dynamic_monitoring_summary::Column::TotalReceived)
-                    .column(dynamic_monitoring_summary::Column::TotalTransmitted)
-                    .column(dynamic_monitoring_summary::Column::TransmitSpeed)
-                    .column(dynamic_monitoring_summary::Column::ReceiveSpeed)
-            } else {
-                // Postgres: descale directly in SQL
-                query
-                    .column_as(
-                        Expr::col(dynamic_monitoring_summary::Column::CpuUsage).div(10.0),
-                        "cpu_usage",
-                    )
-                    .column(dynamic_monitoring_summary::Column::GpuUsage)
-                    .column(dynamic_monitoring_summary::Column::UsedSwap)
-                    .column(dynamic_monitoring_summary::Column::TotalSwap)
-                    .column(dynamic_monitoring_summary::Column::UsedMemory)
-                    .column(dynamic_monitoring_summary::Column::TotalMemory)
-                    .column(dynamic_monitoring_summary::Column::AvailableMemory)
-                    .column_as(
-                        Expr::col(dynamic_monitoring_summary::Column::LoadOne).div(10.0),
-                        "load_one",
-                    )
-                    .column_as(
-                        Expr::col(dynamic_monitoring_summary::Column::LoadFive).div(10.0),
-                        "load_five",
-                    )
-                    .column_as(
-                        Expr::col(dynamic_monitoring_summary::Column::LoadFifteen).div(10.0),
-                        "load_fifteen",
-                    )
-                    .column(dynamic_monitoring_summary::Column::Uptime)
-                    .column(dynamic_monitoring_summary::Column::BootTime)
-                    .column(dynamic_monitoring_summary::Column::ProcessCount)
-                    .column(dynamic_monitoring_summary::Column::TotalSpace)
-                    .column(dynamic_monitoring_summary::Column::AvailableSpace)
-                    .column(dynamic_monitoring_summary::Column::ReadSpeed)
-                    .column(dynamic_monitoring_summary::Column::WriteSpeed)
-                    .column(dynamic_monitoring_summary::Column::TcpConnections)
-                    .column(dynamic_monitoring_summary::Column::UdpConnections)
-                    .column(dynamic_monitoring_summary::Column::TotalReceived)
-                    .column(dynamic_monitoring_summary::Column::TotalTransmitted)
-                    .column(dynamic_monitoring_summary::Column::TransmitSpeed)
-                    .column(dynamic_monitoring_summary::Column::ReceiveSpeed)
-            }
+            query
+                .column(dynamic_monitoring_summary::Column::CpuUsage)
+                .column(dynamic_monitoring_summary::Column::GpuUsage)
+                .column(dynamic_monitoring_summary::Column::UsedSwap)
+                .column(dynamic_monitoring_summary::Column::TotalSwap)
+                .column(dynamic_monitoring_summary::Column::UsedMemory)
+                .column(dynamic_monitoring_summary::Column::TotalMemory)
+                .column(dynamic_monitoring_summary::Column::AvailableMemory)
+                .column(dynamic_monitoring_summary::Column::LoadOne)
+                .column(dynamic_monitoring_summary::Column::LoadFive)
+                .column(dynamic_monitoring_summary::Column::LoadFifteen)
+                .column(dynamic_monitoring_summary::Column::Uptime)
+                .column(dynamic_monitoring_summary::Column::BootTime)
+                .column(dynamic_monitoring_summary::Column::ProcessCount)
+                .column(dynamic_monitoring_summary::Column::TotalSpace)
+                .column(dynamic_monitoring_summary::Column::AvailableSpace)
+                .column(dynamic_monitoring_summary::Column::ReadSpeed)
+                .column(dynamic_monitoring_summary::Column::WriteSpeed)
+                .column(dynamic_monitoring_summary::Column::TcpConnections)
+                .column(dynamic_monitoring_summary::Column::UdpConnections)
+                .column(dynamic_monitoring_summary::Column::TotalReceived)
+                .column(dynamic_monitoring_summary::Column::TotalTransmitted)
+                .column(dynamic_monitoring_summary::Column::TransmitSpeed)
+                .column(dynamic_monitoring_summary::Column::ReceiveSpeed)
         } else {
-            query_data.fields.iter().fold(query, |q, field| {
-                select_field(q, field, needs_app_descaling)
-            })
+            query_data
+                .fields
+                .iter()
+                .fold(query, |q, field| q.column(field_to_column(field)))
         };
 
         let mut limit_count = None;
@@ -212,7 +172,6 @@ pub async fn query_dynamic_summary(
             query.into_json(),
             clamped_limit.unwrap_or(5000),
             uuid_cache,
-            needs_app_descaling,
         )
         .await
     };
@@ -237,24 +196,10 @@ pub async fn query_dynamic_summary(
     }
 }
 
-/// Select a field into the query, applying /10.0 descaling for scaled fields
-/// when the backend supports expression aliases (`PostgreSQL`).
-fn select_field<E>(
-    q: sea_orm::Select<E>,
-    field: &DynamicSummaryQueryField,
-    needs_app_descaling: bool,
-) -> sea_orm::Select<E>
-where
-    E: EntityTrait,
-{
-    let col = field_to_column(field);
-    if field.is_scaled() && !needs_app_descaling {
-        q.column_as(Expr::col(col).div(10.0), field.column_name())
-    } else {
-        q.column(col)
-    }
-}
-
+/// Map a query field to its corresponding entity column.
+///
+/// Exposed as `pub` because `query_dynamic_summary_multi_last` reuses the
+/// same mapping.
 pub const fn field_to_column(
     field: &DynamicSummaryQueryField,
 ) -> dynamic_monitoring_summary::Column {
@@ -304,7 +249,6 @@ async fn execute_query(
     query: Selector<SelectModel<serde_json::Value>>,
     capacity_hint: u64,
     uuid_cache: &MonitoringUuidCache,
-    needs_app_descaling: bool,
 ) -> anyhow::Result<Box<RawValue>> {
     debug!(target: "monitoring", "Starting dynamic summary query DB stream");
     let mut stream = query.stream(db).await.map_err(|e| {
@@ -324,7 +268,10 @@ async fn execute_query(
             Ok(mut v) => {
                 result_count += 1;
 
-                // Translate uuid_id (i16) → uuid (string) for API compatibility
+                // Translate uuid_id (i16) → uuid (string) for API compatibility,
+                // then apply /10.0 descaling to all scaled columns. Both steps
+                // run unconditionally because the SQL itself always returns
+                // raw *10 integers regardless of backend.
                 if let Value::Object(ref mut map) = v {
                     if let Some(Value::Number(n)) = map.remove("uuid_id")
                         && let Some(id) = n.as_i64()
@@ -332,9 +279,7 @@ async fn execute_query(
                     {
                         map.insert("uuid".to_string(), Value::String(uuid.to_string()));
                     }
-                    if needs_app_descaling {
-                        nodeget_lib::monitoring::query::apply_descaling_to_json_object(map);
-                    }
+                    nodeget_lib::monitoring::query::apply_descaling_to_json_object(map);
                 }
 
                 if first {
