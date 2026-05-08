@@ -251,6 +251,24 @@ where
     }
 
     info!("Closing session, terminating child process...");
+    // portable_pty 在 Unix 下 fork 时执行了 setsid()，shell 成为进程组
+    // 组长（pgid == child pid）。child.kill() 只 SIGKILL shell 自己，
+    // 会话中由 shell 启动的子进程（tmux、nohup、后台任务等）若自行
+    // 脱离父进程，会被 init 认领为孤儿进程。
+    //
+    // 先对整个进程组发 SIGTERM 让所有成员有机会清理，短暂等待后由
+    // child.kill() 的 SIGKILL 兜底。非 Unix 平台没有进程组概念，走
+    // 原路径即可。
+    #[cfg(unix)]
+    if let Some(pid) = child.process_id() {
+        #[allow(clippy::cast_possible_wrap)]
+        let pgid = pid as i32;
+        // SAFETY: libc::killpg 签名要求 signed pid；整组 SIGTERM 若
+        // 组已全部退出只是返回 ESRCH，不会造成未定义行为。
+        unsafe {
+            libc::killpg(pgid, libc::SIGTERM);
+        }
+    }
     if let Err(e) = child.kill() {
         error!("Failed to terminate child process: {e}");
     }
@@ -303,14 +321,14 @@ fn handle_ws_message(
             }
             pty_writer
                 .lock()
-                .unwrap()
+                .map_err(|_| "PTY writer mutex poisoned".to_string())?
                 .write_all(text.as_bytes())
                 .map_err(|e| format!("Failed to write to PTY: {e}"))?;
         }
         Message::Binary(data) => {
             pty_writer
                 .lock()
-                .unwrap()
+                .map_err(|_| "PTY writer mutex poisoned".to_string())?
                 .write_all(&data)
                 .map_err(|e| format!("Failed to write to PTY: {e}"))?;
         }

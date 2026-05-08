@@ -12,11 +12,12 @@ use nodeget_lib::task::TaskEvent;
 use nodeget_lib::utils::JsonError;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use tokio::task::JoinSet;
 use tokio::time;
 use tokio_tungstenite::tungstenite::Message;
 
 // 安全地获取 Agent 配置
-fn get_agent_config_safe() -> anyhow::Result<AgentConfig> {
+pub fn get_agent_config_safe() -> anyhow::Result<AgentConfig> {
     AGENT_CONFIG
         .get()
         .ok_or_else(|| NodegetError::Other("Agent config not initialized".to_owned()))?
@@ -79,7 +80,12 @@ pub struct JsonRpcErrorMessage {
 
 // 处理来自服务器的错误消息
 //
-// 该函数订阅各个服务器的错误消息通道，并打印接收到的错误信息
+// 该函数订阅各个服务器的错误消息通道，并打印接收到的错误信息。
+//
+// 每个 server 的订阅循环以及其派生的逐条处理任务都放入同一个
+// [`JoinSet`]，并在函数 await 点上托管其所有权。当调用方（例如
+// 配置热重载时）abort 了本函数的顶层 JoinHandle，`JoinSet` 会被
+// drop 并自动 abort 所有子任务，避免新旧订阅并存。
 pub async fn handle_error_message() {
     time::sleep(Duration::from_secs(1)).await;
 
@@ -91,8 +97,10 @@ pub async fn handle_error_message() {
         }
     };
 
-    for server in agent_config.server.unwrap_or(vec![]) {
-        tokio::spawn(async move {
+    let mut tasks = JoinSet::new();
+
+    for server in agent_config.server.unwrap_or_default() {
+        tasks.spawn(async move {
             let mut rx = match subscribe_to(server.name.as_str()).await {
                 Ok(rx) => rx,
                 Err(e) => {
@@ -100,6 +108,8 @@ pub async fn handle_error_message() {
                     return;
                 }
             };
+
+            let mut per_message_tasks = JoinSet::new();
 
             loop {
                 let message = match rx.recv().await {
@@ -116,28 +126,34 @@ pub async fn handle_error_message() {
                         break;
                     }
                 };
-                {
-                    let message = message;
-                    let server_name = server.name.clone();
-                    tokio::spawn(async move {
-                        let rpc = match message {
-                            Message::Text(text) => text.to_string(),
-                            _ => {
-                                return;
-                            }
-                        };
-
-                        let Ok(json) = serde_json::from_str::<JsonRpcErrorMessage>(&rpc) else {
+                let server_name = server.name.clone();
+                per_message_tasks.spawn(async move {
+                    let rpc = match message {
+                        Message::Text(text) => text.to_string(),
+                        _ => {
                             return;
-                        };
+                        }
+                    };
 
-                        warn!(
-                            "[{}] Received Error Message: {}: {}",
-                            server_name, json.result.error_id, json.result.error_message
-                        );
-                    });
-                }
+                    let Ok(json) = serde_json::from_str::<JsonRpcErrorMessage>(&rpc) else {
+                        return;
+                    };
+
+                    warn!(
+                        "[{}] Received Error Message: {}: {}",
+                        server_name, json.result.error_id, json.result.error_message
+                    );
+                });
             }
+
+            // drop per_message_tasks -> aborts any in-flight per-message processing
+            drop(per_message_tasks);
         });
     }
+
+    // Keep the JoinSet alive; if this future is aborted (e.g. on config
+    // reload) the JoinSet is dropped and all per-server tasks are aborted
+    // transitively, preventing the "old + new subscription coexist" leak
+    // described in review_agent.md #9.
+    while tasks.join_next().await.is_some() {}
 }

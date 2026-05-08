@@ -29,14 +29,14 @@ fn ensure_rustls_ring_provider() {
 // 成功时返回请求耗时，失败时返回错误信息
 pub async fn httping_target(target: url::Url) -> Result<std::time::Duration> {
     let client = GLOBAL_CLIENT
-        .get_or_init(async || {
+        .get_or_try_init(async || {
             ensure_rustls_ring_provider();
             Client::builder()
                 .timeout(PING_TIMEOUT)
                 .build()
-                .expect("Failed to build global reqwest client")
+                .map_err(|e| NodegetError::Other(format!("Failed to build HTTP ping client: {e}")))
         })
-        .await;
+        .await?;
 
     let start = std::time::Instant::now();
     client

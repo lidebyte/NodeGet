@@ -36,18 +36,34 @@ pub fn count_processes() -> u32 {
 #[cfg(target_os = "linux")]
 pub fn count_processes() -> u32 {
     use std::fs;
-    fs::read_dir("/proc")
-        .into_iter()
-        .flatten()
-        .flatten() // 展开 Result<DirEntry>
-        .filter(|entry| {
-            entry
-                .file_name()
-                .to_str()
-                .and_then(|s| s.parse::<u32>().ok()) // 对应 UID
-                .is_some()
-        })
-        .count() as u32
+
+    // Count entries in /proc whose name is a numeric PID, excluding kernel
+    // threads. `/proc/<pid>/cmdline` is always an empty file for kernel
+    // threads (kthreadd / ksoftirqd / ...) and non-empty for real user-space
+    // processes. This is the same heuristic `ps` / `procps` use and is
+    // cheaper than parsing `/proc/<pid>/status`.
+    let Ok(entries) = fs::read_dir("/proc") else {
+        return 0;
+    };
+
+    let mut count: u32 = 0;
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if name.parse::<u32>().is_err() {
+            continue;
+        }
+
+        // Reading cmdline races with process exit; a missing file or
+        // read error just means "not a running user process right now".
+        match fs::read(format!("/proc/{name}/cmdline")) {
+            Ok(bytes) if !bytes.is_empty() => count += 1,
+            _ => {}
+        }
+    }
+    count
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]

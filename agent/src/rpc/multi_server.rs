@@ -35,6 +35,19 @@ static CONNECTION_POOL: OnceCell<RwLock<HashMap<String, Arc<ServerHandle>>>> =
 //
 // 为每个配置的服务器创建连接管理器任务和相应的消息通道
 //
+// # 调用契约
+//
+// 本函数并不会 `abort` 任何已有的 `connection_manager` 任务。重复调用
+// （例如 hot-reload 路径）**必须**由调用方先对上一次 `init_connections`
+// 返回的 `JoinHandle` 执行 `abort`，否则新旧 manager 会并存一小段时间：
+// 旧的 `ServerHandle` 在 `*guard = map` 时被 drop，`uplink_tx` 的 Sender
+// 随之 drop，`uplink_rx.recv()` 最终返回 `Closed` 让老 manager 退出，
+// 但在此之前老 manager 仍可能重新连接并向服务器上报数据。
+//
+// `agent/src/main.rs` 当前实现满足此契约（每轮 reload 先调
+// `abort_handles` 再调 `init_connections`），但新的调用方必须遵守同样
+// 的顺序。
+//
 // # 参数
 // * `servers` - 服务器配置向量
 pub async fn init_connections(
@@ -66,7 +79,12 @@ pub async fn init_connections(
 
     if let Some(pool) = CONNECTION_POOL.get() {
         let mut guard = pool.write().await;
-        *guard = map;
+        // 显式 take 出旧 map 后再 drop，确保旧 `ServerHandle` 的
+        // `uplink_tx` Sender 在本函数返回前就已释放，从而让任何仍在运行
+        // 的老 manager `uplink_rx.recv()` 尽快收到 `Closed`。这是给未
+        // 履行上述"先 abort"契约的调用方的一层纵深防御。
+        let old_map = std::mem::replace(&mut *guard, map);
+        drop(old_map);
         info!("Connection pool refreshed");
     } else {
         if CONNECTION_POOL.set(RwLock::new(map)).is_err() {
@@ -407,6 +425,20 @@ pub async fn send_to(server_name: &str, msg: Message) -> Result<()> {
 // 订阅来自指定服务器的消息
 //
 // 获取指定服务器下行消息通道的接收器，用于接收来自服务器的消息
+//
+// # 订阅时序与 broadcast 语义
+//
+// 返回的 `broadcast::Receiver` **只会看到订阅之后**由 manager 投递到
+// `downlink_tx` 的消息。调用方不应依赖历史消息；常见陷阱：
+//
+// - 若 `connection_manager` 尚未成功连上 server，`downlink_tx` 还没有
+//   任何消息，接收方可能长时间 idle，需要自行加超时处理；
+// - 若 manager 已经 broadcast 了超过 channel 容量（32）条消息但订阅方
+//   尚未订阅，订阅方 `recv()` 会先看到 `RecvError::Lagged(n)`。调用方
+//   必须容忍此错误（通常是 `warn!` + `continue`），不要因此退出循环。
+//
+// 如果需要"订阅即拿到最新快照"的语义，考虑改用
+// `tokio::sync::watch` 存最新状态，并把 broadcast 仅用于增量差分。
 //
 // # 参数
 // * `server_name` - 服务器名称

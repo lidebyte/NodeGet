@@ -350,8 +350,7 @@ pub struct DynamicSummaryResponseItem {
 ///
 /// All descaling helpers and `DynamicSummaryQueryField::is_scaled` derive from
 /// this constant, so adding a new scaled column only requires one edit.
-pub const SCALED_SUMMARY_COLUMNS: &[&str] =
-    &["cpu_usage", "load_one", "load_five", "load_fifteen"];
+pub const SCALED_SUMMARY_COLUMNS: &[&str] = &["cpu_usage", "load_one", "load_five", "load_fifteen"];
 
 /// Apply `/10.0` descaling to known scaled columns in `obj`, in place.
 ///
@@ -374,17 +373,21 @@ pub fn apply_descaling_to_json_object(obj: &mut serde_json::Map<String, serde_js
             // a float), then divide by 10. A `None` at this stage means the
             // value was not representable (e.g. `NaN`), in which case we
             // leave the JSON value untouched.
-            let raw: Option<f64> = n.as_i64().map(|i| {
-                #[allow(clippy::cast_precision_loss)]
-                let f = i as f64;
-                f
-            }).or_else(|| {
-                n.as_u64().map(|u| {
+            let raw: Option<f64> = n
+                .as_i64()
+                .map(|i| {
                     #[allow(clippy::cast_precision_loss)]
-                    let f = u as f64;
+                    let f = i as f64;
                     f
                 })
-            }).or_else(|| n.as_f64());
+                .or_else(|| {
+                    n.as_u64().map(|u| {
+                        #[allow(clippy::cast_precision_loss)]
+                        let f = u as f64;
+                        f
+                    })
+                })
+                .or_else(|| n.as_f64());
 
             if let Some(f) = raw
                 && let Some(scaled) = serde_json::Number::from_f64(f / 10.0)
@@ -397,9 +400,7 @@ pub fn apply_descaling_to_json_object(obj: &mut serde_json::Map<String, serde_js
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DynamicSummaryQueryField, SCALED_SUMMARY_COLUMNS, apply_descaling_to_json_object,
-    };
+    use super::{DynamicSummaryQueryField, SCALED_SUMMARY_COLUMNS, apply_descaling_to_json_object};
     use serde_json::{Map, Number, Value};
 
     #[test]
@@ -499,10 +500,7 @@ mod tests {
     #[test]
     fn descaling_leaves_missing_keys_alone() {
         let mut obj = Map::new();
-        obj.insert(
-            "used_memory".to_owned(),
-            Value::Number(1_234_567i64.into()),
-        );
+        obj.insert("used_memory".to_owned(), Value::Number(1_234_567i64.into()));
 
         apply_descaling_to_json_object(&mut obj);
 

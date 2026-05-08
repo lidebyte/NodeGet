@@ -7,11 +7,20 @@ use nodeget_lib::error::NodegetError;
 use nodeget_lib::task::{TaskEventResponse, TaskEventResult, TaskEventType};
 use nodeget_lib::utils::get_local_timestamp_ms;
 use std::time::Duration;
+use tokio::task::JoinSet;
 use tokio::{fs, time};
 use tokio_tungstenite::tungstenite::{Message, Utf8Bytes};
 
 /// Task 结果类型
 pub type Result<T> = anyhow::Result<T>;
+
+/// 单条非 WebShell 任务的硬性执行上限。
+///
+/// 防止单个任务（被劫持 / 意外卡死 / 外部资源不可达）永久占用
+/// `handle_task` 中的 per-message JoinSet 插槽。10 分钟远大于正常
+/// ICMP/TCP/HTTP ping 与 execute / http_request 的预期上限，又不
+/// 会让真正卡住的任务在 agent 进程里无限堆积。
+const TASK_MAX_TIMEOUT: Duration = Duration::from_secs(600);
 
 // 安全地获取 Agent 配置
 fn get_agent_config() -> Result<AgentConfig> {
@@ -140,7 +149,12 @@ async fn execute_task(
 // 处理来自服务器的任务请求
 //
 // 该函数订阅各个服务器的任务通道，接收并执行不同类型的任务（如 Ping、TCP Ping、HTTP Ping、WebShell、命令执行、IP 查询），
-// 然后将执行结果返回给服务器
+// 然后将执行结果返回给服务器。
+//
+// 与 [`crate::rpc::handle_error_message`] 相同，所有 per-server 订阅循环
+// 以及逐任务处理都交给嵌套的 [`JoinSet`] 托管。当主循环在配置热重载
+// 时 abort 本函数的顶层 JoinHandle，`JoinSet` 被 drop 并级联 abort
+// 全部子任务，避免旧订阅与新订阅同时消费服务器消息。
 pub async fn handle_task() {
     time::sleep(Duration::from_secs(1)).await;
 
@@ -152,8 +166,10 @@ pub async fn handle_task() {
         }
     };
 
-    for server in agent_config.server.unwrap_or(vec![]) {
-        tokio::spawn(async move {
+    let mut server_tasks = JoinSet::new();
+
+    for server in agent_config.server.unwrap_or_default() {
+        server_tasks.spawn(async move {
             if !server.allow_task.unwrap_or(false) {
                 return;
             }
@@ -169,6 +185,8 @@ pub async fn handle_task() {
                     }
                 };
 
+            let mut per_task = JoinSet::new();
+
             loop {
                 let message = match rx.recv().await {
                     Ok(msg) => msg,
@@ -181,140 +199,154 @@ pub async fn handle_task() {
                         break;
                     }
                 };
-                {
-                    let message = message;
-                    let server_name = server.name.clone();
-                    let server_token = server.token.clone();
-                    let server_config = server.clone();
-                    tokio::spawn(async move {
-                        let rpc = match message {
-                            Message::Text(text) => text.to_string(),
-                            _ => return,
+                let server_name = server.name.clone();
+                let server_token = server.token.clone();
+                let server_config = server.clone();
+                per_task.spawn(async move {
+                    let rpc = match message {
+                        Message::Text(text) => text.to_string(),
+                        _ => return,
+                    };
+
+                    let json_rpc: JsonRpcTask = match serde_json::from_str(&rpc) {
+                        Ok(json_rpc) => json_rpc,
+                        Err(_) => return,
+                    };
+
+                    if json_rpc.method != "task_register_task" {
+                        return;
+                    }
+
+                    let task_type = &json_rpc.params.result.task_event_type;
+
+                    let task_result: Result<TaskEventResult> =
+                        if is_task_allowed(&server_config, task_type) {
+                            // WebShell 是长驻 PTY 会话，天然可长时间运行，
+                            // 绕过统一超时；其余任务一律包一层硬上限，
+                            // 防止某个被劫持 / 卡死的任务让对应 server
+                            // 的 per_task 处理流程永久占用一个 future。
+                            let fut = execute_task(
+                                task_type,
+                                json_rpc.params.result.task_id,
+                                &json_rpc.params.result.task_token,
+                            );
+                            if matches!(task_type, TaskEventType::WebShell(_)) {
+                                fut.await
+                            } else {
+                                match time::timeout(TASK_MAX_TIMEOUT, fut).await {
+                                    Ok(res) => res,
+                                    Err(_) => Err(NodegetError::Other(format!(
+                                        "Task timed out after {}s",
+                                        TASK_MAX_TIMEOUT.as_secs()
+                                    ))
+                                    .into()),
+                                }
+                            }
+                        } else {
+                            Err(NodegetError::PermissionDenied(
+                                "Permission Denied: Task not allowed".to_owned(),
+                            )
+                            .into())
                         };
 
-                        let json_rpc: JsonRpcTask = match serde_json::from_str(&rpc) {
-                            Ok(json_rpc) => json_rpc,
-                            Err(_) => return,
-                        };
+                    let should_restart = matches!(task_type, TaskEventType::EditConfig(_))
+                        && matches!(&task_result, Ok(TaskEventResult::EditConfig(true)));
 
-                        if json_rpc.method != "task_register_task" {
+                    let should_self_update_restart =
+                        matches!(task_type, TaskEventType::SelfUpdate(_))
+                            && matches!(&task_result, Ok(TaskEventResult::SelfUpdate(true)));
+
+                    let timestamp = get_local_timestamp_ms().unwrap_or(0);
+
+                    let agent_uuid = match get_agent_config() {
+                        Ok(cfg) => cfg.agent_uuid,
+                        Err(e) => {
+                            error!("Failed to get agent config for response: {e}");
                             return;
                         }
+                    };
 
-                        let task_type = &json_rpc.params.result.task_event_type;
-
-                        let task_result: Result<TaskEventResult> =
-                            if is_task_allowed(&server_config, task_type) {
-                                execute_task(
-                                    task_type,
-                                    json_rpc.params.result.task_id,
-                                    &json_rpc.params.result.task_token,
-                                )
-                                .await
-                            } else {
-                                Err(NodegetError::PermissionDenied(
-                                    "Permission Denied: Task not allowed".to_owned(),
-                                )
-                                .into())
-                            };
-
-                        let should_restart = matches!(task_type, TaskEventType::EditConfig(_))
-                            && matches!(&task_result, Ok(TaskEventResult::EditConfig(true)));
-
-                        let should_self_update_restart =
-                            matches!(task_type, TaskEventType::SelfUpdate(_))
-                                && matches!(
-                                    &task_result,
-                                    Ok(TaskEventResult::SelfUpdate(true))
-                                );
-
-                        let timestamp = get_local_timestamp_ms().unwrap_or(0);
-
-                        let agent_uuid = match get_agent_config() {
-                            Ok(cfg) => cfg.agent_uuid,
-                            Err(e) => {
-                                error!("Failed to get agent config for response: {e}");
-                                return;
-                            }
-                        };
-
-                        let response = match task_result {
-                            Ok(task_result) => TaskEventResponse {
+                    let response = match task_result {
+                        Ok(task_result) => TaskEventResponse {
+                            task_id: json_rpc.params.result.task_id,
+                            agent_uuid,
+                            task_token: json_rpc.params.result.task_token,
+                            timestamp,
+                            success: true,
+                            error_message: None,
+                            task_event_result: Some(task_result),
+                        },
+                        Err(e) => {
+                            let error_message = format!("{e}");
+                            TaskEventResponse {
                                 task_id: json_rpc.params.result.task_id,
                                 agent_uuid,
                                 task_token: json_rpc.params.result.task_token,
                                 timestamp,
-                                success: true,
-                                error_message: None,
-                                task_event_result: Some(task_result),
-                            },
-                            Err(e) => {
-                                let error_message = format!("{e}");
-                                TaskEventResponse {
-                                    task_id: json_rpc.params.result.task_id,
-                                    agent_uuid,
-                                    task_token: json_rpc.params.result.task_token,
-                                    timestamp,
-                                    success: false,
-                                    error_message: Some(error_message),
-                                    task_event_result: None,
-                                }
+                                success: false,
+                                error_message: Some(error_message),
+                                task_event_result: None,
                             }
-                        };
+                        }
+                    };
 
-                        let server_token_value = match serde_json::to_value(server_token) {
-                            Ok(v) => v,
-                            Err(e) => {
-                                error!("Failed to serialize server token: {e}");
-                                return;
-                            }
-                        };
-                        let response_value = match serde_json::to_value(response) {
-                            Ok(v) => v,
-                            Err(e) => {
-                                error!("Failed to serialize response: {e}");
-                                return;
-                            }
-                        };
-                        let rpc = wrap_json_into_rpc_with_id_1(
-                            "task_upload_task_result",
-                            vec![server_token_value, response_value],
+                    let server_token_value = match serde_json::to_value(server_token) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("Failed to serialize server token: {e}");
+                            return;
+                        }
+                    };
+                    let response_value = match serde_json::to_value(response) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("Failed to serialize response: {e}");
+                            return;
+                        }
+                    };
+                    let rpc = wrap_json_into_rpc_with_id_1(
+                        "task_upload_task_result",
+                        vec![server_token_value, response_value],
+                    );
+
+                    if let Err(e) = send_to(&server_name, Message::Text(Utf8Bytes::from(rpc))).await
+                    {
+                        error!("{e}");
+                    }
+
+                    if should_restart {
+                        info!(
+                            "[{server_name}] EditConfig applied successfully, restarting agent..."
                         );
+                        time::sleep(Duration::from_millis(300)).await;
+                        if let Some(notify) = RELOAD_NOTIFY.get() {
+                            notify.notify_one();
+                        } else {
+                            error!("Reload notify is not initialized");
+                        }
+                    }
 
-                        if let Err(e) =
-                            send_to(&server_name, Message::Text(Utf8Bytes::from(rpc))).await
+                    if should_self_update_restart {
+                        info!("[{server_name}] Self-update successful, restarting agent...");
+                        time::sleep(Duration::from_millis(300)).await;
+                        #[cfg(target_os = "windows")]
                         {
-                            error!("{e}");
+                            nodeget_lib::self_update::restart_process();
                         }
-
-                        if should_restart {
-                            info!(
-                                "[{server_name}] EditConfig applied successfully, restarting agent..."
-                            );
-                            time::sleep(Duration::from_millis(300)).await;
-                            if let Some(notify) = RELOAD_NOTIFY.get() {
-                                notify.notify_one();
-                            } else {
-                                error!("Reload notify is not initialized");
-                            }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            nodeget_lib::self_update::restart_process_with_exec_v();
                         }
-
-                        if should_self_update_restart {
-                            info!(
-                                "[{server_name}] Self-update successful, restarting agent..."
-                            );
-                            time::sleep(Duration::from_millis(300)).await;
-                            #[cfg(target_os = "windows")]
-                            {
-                                nodeget_lib::self_update::restart_process();
-                            }
-                            #[cfg(not(target_os = "windows"))]{
-                                nodeget_lib::self_update::restart_process_with_exec_v();
-                            }
-                        }
-                    });
-                }
+                    }
+                });
             }
+
+            // drop per_task -> aborts every in-flight per-message handler
+            drop(per_task);
         });
     }
+
+    // Await on the outer JoinSet so the runtime keeps the set alive for the
+    // lifetime of this function. A cancel (reload) drops both JoinSets.
+    while server_tasks.join_next().await.is_some() {}
 }

@@ -426,7 +426,9 @@ mod tests {
             receive_speed: None,
         };
 
-        cache.update_dynamic_summary(uuid, 1_777_463_543_359, &summary).await;
+        cache
+            .update_dynamic_summary(uuid, 1_777_463_543_359, &summary)
+            .await;
         let cached = cache
             .get_dynamic_summary_last(
                 &uuid,
@@ -485,7 +487,9 @@ mod tests {
             receive_speed: None,
         };
 
-        cache.update_dynamic_summary(uuid, 1_777_463_543_359, &summary).await;
+        cache
+            .update_dynamic_summary(uuid, 1_777_463_543_359, &summary)
+            .await;
         let cached = cache
             .get_dynamic_summary_last(&uuid, &[])
             .await
