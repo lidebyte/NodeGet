@@ -11,7 +11,7 @@ pub const DEFAULT_DYNAMIC_SUMMARY_REPORT_INTERVAL_MS: u64 = 1000;
 pub const DEFAULT_STATIC_REPORT_INTERVAL_MS: u64 = 300_000;
 pub const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 1000;
 pub const DEFAULT_EXEC_MAX_CHARACTER: usize = 10_000;
-pub const DEFAULT_IP_PROVIDER: IpProvider = IpProvider::IpInfo;
+pub const DEFAULT_IP_PROVIDER: IpProvider = IpProvider::Cloudflare;
 pub const DEFAULT_NTP_SERVER: &str = "pool.ntp.org";
 
 // Agent 配置结构体，定义 Agent 的运行参数
