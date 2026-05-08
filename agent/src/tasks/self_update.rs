@@ -31,7 +31,7 @@ pub async fn self_update(tag: &str) -> bool {
     let client = reqwest::Client::new();
     let response = match client
         .get(&url)
-        .header("User-Agent", "curl/8.7.1")
+        .header("User-Agent", "NodeGet-Agent")
         .timeout(std::time::Duration::from_secs(60))
         .send()
         .await
