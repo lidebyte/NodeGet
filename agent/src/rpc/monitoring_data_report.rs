@@ -22,7 +22,7 @@ pub async fn handle_static_monitoring_data_report() {
         .expect("AGENT_CONFIG lock poisoned")
         .clone();
 
-    let interval_ms = agent_config.static_report_interval_ms.unwrap_or(300_000);
+    let interval_ms = agent_config.static_report_interval_ms_or_default();
     let mut ticker = interval(Duration::from_millis(interval_ms));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -70,10 +70,8 @@ pub async fn handle_dynamic_monitoring_data_report() {
         .expect("AGENT_CONFIG lock poisoned")
         .clone();
 
-    let dynamic_interval_ms = agent_config.dynamic_report_interval_ms.unwrap_or(1000);
-    let summary_interval_ms = agent_config
-        .dynamic_summary_report_interval_ms
-        .unwrap_or(1000);
+    let dynamic_interval_ms = agent_config.dynamic_report_interval_ms_or_default();
+    let summary_interval_ms = agent_config.dynamic_summary_report_interval_ms_or_default();
 
     // dynamic_interval_ms 是 summary_interval_ms 的整数倍（已在配置解析时校验）
     let ticks_per_dynamic = dynamic_interval_ms / summary_interval_ms;

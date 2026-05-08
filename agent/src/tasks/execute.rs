@@ -33,7 +33,7 @@ fn get_agent_config() -> Result<crate::AgentConfig> {
 // 成功时返回命令输出字符串，失败时返回错误信息
 pub async fn execute_command(task: ExecuteTask) -> Result<String> {
     let config = get_agent_config()?;
-    let max_chars = config.exec_max_character.unwrap_or(10000);
+    let max_chars = config.exec_max_character_or_default();
 
     if task.cmd.trim().is_empty() {
         return Err(NodegetError::InvalidInput(
