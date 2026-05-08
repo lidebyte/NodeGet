@@ -1,3 +1,4 @@
+use crate::config::agent::DEFAULT_AGENT_CONFIG_PATH;
 use palc::Parser;
 
 #[derive(Parser, Debug, Clone)]
@@ -7,7 +8,7 @@ use palc::Parser;
     after_long_help = "This Agent is open-sourced on Github, powered by powerful Rust. Love from NodeGet"
 )]
 pub struct AgentArgs {
-    #[arg(long, short, default_value_t = "config.yaml".to_string())]
+    #[arg(long, short, default_value_t = DEFAULT_AGENT_CONFIG_PATH.to_owned())]
     pub config: String,
 
     #[arg(long, short, default_value_t = false)]

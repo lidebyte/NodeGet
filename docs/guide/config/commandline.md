@@ -25,8 +25,12 @@ Options:
 
 ```
 ./nodeget-agent -h
-Usage: nodeget-agent --config <CONFIG>
+Usage: nodeget-agent [OPTIONS]
 
 Options:
   -c, --config <CONFIG>
+          [default: config.toml]
+
+  -v, --version
+          [default: false]
 ```

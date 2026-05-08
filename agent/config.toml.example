@@ -32,8 +32,8 @@ exec_max_character = 10000
 # IP 地址获取服务提供商，可选 ipinfo / cloudflare，默认 ipinfo
 ip_provider = "ipinfo"
 
-# NTP 服务器地址，默认使用阿里云公共 NTP（time.pool.aliyun.com）
-ntp_server = "time.pool.aliyun.com"
+# NTP 服务器地址，默认使用 pool.ntp.org
+ntp_server = "pool.ntp.org"
 
 # 服务器列表
 # 可指定多个，以连接多个 Servers

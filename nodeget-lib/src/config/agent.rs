@@ -2,7 +2,12 @@ use crate::config::deserialize_uuid_or_auto;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
+use std::time::Duration;
 use tokio::fs;
+
+pub const DEFAULT_AGENT_CONFIG_PATH: &str = "config.toml";
+pub const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 1000;
+pub const DEFAULT_NTP_SERVER: &str = "pool.ntp.org";
 
 // Agent 配置结构体，定义 Agent 的运行参数
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -90,6 +95,19 @@ pub enum IpProvider {
 }
 
 impl AgentConfig {
+    #[must_use]
+    pub fn connect_timeout_duration(&self) -> Duration {
+        Duration::from_millis(
+            self.connect_timeout_ms
+                .unwrap_or(DEFAULT_CONNECT_TIMEOUT_MS),
+        )
+    }
+
+    #[must_use]
+    pub fn ntp_server_or_default(&self) -> &str {
+        self.ntp_server.as_deref().unwrap_or(DEFAULT_NTP_SERVER)
+    }
+
     /// 从指定路径读取并解析代理配置
     ///
     /// 若配置文件中 `agent_uuid` 为 `"auto_gen"`，则会生成随机 UUIDv4
@@ -155,6 +173,10 @@ impl AgentConfig {
         };
 
         let config: Self = toml::from_str(&config_content)?;
+
+        if matches!(config.connect_timeout_ms, Some(0)) {
+            return Err("connect_timeout_ms must be greater than 0".into());
+        }
 
         // 校验 server name 不能重复
         if let Some(servers) = &config.server {
