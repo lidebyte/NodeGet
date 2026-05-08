@@ -5,8 +5,8 @@ use nodeget_lib::error::NodegetError;
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::fs;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::{
     sync::{RwLock, mpsc},
@@ -77,21 +77,60 @@ pub async fn handle_pty_url(
 
         let ws_stream = ws.0;
 
-        let cmd = if cfg!(windows) {
-            "cmd.exe"
-        } else if fs::exists("/bin/bash").unwrap_or(false) {
-            "bash"
-        } else {
-            "sh"
-        };
+        let cmd = terminal_shell()?;
 
-        handle_pty_session(ws_stream, cmd).await
+        handle_pty_session(ws_stream, &cmd).await
     }
     .await;
 
     release_terminal_id(&terminal_id).await;
 
     connect_result
+}
+
+fn terminal_shell() -> Result<String> {
+    let Some(config) = AGENT_CONFIG.get() else {
+        return Err(NodegetError::Other(
+            "Agent config not initialized".to_owned(),
+        ));
+    };
+
+    let configured_shell = config
+        .read()
+        .map_err(|_| NodegetError::Other("AGENT_CONFIG lock poisoned".to_owned()))?
+        .terminal_shell
+        .clone();
+
+    let shell = configured_shell.map_or_else(
+        || default_terminal_shell().to_owned(),
+        |shell| {
+            let shell = shell.trim();
+            if shell.is_empty() {
+                default_terminal_shell().to_owned()
+            } else {
+                shell.to_owned()
+            }
+        },
+    );
+
+    let shell_path = Path::new(&shell);
+    if shell_path.components().count() > 1 && !shell_path.exists() {
+        return Err(NodegetError::InvalidInput(format!(
+            "Configured terminal_shell does not exist: {shell}"
+        )));
+    }
+
+    Ok(shell)
+}
+
+fn default_terminal_shell() -> &'static str {
+    if cfg!(windows) {
+        "cmd.exe"
+    } else if Path::new("/bin/bash").exists() {
+        "/bin/bash"
+    } else {
+        "sh"
+    }
 }
 
 // Handle a PTY session.

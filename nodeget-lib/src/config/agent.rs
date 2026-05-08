@@ -2,7 +2,17 @@ use crate::config::deserialize_uuid_or_auto;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
+use std::time::Duration;
 use tokio::fs;
+
+pub const DEFAULT_AGENT_CONFIG_PATH: &str = "config.toml";
+pub const DEFAULT_DYNAMIC_REPORT_INTERVAL_MS: u64 = 1000;
+pub const DEFAULT_DYNAMIC_SUMMARY_REPORT_INTERVAL_MS: u64 = 1000;
+pub const DEFAULT_STATIC_REPORT_INTERVAL_MS: u64 = 300_000;
+pub const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 1000;
+pub const DEFAULT_EXEC_MAX_CHARACTER: usize = 10_000;
+pub const DEFAULT_IP_PROVIDER: IpProvider = IpProvider::Cloudflare;
+pub const DEFAULT_NTP_SERVER: &str = "pool.ntp.org";
 
 // Agent 配置结构体，定义 Agent 的运行参数
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -82,14 +92,62 @@ pub struct Server {
 }
 
 // IP 地址获取服务提供商枚举
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum IpProvider {
     IpInfo,
     Cloudflare,
 }
 
+impl Default for IpProvider {
+    fn default() -> Self {
+        DEFAULT_IP_PROVIDER
+    }
+}
+
 impl AgentConfig {
+    #[must_use]
+    pub fn dynamic_report_interval_ms_or_default(&self) -> u64 {
+        self.dynamic_report_interval_ms
+            .unwrap_or(DEFAULT_DYNAMIC_REPORT_INTERVAL_MS)
+    }
+
+    #[must_use]
+    pub fn dynamic_summary_report_interval_ms_or_default(&self) -> u64 {
+        self.dynamic_summary_report_interval_ms
+            .unwrap_or(DEFAULT_DYNAMIC_SUMMARY_REPORT_INTERVAL_MS)
+    }
+
+    #[must_use]
+    pub fn static_report_interval_ms_or_default(&self) -> u64 {
+        self.static_report_interval_ms
+            .unwrap_or(DEFAULT_STATIC_REPORT_INTERVAL_MS)
+    }
+
+    #[must_use]
+    pub fn connect_timeout_duration(&self) -> Duration {
+        Duration::from_millis(
+            self.connect_timeout_ms
+                .unwrap_or(DEFAULT_CONNECT_TIMEOUT_MS),
+        )
+    }
+
+    #[must_use]
+    pub fn exec_max_character_or_default(&self) -> usize {
+        self.exec_max_character
+            .unwrap_or(DEFAULT_EXEC_MAX_CHARACTER)
+    }
+
+    #[must_use]
+    pub fn ip_provider_or_default(&self) -> IpProvider {
+        self.ip_provider.unwrap_or(DEFAULT_IP_PROVIDER)
+    }
+
+    #[must_use]
+    pub fn ntp_server_or_default(&self) -> &str {
+        self.ntp_server.as_deref().unwrap_or(DEFAULT_NTP_SERVER)
+    }
+
     /// 从指定路径读取并解析代理配置
     ///
     /// 若配置文件中 `agent_uuid` 为 `"auto_gen"`，则会生成随机 UUIDv4
@@ -156,6 +214,10 @@ impl AgentConfig {
 
         let config: Self = toml::from_str(&config_content)?;
 
+        if matches!(config.connect_timeout_ms, Some(0)) {
+            return Err("connect_timeout_ms must be greater than 0".into());
+        }
+
         // 校验 server name 不能重复
         if let Some(servers) = &config.server {
             let mut seen = HashSet::with_capacity(servers.len());
@@ -168,8 +230,8 @@ impl AgentConfig {
 
         // 校验 dynamic_report_interval_ms 必须是 dynamic_summary_report_interval_ms 的整数倍
         {
-            let dynamic_interval = config.dynamic_report_interval_ms.unwrap_or(1000);
-            let summary_interval = config.dynamic_summary_report_interval_ms.unwrap_or(1000);
+            let dynamic_interval = config.dynamic_report_interval_ms_or_default();
+            let summary_interval = config.dynamic_summary_report_interval_ms_or_default();
             if summary_interval == 0 {
                 return Err("dynamic_summary_report_interval_ms must be greater than 0".into());
             }

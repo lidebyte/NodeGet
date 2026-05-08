@@ -15,7 +15,7 @@ nodeget-server init -c ./config.toml
 nodeget-server roll-super-token -c ./config.toml
 ```
 
-`-c/--config` 为必填参数；若配置文件无法读取将会 Panic 退出。
+`nodeget-server` 的 `-c/--config` 为必填参数；`nodeget-agent` 未传 `-c/--config` 时默认读取当前工作目录下的 `config.toml`。若配置文件无法读取将会退出。
 
 ## 详细的配置参考
 

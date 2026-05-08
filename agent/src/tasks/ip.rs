@@ -33,9 +33,9 @@ pub async fn ip() -> IPInfo {
         .and_then(|lock| {
             lock.read()
                 .ok()
-                .and_then(|config| config.ip_provider.clone())
+                .map(|config| config.ip_provider_or_default())
         })
-        .unwrap_or(IpProvider::Cloudflare);
+        .unwrap_or_default();
 
     match provider {
         IpProvider::Cloudflare => ip_cloudflare().await,

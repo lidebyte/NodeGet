@@ -34,14 +34,14 @@ terminal_shell = "bash"
 # 超出该数量只返回命令的最后结果，上文将被截断，默认 10000
 exec_max_character = 10000
 
-# IP 地址获取服务提供商，可选 ipinfo / Cloudflare，默认 ipinfo
-ip_provider = "ipinfo"
+# IP 地址获取服务提供商，可选 ipinfo / cloudflare，默认 cloudflare
+ip_provider = "cloudflare"
 
 # NTP 服务器地址，用于获取本地时间与 NTP 参考时间的偏差
 # Agent 仅在首次启动时查询该服务器，所有时间戳输出自动应用此偏移
 # 连接失败或超时时自动降级为本地时间（偏移为 0），不影响业务
-# 默认使用阿里云公共 NTP（time.pool.aliyun.com）
-ntp_server = "time.pool.aliyun.com"
+# 默认使用 pool.ntp.org
+ntp_server = "pool.ntp.org"
 
 # 服务器列表
 # 可指定多个，以连接多个 Servers
