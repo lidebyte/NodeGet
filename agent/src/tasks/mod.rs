@@ -14,13 +14,13 @@ use tokio_tungstenite::tungstenite::{Message, Utf8Bytes};
 /// Task 结果类型
 pub type Result<T> = anyhow::Result<T>;
 
-/// 单条非 WebShell 任务的硬性执行上限。
+/// 单条非 `WebShell` 任务的硬性执行上限。
 ///
 /// 防止单个任务（被劫持 / 意外卡死 / 外部资源不可达）永久占用
-/// `handle_task` 中的 per-message JoinSet 插槽。10 分钟远大于正常
-/// ICMP/TCP/HTTP ping 与 execute / http_request 的预期上限，又不
+/// `handle_task` 中的 per-message `JoinSet` 插槽。10 分钟远大于正常
+/// ICMP/TCP/HTTP ping 与 execute / `http_request` 的预期上限，又不
 /// 会让真正卡住的任务在 agent 进程里无限堆积。
-const TASK_MAX_TIMEOUT: Duration = Duration::from_secs(600);
+const TASK_MAX_TIMEOUT: Duration = Duration::from_mins(10);
 
 // 安全地获取 Agent 配置
 fn get_agent_config() -> Result<AgentConfig> {

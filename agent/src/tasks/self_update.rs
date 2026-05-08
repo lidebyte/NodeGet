@@ -44,7 +44,7 @@ pub async fn self_update(tag: &str) -> bool {
     let response = match client
         .get(&url)
         .header("User-Agent", "NodeGet-Agent")
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_mins(1))
         .send()
         .await
     {
@@ -78,12 +78,11 @@ pub async fn self_update(tag: &str) -> bool {
 
     log::info!("Downloaded {} bytes ", bytes.len());
 
-    match replace_binary(bytes.to_vec()) {
-        true => log::info!("Binary replaced successfully"),
-        false => {
-            log::error!("Failed to replace binary");
-            return false;
-        }
+    if replace_binary(bytes.to_vec()) {
+        log::info!("Binary replaced successfully");
+    } else {
+        log::error!("Failed to replace binary");
+        return false;
     }
 
     #[cfg(unix)]

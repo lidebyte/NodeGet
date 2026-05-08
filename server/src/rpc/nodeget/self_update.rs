@@ -52,7 +52,7 @@ pub async fn self_update(token: String, tag: String) -> RpcResult<()> {
         let response = client
             .get(&url)
             .header("User-Agent", "NodeGet-Server")
-            .timeout(std::time::Duration::from_secs(120))
+            .timeout(std::time::Duration::from_mins(2))
             .send()
             .await
             .map_err(|e| NodegetError::Other(format!("Download request failed: {e}")))?;

@@ -222,7 +222,7 @@ async fn connection_manager(
                     continue;
                 }
 
-                let sub_ack = match timeout(Duration::from_secs(5), ws_read.next()).await {
+                match timeout(Duration::from_secs(5), ws_read.next()).await {
                     Ok(Some(Ok(Message::Text(text)))) => {
                         let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
                         if v.get("error").is_some() {
@@ -252,15 +252,15 @@ async fn connection_manager(
                     Ok(Some(Ok(_))) => {
                         debug!("[{name}] Non-text message during subscription ack");
                     }
-                };
-                let _ = sub_ack;
+                }
+                let () = ();
             }
         }
 
         let mut task_resubscribe_interval = if server.allow_task.unwrap_or(false) {
             Some(tokio::time::interval_at(
-                tokio::time::Instant::now() + Duration::from_secs(60),
-                Duration::from_secs(60),
+                tokio::time::Instant::now() + Duration::from_mins(1),
+                Duration::from_mins(1),
             ))
         } else {
             None
@@ -312,11 +312,11 @@ async fn connection_manager(
                 }
 
                 // 定时重注册 task（仅 allow_task 时）
-                _ = async {
+                () = async {
                 if let Some(ref mut interval) = task_resubscribe_interval {
                     interval.tick().await;
                 } else {
-                    loop { tokio::time::sleep(Duration::from_secs(3600)).await; }
+                    loop { tokio::time::sleep(Duration::from_hours(1)).await; }
                 }
                 } => {
                     let agent_uuid = AGENT_CONFIG
