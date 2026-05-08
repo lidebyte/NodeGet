@@ -10,10 +10,10 @@ use nodeget_lib::monitoring::query::DynamicSummaryQueryField;
 use nodeget_lib::permission::data_structure::{DynamicMonitoringSummary, Permission, Scope};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::error_message::anyhow_error_to_raw;
-use sea_orm::sea_query::{Alias, Expr, Query, SelectStatement, UnionType};
+use sea_orm::sea_query::{Alias, Query, SelectStatement, UnionType};
 use sea_orm::{
-    ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, ExprTrait, FromQueryResult,
-    Order, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, StatementBuilder,
+    ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, FromQueryResult, Order,
+    QueryFilter, QueryOrder, QuerySelect, QueryTrait, Statement, StatementBuilder,
 };
 use serde_json::value::RawValue;
 use std::collections::HashSet;
@@ -104,6 +104,11 @@ pub async fn dynamic_summary_multi_last_query(
         }
 
         // ── Fast path: in-memory last-cache (partial hit merge) ─────
+        //
+        // The cache stores raw `*10`-scaled integers (see
+        // `monitoring_last_cache::update_dynamic_summary`), so every hit needs
+        // descaling before it can be merged with the DB fallback below, which
+        // is itself descaled unconditionally in `execute_statement_query`.
         let last_cache = crate::monitoring_last_cache::MonitoringLastCache::global();
         let mut results: Vec<Option<serde_json::Value>> = vec![None; uuid_id_pairs.len()];
         let mut misses: Vec<(usize, i16)> = Vec::new();
@@ -219,18 +224,17 @@ fn build_union_last_statement(
     Ok(StatementBuilder::build(&union_query, &backend))
 }
 
-/// Column names that are stored as *10 scaled integers and need /10.0 on read
-const SCALED_COLUMNS: &[&str] = &["cpu_usage", "load_one", "load_five", "load_fifteen"];
-
-fn is_scaled_column(name: &str) -> bool {
-    SCALED_COLUMNS.contains(&name)
-}
-
 fn build_single_last_select(
     uuid_id: i16,
     fields: &[DynamicSummaryQueryField],
     backend: DatabaseBackend,
 ) -> SelectStatement {
+    // `backend` is still part of the signature because callers pass it
+    // through from `db.get_database_backend()`; we ignore it intentionally
+    // now that both backends emit the same `SELECT` of raw columns. The
+    // caller then descales in Rust (see `execute_statement_query`).
+    let _ = backend;
+
     let inner_query = dynamic_monitoring_summary::Entity::find()
         .select_only()
         .column(dynamic_monitoring_summary::Column::UuidId)
@@ -290,25 +294,12 @@ fn build_single_last_select(
             .collect()
     };
 
-    if backend == DatabaseBackend::Postgres {
-        // PostgreSQL handles expression aliases correctly in find_by_statement,
-        // so we can descale directly in SQL.
-        for col_name in col_names {
-            if is_scaled_column(col_name) {
-                wrapped.expr_as(
-                    Expr::col((alias.clone(), Alias::new(col_name))).div(10.0),
-                    Alias::new(col_name),
-                );
-            } else {
-                wrapped.column((alias.clone(), Alias::new(col_name)));
-            }
-        }
-    } else {
-        // SQLite (and MySQL): expression aliases in raw subquery-to-JSON mapping
-        // can drop columns, so we select raw values and descale in Rust code.
-        for col_name in col_names {
-            wrapped.column((alias.clone(), Alias::new(col_name)));
-        }
+    // Always select raw columns. All `*10`-scaled columns are descaled in
+    // application code by `apply_descaling_to_json_object` so that SQLite,
+    // PostgreSQL, and the in-memory last-cache all go through exactly one
+    // `/10.0` step.
+    for col_name in col_names {
+        wrapped.column((alias.clone(), Alias::new(col_name)));
     }
 
     wrapped.clone()
@@ -320,8 +311,6 @@ async fn execute_statement_query(
     capacity_hint: usize,
     uuid_cache: &MonitoringUuidCache,
 ) -> anyhow::Result<Box<RawValue>> {
-    let needs_app_descaling = db.get_database_backend() != DatabaseBackend::Postgres;
-
     debug!(target: "monitoring", "Starting dynamic summary multi-last query DB stream");
     let mut stream = serde_json::Value::find_by_statement(statement)
         .stream(db)
@@ -342,7 +331,9 @@ async fn execute_statement_query(
         match item_res {
             Ok(mut value) => {
                 result_count += 1;
-                // Translate uuid_id → uuid string
+                // Translate uuid_id → uuid string, then descale all *10 columns.
+                // Descaling is unconditional because the SQL always returns
+                // raw scaled integers regardless of backend.
                 if let Some(obj) = value.as_object_mut() {
                     if let Some(uuid_id_val) = obj.remove("uuid_id")
                         && let Some(uuid_id) = uuid_id_val.as_i64()
@@ -353,9 +344,7 @@ async fn execute_statement_query(
                             serde_json::Value::String(uuid.to_string()),
                         );
                     }
-                    if needs_app_descaling {
-                        nodeget_lib::monitoring::query::apply_descaling_to_json_object(obj);
-                    }
+                    nodeget_lib::monitoring::query::apply_descaling_to_json_object(obj);
                 }
                 if first {
                     first = false;
@@ -653,27 +642,38 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_sql_includes_div_10() {
+    fn test_postgres_sql_has_no_div_10() {
+        // Regression for the "/10 integer truncation" bug: `sea_query`
+        // renders `Expr::col(...).div(10.0)` as `col / 10` (integer division
+        // in PostgreSQL), which silently truncated low CPU/load values.
+        // The fix removes all SQL-level descaling and relies on
+        // `apply_descaling_to_json_object` in Rust.
         let fields = vec![
             DynamicSummaryQueryField::CpuUsage,
             DynamicSummaryQueryField::UsedMemory,
             DynamicSummaryQueryField::LoadOne,
+            DynamicSummaryQueryField::LoadFive,
+            DynamicSummaryQueryField::LoadFifteen,
         ];
 
         let stmt = build_single_last_select(1i16, &fields, DatabaseBackend::Postgres);
         let sql = StatementBuilder::build(&stmt, &DatabaseBackend::Postgres).to_string();
 
         assert!(
-            sql.contains(r#""cpu_usage" / 10 AS "cpu_usage""#),
-            "PostgreSQL SQL should descale cpu_usage in SQL: {sql}"
+            !sql.contains("/ 10"),
+            "PostgreSQL SQL must not contain `/ 10` expressions (integer truncation bug): {sql}"
         );
         assert!(
-            sql.contains(r#""load_one" / 10 AS "load_one""#),
-            "PostgreSQL SQL should descale load_one in SQL: {sql}"
+            !sql.contains("/10"),
+            "PostgreSQL SQL must not contain `/10` expressions: {sql}"
         );
         assert!(
-            !sql.contains(r#""used_memory" / 10"#),
-            "PostgreSQL SQL should NOT descale used_memory in SQL: {sql}"
+            sql.contains(r#""cpu_usage""#),
+            "PostgreSQL SQL must still select raw cpu_usage: {sql}"
+        );
+        assert!(
+            sql.contains(r#""load_one""#),
+            "PostgreSQL SQL must still select raw load_one: {sql}"
         );
     }
 
@@ -691,6 +691,57 @@ mod tests {
         assert!(
             !sql.contains("/ 10"),
             "SQLite SQL should NOT contain / 10 expressions: {sql}"
+        );
+    }
+
+    /// Regression test for the Postgres cache-hit path bug.
+    ///
+    /// The old code only descaled the cache value when the backend was
+    /// `SQLite`, which meant `PostgreSQL` deployments served raw `*10`
+    /// integers out of the in-memory cache (e.g. 534 instead of 53.4 for CPU
+    /// usage). This test verifies that `apply_descaling_to_json_object`
+    /// works independently of any backend and produces the correct
+    /// `/10.0` floating-point result for all scaled columns.
+    #[test]
+    fn test_cache_path_descaling_is_backend_agnostic() {
+        let mut cache_value = serde_json::Map::new();
+        cache_value.insert(
+            "uuid".to_owned(),
+            serde_json::Value::String("abc".to_owned()),
+        );
+        cache_value.insert("timestamp".to_owned(), Value::Number(1000i64.into()));
+        // *10 scaled integers, as stored by `update_dynamic_summary`
+        cache_value.insert("cpu_usage".to_owned(), Value::Number(534i64.into()));
+        cache_value.insert("load_one".to_owned(), Value::Number(15i64.into()));
+        cache_value.insert("load_five".to_owned(), Value::Number(7i64.into()));
+        cache_value.insert("load_fifteen".to_owned(), Value::Number(3i64.into()));
+        // Non-scaled field must not be touched
+        cache_value.insert(
+            "used_memory".to_owned(),
+            Value::Number(650_596_352i64.into()),
+        );
+
+        nodeget_lib::monitoring::query::apply_descaling_to_json_object(&mut cache_value);
+
+        assert_eq!(
+            cache_value["cpu_usage"],
+            Value::Number(serde_json::Number::from_f64(53.4).unwrap())
+        );
+        assert_eq!(
+            cache_value["load_one"],
+            Value::Number(serde_json::Number::from_f64(1.5).unwrap())
+        );
+        assert_eq!(
+            cache_value["load_five"],
+            Value::Number(serde_json::Number::from_f64(0.7).unwrap())
+        );
+        assert_eq!(
+            cache_value["load_fifteen"],
+            Value::Number(serde_json::Number::from_f64(0.3).unwrap())
+        );
+        assert_eq!(
+            cache_value["used_memory"],
+            Value::Number(650_596_352i64.into())
         );
     }
 }

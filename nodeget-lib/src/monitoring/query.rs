@@ -266,12 +266,11 @@ impl DynamicSummaryQueryField {
     }
 
     /// 该字段是否在数据库中以 *10 缩放存储（读取时需要 /10.0 还原）
+    ///
+    /// 来源与 [`SCALED_SUMMARY_COLUMNS`] 保持一致，新增缩放字段时只需修改常量。
     #[must_use]
-    pub const fn is_scaled(&self) -> bool {
-        matches!(
-            self,
-            Self::CpuUsage | Self::LoadOne | Self::LoadFive | Self::LoadFifteen
-        )
+    pub fn is_scaled(&self) -> bool {
+        SCALED_SUMMARY_COLUMNS.contains(&self.column_name())
     }
 }
 
@@ -345,25 +344,179 @@ pub struct DynamicSummaryResponseItem {
     pub receive_speed: Option<Value>,
 }
 
-/// Apply /10.0 descaling to known scaled columns in the JSON object.
+/// Single source of truth for the list of `dynamic_monitoring_summary` columns
+/// that are stored as `*10`-scaled `i16` integers and must be divided by
+/// `10.0` on read.
 ///
-/// This is done in application code rather than SQL to work around
-/// `SQLite` limitations with expression aliases in raw query-to-JSON mapping.
+/// All descaling helpers and `DynamicSummaryQueryField::is_scaled` derive from
+/// this constant, so adding a new scaled column only requires one edit.
+pub const SCALED_SUMMARY_COLUMNS: &[&str] =
+    &["cpu_usage", "load_one", "load_five", "load_fifteen"];
+
+/// Apply `/10.0` descaling to known scaled columns in `obj`, in place.
+///
+/// This is the canonical post-processing step used by every `dynamic_summary`
+/// read path (DB stream, in-memory last-cache, `SQLite`, `PostgreSQL`).
+/// Running it on an already-descaled object would double-divide, so call
+/// sites must ensure it runs exactly once per row.
+///
+/// Integer values are divided as `f64`; existing `f64` values are also
+/// handled (for forwards compatibility with backends that already apply the
+/// division in SQL). `NaN` / `±Infinity` values that cannot be represented by
+/// `serde_json::Number` are left untouched rather than silently dropped.
 pub fn apply_descaling_to_json_object(obj: &mut serde_json::Map<String, serde_json::Value>) {
-    const SCALED_FIELDS: &[&str] = &["cpu_usage", "load_one", "load_five", "load_fifteen"];
-    for key in SCALED_FIELDS {
+    for key in SCALED_SUMMARY_COLUMNS {
         if let Some(val) = obj.get_mut(*key)
             && let serde_json::Value::Number(n) = val
         {
-            if let Some(i) = n.as_i64() {
-                if let Some(scaled) = serde_json::Number::from_f64(i as f64 / 10.0) {
-                    *val = serde_json::Value::Number(scaled);
-                }
-            } else if let Some(f) = n.as_f64()
+            // Resolve the numeric value to an `f64` regardless of how
+            // `serde_json` stored it (signed int, unsigned int, or already
+            // a float), then divide by 10. A `None` at this stage means the
+            // value was not representable (e.g. `NaN`), in which case we
+            // leave the JSON value untouched.
+            let raw: Option<f64> = n.as_i64().map(|i| {
+                #[allow(clippy::cast_precision_loss)]
+                let f = i as f64;
+                f
+            }).or_else(|| {
+                n.as_u64().map(|u| {
+                    #[allow(clippy::cast_precision_loss)]
+                    let f = u as f64;
+                    f
+                })
+            }).or_else(|| n.as_f64());
+
+            if let Some(f) = raw
                 && let Some(scaled) = serde_json::Number::from_f64(f / 10.0)
             {
                 *val = serde_json::Value::Number(scaled);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        DynamicSummaryQueryField, SCALED_SUMMARY_COLUMNS, apply_descaling_to_json_object,
+    };
+    use serde_json::{Map, Number, Value};
+
+    #[test]
+    fn scaled_fields_match_single_source_of_truth() {
+        // `is_scaled` and `SCALED_SUMMARY_COLUMNS` must never drift apart.
+        let scaled_from_const: std::collections::HashSet<&str> =
+            SCALED_SUMMARY_COLUMNS.iter().copied().collect();
+
+        let all_fields = [
+            DynamicSummaryQueryField::CpuUsage,
+            DynamicSummaryQueryField::GpuUsage,
+            DynamicSummaryQueryField::UsedSwap,
+            DynamicSummaryQueryField::TotalSwap,
+            DynamicSummaryQueryField::UsedMemory,
+            DynamicSummaryQueryField::TotalMemory,
+            DynamicSummaryQueryField::AvailableMemory,
+            DynamicSummaryQueryField::LoadOne,
+            DynamicSummaryQueryField::LoadFive,
+            DynamicSummaryQueryField::LoadFifteen,
+            DynamicSummaryQueryField::Uptime,
+            DynamicSummaryQueryField::BootTime,
+            DynamicSummaryQueryField::ProcessCount,
+            DynamicSummaryQueryField::TotalSpace,
+            DynamicSummaryQueryField::AvailableSpace,
+            DynamicSummaryQueryField::ReadSpeed,
+            DynamicSummaryQueryField::WriteSpeed,
+            DynamicSummaryQueryField::TcpConnections,
+            DynamicSummaryQueryField::UdpConnections,
+            DynamicSummaryQueryField::TotalReceived,
+            DynamicSummaryQueryField::TotalTransmitted,
+            DynamicSummaryQueryField::TransmitSpeed,
+            DynamicSummaryQueryField::ReceiveSpeed,
+        ];
+
+        for field in all_fields {
+            let expected = scaled_from_const.contains(field.column_name());
+            assert_eq!(
+                field.is_scaled(),
+                expected,
+                "field `{}` is_scaled() does not match SCALED_SUMMARY_COLUMNS",
+                field.column_name()
+            );
+        }
+    }
+
+    #[test]
+    fn descaling_divides_integer_scaled_fields_by_ten() {
+        let mut obj = Map::new();
+        obj.insert("cpu_usage".to_owned(), Value::Number(534i64.into()));
+        obj.insert("load_one".to_owned(), Value::Number(15i64.into()));
+        obj.insert("load_five".to_owned(), Value::Number(7i64.into()));
+        obj.insert("load_fifteen".to_owned(), Value::Number(3i64.into()));
+        obj.insert("used_memory".to_owned(), Value::Number(1024i64.into()));
+
+        apply_descaling_to_json_object(&mut obj);
+
+        assert_eq!(
+            obj["cpu_usage"],
+            Value::Number(Number::from_f64(53.4).unwrap())
+        );
+        assert_eq!(
+            obj["load_one"],
+            Value::Number(Number::from_f64(1.5).unwrap())
+        );
+        assert_eq!(
+            obj["load_five"],
+            Value::Number(Number::from_f64(0.7).unwrap())
+        );
+        assert_eq!(
+            obj["load_fifteen"],
+            Value::Number(Number::from_f64(0.3).unwrap())
+        );
+        // Non-scaled fields untouched
+        assert_eq!(obj["used_memory"], Value::Number(1024i64.into()));
+    }
+
+    #[test]
+    fn descaling_handles_float_input_idempotently_once() {
+        // If a backend ever returns a pre-descaled float, a single call of
+        // `apply_descaling_to_json_object` will divide it once more. The
+        // contract is: callers must invoke descaling **exactly once** per
+        // row. This test documents that contract.
+        let mut obj = Map::new();
+        obj.insert(
+            "cpu_usage".to_owned(),
+            Value::Number(Number::from_f64(10.0).unwrap()),
+        );
+
+        apply_descaling_to_json_object(&mut obj);
+
+        assert_eq!(
+            obj["cpu_usage"],
+            Value::Number(Number::from_f64(1.0).unwrap())
+        );
+    }
+
+    #[test]
+    fn descaling_leaves_missing_keys_alone() {
+        let mut obj = Map::new();
+        obj.insert(
+            "used_memory".to_owned(),
+            Value::Number(1_234_567i64.into()),
+        );
+
+        apply_descaling_to_json_object(&mut obj);
+
+        assert_eq!(obj.len(), 1);
+        assert_eq!(obj["used_memory"], Value::Number(1_234_567i64.into()));
+    }
+
+    #[test]
+    fn descaling_skips_null_values() {
+        let mut obj = Map::new();
+        obj.insert("cpu_usage".to_owned(), Value::Null);
+
+        apply_descaling_to_json_object(&mut obj);
+
+        assert_eq!(obj["cpu_usage"], Value::Null);
     }
 }
