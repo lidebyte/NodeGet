@@ -241,7 +241,9 @@
   "token": "demo_token",
   "name": "my-site",
   "path": "/css/style.css",
-  "body": [/* 文件二进制内容 */]
+  "body": [
+    /* 文件二进制内容 */
+  ]
 }
 ```
 
@@ -446,7 +448,8 @@ curl http://localhost:3000/index.html
 # 实际返回磁盘上 {static_path}/{path}/index.html 的内容（path 为该 static 记录里的 path 字段）
 ```
 
-`is_http_root` 在同一时刻只能存在一个。尝试创建或更新第二条 `is_http_root` 为 `true` 的配置会返回错误（数据库层 partial unique index 强制保证）。
+`is_http_root` 在同一时刻只能存在一个。尝试创建或更新第二条 `is_http_root` 为 `true` 的配置会返回错误（数据库层 partial
+unique index 强制保证）。
 
 ## 缓存说明
 

@@ -10,7 +10,8 @@
 ::: tip 路径迁移说明
 旧的 `/worker-route/{route_name}` 与 `/worker-route/{route_name}/*` 仍然可用，行为与新路径**完全一致**，仅为给接入方提供迁移过渡。
 
-**为什么迁移：** NodeGet 内置 HTTP 端点正在统一到 `/nodeget/` 前缀下（当前还有 `/nodeget/static/*`），可以避免与业务自定义路径冲突，同时也便于反向代理规则统一。
+**为什么迁移：** NodeGet 内置 HTTP 端点正在统一到 `/nodeget/` 前缀下（当前还有 `/nodeget/static/*`
+），可以避免与业务自定义路径冲突，同时也便于反向代理规则统一。
 
 **建议：** 新接入请直接使用 `/nodeget/worker-route/`；已有接入请在方便时将反向代理 / 客户端中的调用地址切换到新前缀。后续版本会移除旧路径。
 :::

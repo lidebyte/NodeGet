@@ -362,27 +362,27 @@ fn handle_ws_message(
             // 旧实现对每条文本消息做两次 `from_str`（HeartBeat + NeedResize），终端按键
             // 频率高时开销可观，这里改为一次 Value 解析 + 结构化分派。协议语义保持不变：
             // 有 `cols` / `rows` 字段 → 视为 resize；否则（含 type==heartbeat、无 type）一律丢弃为控制。
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(text.as_ref()) {
-                if v.is_object() {
-                    // resize：只要结构上匹配 cols/rows 即视为 resize（与旧行为一致）。
-                    if let (Some(cols), Some(rows)) = (
-                        v.get("cols").and_then(serde_json::Value::as_u64),
-                        v.get("rows").and_then(serde_json::Value::as_u64),
-                    ) {
-                        return Ok(Some(NeedResize {
-                            type_str: v
-                                .get("type")
-                                .and_then(|t| t.as_str())
-                                .unwrap_or("resize")
-                                .to_owned(),
-                            cols: u16::try_from(cols).unwrap_or(u16::MAX),
-                            rows: u16::try_from(rows).unwrap_or(u16::MAX),
-                        }));
-                    }
-                    // 结构上像 heartbeat：带 type 和 timestamp，或没有终端输入负载但属于控制消息。
-                    if v.get("type").is_some() && v.get("timestamp").is_some() {
-                        return Ok(None);
-                    }
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(text.as_ref())
+                && v.is_object()
+            {
+                // resize：只要结构上匹配 cols/rows 即视为 resize（与旧行为一致）。
+                if let (Some(cols), Some(rows)) = (
+                    v.get("cols").and_then(serde_json::Value::as_u64),
+                    v.get("rows").and_then(serde_json::Value::as_u64),
+                ) {
+                    return Ok(Some(NeedResize {
+                        type_str: v
+                            .get("type")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("resize")
+                            .to_owned(),
+                        cols: u16::try_from(cols).unwrap_or(u16::MAX),
+                        rows: u16::try_from(rows).unwrap_or(u16::MAX),
+                    }));
+                }
+                // 结构上像 heartbeat：带 type 和 timestamp，或没有终端输入负载但属于控制消息。
+                if v.get("type").is_some() && v.get("timestamp").is_some() {
+                    return Ok(None);
                 }
             }
             pty_writer

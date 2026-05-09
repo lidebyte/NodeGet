@@ -10,18 +10,20 @@ use crate::entity::static_file as static_entity;
 
 pub mod cache;
 
-/// 获取配置文件中的 static_path，默认 `./static/`
+/// 获取配置文件中的 `static_path，默认` `./static/`
 pub fn get_static_path() -> String {
     crate::SERVER_CONFIG
         .get()
         .and_then(|lock| lock.read().ok())
-        .map(|guard| {
-            guard
-                .static_path
-                .clone()
-                .unwrap_or_else(|| "./static/".to_owned())
-        })
-        .unwrap_or_else(|| "./static/".to_owned())
+        .map_or_else(
+            || "./static/".to_owned(),
+            |guard| {
+                guard
+                    .static_path
+                    .clone()
+                    .unwrap_or_else(|| "./static/".to_owned())
+            },
+        )
 }
 
 /// 校验 static name 的合法性
@@ -185,11 +187,9 @@ pub async fn create_static(
         .one(db)
         .await?;
     if existing.is_some() {
-        return Err(NodegetError::DatabaseError(format!(
-            "Static '{}' already exists",
-            name_trimmed
-        ))
-        .into());
+        return Err(
+            NodegetError::DatabaseError(format!("Static '{name_trimmed}' already exists")).into(),
+        );
     }
 
     // is_http_root 只能同时存在一个
@@ -255,7 +255,7 @@ pub async fn update_static(
         .filter(static_entity::Column::Name.eq(&name_trimmed))
         .one(db)
         .await?
-        .ok_or_else(|| NodegetError::NotFound(format!("Static '{}' not found", name_trimmed)))?;
+        .ok_or_else(|| NodegetError::NotFound(format!("Static '{name_trimmed}' not found")))?;
 
     // is_http_root 只能同时存在一个
     if new_is_http_root && !model.is_http_root {
@@ -303,7 +303,7 @@ pub async fn delete_static(name: &str) -> anyhow::Result<()> {
         .filter(static_entity::Column::Name.eq(name_trimmed))
         .one(db)
         .await?
-        .ok_or_else(|| NodegetError::NotFound(format!("Static '{}' not found", name_trimmed)))?;
+        .ok_or_else(|| NodegetError::NotFound(format!("Static '{name_trimmed}' not found")))?;
 
     static_entity::Entity::delete_by_id(model.id)
         .exec(db)
@@ -350,10 +350,10 @@ pub async fn upload_file(
     let static_path = get_static_path();
     let resolved = resolve_safe_file_path(&static_path, &model.path, file_path)?;
 
-    if let Some(parent) = resolved.parent() {
-        if let Err(e) = tokio::fs::create_dir_all(parent).await {
-            warn!(target: "static", path = %parent.display(), error = %e, "failed to create parent directory");
-        }
+    if let Some(parent) = resolved.parent()
+        && let Err(e) = tokio::fs::create_dir_all(parent).await
+    {
+        warn!(target: "static", path = %parent.display(), error = %e, "failed to create parent directory");
     }
 
     tokio::fs::write(&resolved, data).await.map_err(|e| {

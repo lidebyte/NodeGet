@@ -40,8 +40,7 @@ impl StaticDataFromGpu {
                     let cuda_cores = u64::from(device.num_cores().unwrap_or(0));
                     let architecture = device
                         .architecture()
-                        .map(|a| a.to_string())
-                        .unwrap_or_else(|_| "unknown".to_owned());
+                        .map_or_else(|_| "unknown".to_owned(), |a| a.to_string());
                     Some(StaticGpuData {
                         id: id + 1,
                         name,

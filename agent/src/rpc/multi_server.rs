@@ -190,7 +190,8 @@ async fn connection_manager(
                         // 当成 ack 吞掉。
                         match serde_json::from_str::<serde_json::Value>(&text) {
                             Ok(v) => {
-                                let id_ok = v.get("id").and_then(|i| i.as_u64()) == Some(1);
+                                let id_ok =
+                                    v.get("id").and_then(serde_json::Value::as_u64) == Some(1);
                                 if !id_ok {
                                     error!(
                                         "[{name}] Task subscription ack id mismatch: {v}, reconnecting..."
@@ -331,7 +332,7 @@ async fn connection_manager(
 ///
 /// 拆出这个 enum 是为了让 caller 能区分"网络问题"（重试即可）与"对端身份错误"
 /// （大概率配置/DNS/反向代理错路，狂连无意义），分别走不同的退避。详见
-/// review_agent.md #71。
+/// `review_agent.md` #71。
 enum UuidVerification {
     /// 对端返回的 server uuid 和 agent 侧配置一致，握手通过。
     Ok,
@@ -407,7 +408,7 @@ async fn connect_with_retry(
     use rand::Rng;
 
     const BASE_BACKOFF: Duration = Duration::from_secs(1);
-    const MAX_BACKOFF: Duration = Duration::from_secs(60);
+    const MAX_BACKOFF: Duration = Duration::from_mins(1);
 
     let mut retry_count: u32 = 0;
     loop {

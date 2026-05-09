@@ -32,33 +32,33 @@ demo-extension
 
 ```json
 {
-    "name":"my-extenstion",
-    "icon":"assets/icon.svg",
-    "routes":[
-        {
-            "type":"node",
-            "name":"extension-test-1",
-            "icon":"assets/route-icon.svg",
-            "entry":"index.html"
-        },
-        {
-            "type":"global",
-            "name":"extension-test-2",
-            "icon":"assets/route-icon.svg",
-            "entry":"index.html"
-        }
-    ],
-    "limits":[
-        // 这里由用户输入，Token 所需要的权限列表
-    ],
-    // 非关键字段，仅记录用
-    "version": "1.0",
-    "description": "Just an extension demo.",
-    "extension_version": 1,
-    "author":"",
-    "repository":"",
-    "homepage":"",
-    "license":"",
+  "name": "my-extenstion",
+  "icon": "assets/icon.svg",
+  "routes": [
+    {
+      "type": "node",
+      "name": "extension-test-1",
+      "icon": "assets/route-icon.svg",
+      "entry": "index.html"
+    },
+    {
+      "type": "global",
+      "name": "extension-test-2",
+      "icon": "assets/route-icon.svg",
+      "entry": "index.html"
+    }
+  ],
+  "limits": [
+    // 这里由用户输入，Token 所需要的权限列表
+  ],
+  // 非关键字段，仅记录用
+  "version": "1.0",
+  "description": "Just an extension demo.",
+  "extension_version": 1,
+  "author": "",
+  "repository": "",
+  "homepage": "",
+  "license": ""
 }
 ```
 
@@ -102,6 +102,7 @@ fetch(resourceURL).then(r => r.text()).then(console.log)
 因此，在文件上传完成后，其实只是在网页上开一个 `iframe`，类似于：
 
 ```html
+
 <iframe src="https://WS_HOST/nodeget/worker-route/static-worker-route/Extension_UUID/{entry}#?token={}&node=${AGENT_UUID}&theme={theme}"></iframe>
 ```
 

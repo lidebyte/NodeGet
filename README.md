@@ -10,6 +10,8 @@
 ![GitHub top language](https://img.shields.io/github/languages/top/NodeSeekDev/NodeGet?style=for-the-badge&label=Rust&color=red)
 ![GitHub License](https://img.shields.io/github/license/NodeSeekDev/NodeGet?style=for-the-badge)
 ![GitHub contributors](https://img.shields.io/github/contributors/NodeSeekDev/NodeGet?style=for-the-badge)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/w/NodeSeekDev/NodeGet?style=for-the-badge&color=black)
+![GitHub repo size](https://img.shields.io/github/repo-size/NodeSeekDev/NodeGet?style=for-the-badge&color=pink)
 ![GitHub Repo stars](https://img.shields.io/github/stars/NodeSeekDev/NodeGet?style=for-the-badge&color=yellow)
 ![GitHub forks](https://img.shields.io/github/forks/NodeSeekDev/NodeGet?style=for-the-badge&color=white)
 

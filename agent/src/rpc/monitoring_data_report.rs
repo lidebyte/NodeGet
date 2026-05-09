@@ -32,8 +32,8 @@ async fn wait_for_agent_config() -> AgentConfig {
 /// `Arc<str>` 的好处：
 ///   - `Arc::clone` 只是原子自增引用计数，O(1)；
 ///   - 下游 spawn 里拿到 `Arc<str>` 后直接 `&*arc` 拼 RPC 字符串，零额外分配。
-/// 对比起以前"先 to_value → 每个 server clone 一次 Value（递归深拷贝 HashMap/Vec）"
-/// 的做法，CPU 和 RSS 峰值都能显著降低（review_agent.md #73）。
+/// 对比起以前"先 `to_value` → 每个 server clone 一次 Value（递归深拷贝 HashMap/Vec）"
+/// 的做法，CPU 和 RSS `峰值都能显著降低（review_agent.md` #73）。
 fn serialize_shared<T: Serialize>(data: &T) -> Option<Arc<str>> {
     match serde_json::to_string(data) {
         Ok(s) => Some(Arc::from(s.into_boxed_str())),
