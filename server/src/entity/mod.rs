@@ -10,6 +10,7 @@ pub mod js_result;
 pub mod js_worker;
 pub mod kv;
 pub mod monitoring_uuid;
+pub mod static_file;
 pub mod static_monitoring;
 pub mod task;
 pub mod token;

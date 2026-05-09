@@ -132,4 +132,4 @@ export default {
 
 - 创建/更新时会进行"仅编译"预检查，不会执行业务逻辑。
 - 真正执行发生在 `js-worker_run`。
-- HTTP 路由调用发生在 `/worker-route/{route_name}`。
+- HTTP 路由调用发生在 `/nodeget/worker-route/{route_name}`（旧 `/worker-route/{route_name}` 仍兼容，后续版本将移除）。

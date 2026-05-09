@@ -172,9 +172,7 @@ async fn connection_manager(
                     "task_register_task",
                     vec![
                         serde_json::Value::String(token.clone()),
-                        serde_json::Value::String(
-                            crate::config_access::current_agent_uuid_string(),
-                        ),
+                        serde_json::Value::String(crate::config_access::current_agent_uuid_string()),
                     ],
                 );
 
@@ -351,10 +349,7 @@ enum UuidVerification {
 async fn verify_server_uuid(
     name: &str,
     expected_uuid: &str,
-    ws_write: &mut SplitSink<
-        WebSocketStream<MaybeTlsStream<TcpStream>>,
-        Message,
-    >,
+    ws_write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
     ws_read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 ) -> UuidVerification {
     let rpc = wrap_json_into_rpc_with_id_1("nodeget-server_uuid", vec![]);
@@ -432,15 +427,16 @@ async fn connect_with_retry(
         retry_count = retry_count.saturating_add(1);
 
         // 指数退避：base * 2^(retry-1)，截断到 MAX_BACKOFF
-        let exp_secs = BASE_BACKOFF
-            .as_secs()
-            .saturating_mul(1u64.checked_shl(retry_count.saturating_sub(1).min(16)).unwrap_or(1));
+        let exp_secs = BASE_BACKOFF.as_secs().saturating_mul(
+            1u64.checked_shl(retry_count.saturating_sub(1).min(16))
+                .unwrap_or(1),
+        );
         let base_wait = Duration::from_secs(exp_secs).min(MAX_BACKOFF);
 
         // ±20% jitter，避免与其它 agent 同时重连
         let jitter_factor: f64 = rand::rng().random_range(0.8..1.2);
-        let wait = Duration::from_secs_f64(base_wait.as_secs_f64() * jitter_factor)
-            .min(MAX_BACKOFF);
+        let wait =
+            Duration::from_secs_f64(base_wait.as_secs_f64() * jitter_factor).min(MAX_BACKOFF);
 
         debug!(
             "[{name}] Retry attempt {retry_count} in {}ms...",

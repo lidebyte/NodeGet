@@ -1,5 +1,5 @@
-use crate::monitoring::impls::Monitor;
 use crate::config_access::get_agent_config;
+use crate::monitoring::impls::Monitor;
 use crate::rpc::multi_server::send_to;
 use log::{error, trace, warn};
 use nodeget_lib::config::agent::AgentConfig;
@@ -51,11 +51,8 @@ fn serialize_shared<T: Serialize>(data: &T) -> Option<Arc<str>> {
 /// 正确转义，`data_json` 原样嵌入（上游来自 `serialize_shared`，已是合法 JSON）。
 fn build_rpc_with_raw_data(method: &str, token: &str, data_json: &str) -> String {
     // `serde_json::to_string(&str)` 对 String 绝不会失败；但保守起见兜底一个空串字面量。
-    let token_json =
-        serde_json::to_string(token).unwrap_or_else(|_| "\"\"".to_owned());
-    format!(
-        r#"{{"jsonrpc":"2.0","id":1,"method":"{method}","params":[{token_json},{data_json}]}}"#
-    )
+    let token_json = serde_json::to_string(token).unwrap_or_else(|_| "\"\"".to_owned());
+    format!(r#"{{"jsonrpc":"2.0","id":1,"method":"{method}","params":[{token_json},{data_json}]}}"#)
 }
 
 // 处理静态监控数据上报
@@ -103,11 +100,8 @@ pub async fn handle_static_monitoring_data_report() {
         for server in agent_config.server.unwrap_or_default() {
             let static_json = Arc::clone(&static_json);
             tokio::spawn(async move {
-                let rpc = build_rpc_with_raw_data(
-                    "agent_report_static",
-                    &server.token,
-                    &static_json,
-                );
+                let rpc =
+                    build_rpc_with_raw_data("agent_report_static", &server.token, &static_json);
                 if let Err(e) = send_to(&server.name, Message::Text(Utf8Bytes::from(rpc))).await {
                     error!("{e}");
                 }

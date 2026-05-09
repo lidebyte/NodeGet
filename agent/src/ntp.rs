@@ -32,7 +32,9 @@ impl NtpTimestampGenerator for StdTimestampGen {
 /// 连接失败或超时时返回 0，等同于使用本地时间。
 pub async fn fetch_ntp_offset(ntp_server: &str) -> i64 {
     let Some(addr) = resolve_ntp_addr(ntp_server).await else {
-        warn!("Failed to resolve NTP server address for: {ntp_server}; falling back to local time (offset=0)");
+        warn!(
+            "Failed to resolve NTP server address for: {ntp_server}; falling back to local time (offset=0)"
+        );
         return 0;
     };
 
@@ -61,11 +63,15 @@ pub async fn fetch_ntp_offset(ntp_server: &str) -> i64 {
             offset_ms
         }
         Ok(Err(e)) => {
-            warn!("NTP request failed for {ntp_server}: {e:?}; falling back to local time (offset=0)");
+            warn!(
+                "NTP request failed for {ntp_server}: {e:?}; falling back to local time (offset=0)"
+            );
             0
         }
         Err(_) => {
-            warn!("NTP request timed out after 10s for {ntp_server}; falling back to local time (offset=0)");
+            warn!(
+                "NTP request timed out after 10s for {ntp_server}; falling back to local time (offset=0)"
+            );
             0
         }
     }

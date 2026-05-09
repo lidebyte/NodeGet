@@ -14,7 +14,7 @@
   "name": "demo_worker",            // 脚本唯一名称
   "description": "demo worker for monitoring", // 可选，脚本描述
   "js_script_base64": "ZXhwb3J0IGRlZmF1bHQg...", // Base64 编码后的 UTF-8 JS 源码
-  "route_name": "demo_route",       // 可选，HTTP 路由入口，路径前缀为 /worker-route/{route_name}
+  "route_name": "demo_route",       // 可选，HTTP 路由入口，路径前缀为 /nodeget/worker-route/{route_name}（旧 /worker-route 仍兼容）
   "runtime_clean_time": 60000,       // 脚本 Runtime 空闲清理时间（毫秒），null 表示不自动清理
   "env": {                           // 可选，任意 JSON 结构，存入数据库并可在运行时传给脚本
     "region": "ap-east-1"
@@ -30,7 +30,7 @@
 - `name`：脚本唯一名称。
 - `description`：可选，脚本描述。
 - `js_script_base64`：Base64 编码后的 UTF-8 JS 源码。
-- `route_name`：可选。若设置则开启 HTTP 路由入口，对应路径前缀为 `/worker-route/{route_name}`。
+- `route_name`：可选。若设置则开启 HTTP 路由入口，对应路径前缀为 `/nodeget/worker-route/{route_name}`（旧 `/worker-route/{route_name}` 仍保留兼容，后续版本将移除）。
 - `runtime_clean_time`：脚本 Runtime 空闲清理时间（毫秒），`null` 表示不自动清理。
 - `env`：可选，任意 JSON 结构，存入数据库并可在运行时传给脚本。
 - `max_run_time`：可选，单次执行从 runtime spawn 到返回值的墙上时钟上限（毫秒）。超时会先通过 QuickJS interrupt handler 抛不可捕获异常打断（包括纯 CPU 死循环如 `while(true){}`），同时外层 `tokio::time::timeout` 兜住 async 路径。`null` 或非正数 → 应用层默认 `30000`（30 秒）。

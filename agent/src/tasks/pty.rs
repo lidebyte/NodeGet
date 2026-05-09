@@ -68,22 +68,21 @@ pub async fn handle_pty_url(
         // 限制 connect_async 最多 10s 握手，避免恶意/异常 server 让任务挂死，
         // 同时配合 `release_terminal_id` 保证 terminal_id 不会被永远占用。
         const PTY_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
-        let ws = match tokio::time::timeout(PTY_CONNECT_TIMEOUT, connect_async(url.to_string()))
-            .await
-        {
-            Ok(Ok(ws)) => ws,
-            Ok(Err(e)) => {
-                return Err(NodegetError::AgentConnectionError(format!(
-                    "Failed to connect to WebSocket: {e}"
-                )));
-            }
-            Err(_) => {
-                return Err(NodegetError::AgentConnectionError(format!(
-                    "WebSocket connect timed out after {}s",
-                    PTY_CONNECT_TIMEOUT.as_secs()
-                )));
-            }
-        };
+        let ws =
+            match tokio::time::timeout(PTY_CONNECT_TIMEOUT, connect_async(url.to_string())).await {
+                Ok(Ok(ws)) => ws,
+                Ok(Err(e)) => {
+                    return Err(NodegetError::AgentConnectionError(format!(
+                        "Failed to connect to WebSocket: {e}"
+                    )));
+                }
+                Err(_) => {
+                    return Err(NodegetError::AgentConnectionError(format!(
+                        "WebSocket connect timed out after {}s",
+                        PTY_CONNECT_TIMEOUT.as_secs()
+                    )));
+                }
+            };
 
         let ws_stream = ws.0;
 
