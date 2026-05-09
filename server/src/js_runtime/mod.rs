@@ -117,10 +117,8 @@ async fn apply_runtime_limits(rt: &AsyncRuntime, limits: RuntimeLimits) {
 ///
 /// 这样即便脚本里写的是 `while(true){}` 这种无 await 纯 CPU 循环，也能被杀。
 async fn install_kill_handler(rt: &AsyncRuntime, kill_flag: Arc<AtomicBool>) {
-    rt.set_interrupt_handler(Some(Box::new(move || {
-        kill_flag.load(Ordering::Relaxed)
-    })))
-    .await;
+    rt.set_interrupt_handler(Some(Box::new(move || kill_flag.load(Ordering::Relaxed))))
+        .await;
 }
 
 /// 启动硬超时看门狗：独立 OS 线程，到时间仍未被 cancel 就 `store(true)`。
