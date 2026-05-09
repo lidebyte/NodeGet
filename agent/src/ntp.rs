@@ -1,4 +1,4 @@
-use log::info;
+use log::{info, warn};
 use sntpc::{NtpContext, NtpTimestampGenerator, get_time};
 use sntpc_net_tokio::UdpSocketWrapper;
 use tokio::net::UdpSocket;
@@ -32,14 +32,14 @@ impl NtpTimestampGenerator for StdTimestampGen {
 /// 连接失败或超时时返回 0，等同于使用本地时间。
 pub async fn fetch_ntp_offset(ntp_server: &str) -> i64 {
     let Some(addr) = resolve_ntp_addr(ntp_server).await else {
-        info!("Failed to resolve NTP server address for: {ntp_server}");
+        warn!("Failed to resolve NTP server address for: {ntp_server}; falling back to local time (offset=0)");
         return 0;
     };
 
     let socket = match UdpSocket::bind("0.0.0.0:0").await {
         Ok(s) => UdpSocketWrapper::from(s),
         Err(e) => {
-            info!("Failed to bind UDP socket for NTP: {e}");
+            warn!("Failed to bind UDP socket for NTP: {e}; falling back to local time (offset=0)");
             return 0;
         }
     };
@@ -50,18 +50,22 @@ pub async fn fetch_ntp_offset(ntp_server: &str) -> i64 {
     match result {
         Ok(Ok(time)) => {
             let offset_us = time.offset();
-            let offset_ms = offset_us / 1000;
+            // 有符号整数除法在 Rust 中对负数向 0 截断，例如 -1999 / 1000 = -1 而非 -2。
+            // NTP offset 在局域网里经常就是 ±几十 us 这种小数量级，直接整除会把符号丢掉并且
+            // 偏离真实值。用 f64 round 做四舍五入到最近的 ms，再转回 i64。
+            #[allow(clippy::cast_possible_truncation)]
+            let offset_ms = (offset_us as f64 / 1000.0).round() as i64;
             info!(
                 "NTP sync success: server={ntp_server}, offset={offset_ms} ms (raw={offset_us} us)"
             );
             offset_ms
         }
         Ok(Err(e)) => {
-            info!("NTP request failed for {ntp_server}: {e:?}");
+            warn!("NTP request failed for {ntp_server}: {e:?}; falling back to local time (offset=0)");
             0
         }
         Err(_) => {
-            info!("NTP request timed out after 10s for {ntp_server}");
+            warn!("NTP request timed out after 10s for {ntp_server}; falling back to local time (offset=0)");
             0
         }
     }

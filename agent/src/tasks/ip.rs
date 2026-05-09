@@ -6,7 +6,7 @@ use reqwest::header::USER_AGENT;
 use serde_json::Value;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
-use std::sync::OnceLock;
+use std::sync::Once;
 use std::time::Duration;
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
@@ -17,9 +17,13 @@ enum IpFamily {
     Ipv6Only,
 }
 
+// reqwest client 构建在异步闭包里（见 `get_client`），必须用 `tokio::sync::OnceCell`
+// 的 `get_or_try_init` async 版本；`std::sync::LazyLock` 的初始化闭包不能 await，
+// 所以这两个保持 `OnceCell`。
 static CLIENT_V4: OnceCell<Client> = OnceCell::const_new();
 static CLIENT_V6: OnceCell<Client> = OnceCell::const_new();
-static RUSTLS_PROVIDER_INIT: OnceLock<()> = OnceLock::new();
+// 单纯的 idempotent side effect 只需要 `Once`，没必要存结果。
+static RUSTLS_PROVIDER_INIT: Once = Once::new();
 
 #[derive(Debug)]
 pub struct IPInfo {
@@ -44,7 +48,7 @@ pub async fn ip() -> IPInfo {
 }
 
 fn ensure_rustls_ring_provider() {
-    let () = RUSTLS_PROVIDER_INIT.get_or_init(|| {
+    RUSTLS_PROVIDER_INIT.call_once(|| {
         let _ = rustls::crypto::ring::default_provider().install_default();
     });
 }

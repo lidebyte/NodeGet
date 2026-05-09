@@ -3,11 +3,10 @@ pub mod monitoring_data_report;
 // 多服务器连接管理模块
 pub mod multi_server;
 
-use crate::AGENT_CONFIG;
+use crate::config_access::get_agent_config;
 use crate::rpc::multi_server::subscribe_to;
 use log::{error, info, warn};
 use nodeget_lib::config::agent::AgentConfig;
-use nodeget_lib::error::NodegetError;
 use nodeget_lib::task::TaskEvent;
 use nodeget_lib::utils::JsonError;
 use serde::{Deserialize, Serialize};
@@ -16,14 +15,12 @@ use tokio::task::JoinSet;
 use tokio::time;
 use tokio_tungstenite::tungstenite::Message;
 
-// 安全地获取 Agent 配置
+// `get_agent_config_safe` 的旧名，作为兼容别名保留，防止外部模块未同步更新引用。
+// 新代码请直接用 `crate::config_access::get_agent_config`。
+#[deprecated(note = "use crate::config_access::get_agent_config instead")]
+#[allow(dead_code)]
 pub fn get_agent_config_safe() -> anyhow::Result<AgentConfig> {
-    AGENT_CONFIG
-        .get()
-        .ok_or_else(|| NodegetError::Other("Agent config not initialized".to_owned()))?
-        .read()
-        .map(|guard| guard.clone())
-        .map_err(|_| NodegetError::Other("AGENT_CONFIG lock poisoned".to_owned()).into())
+    get_agent_config().map_err(Into::into)
 }
 
 // JSON-RPC 2.0 请求结构体
@@ -45,9 +42,9 @@ struct JsonRpc {
 // 返回 JSON-RPC 2.0 格式的字符串
 pub fn wrap_json_into_rpc_with_id_1(method: &str, params: Vec<serde_json::Value>) -> String {
     let rpc = JsonRpc {
-        jsonrpc: "2.0".to_string(),
+        jsonrpc: "2.0".to_owned(),
         id: 1,
-        method: method.to_string(),
+        method: method.to_owned(),
         params,
     };
 
@@ -89,7 +86,7 @@ pub struct JsonRpcErrorMessage {
 pub async fn handle_error_message() {
     time::sleep(Duration::from_secs(1)).await;
 
-    let agent_config = match get_agent_config_safe() {
+    let agent_config = match get_agent_config() {
         Ok(cfg) => cfg,
         Err(e) => {
             error!("Failed to get agent config: {e}");

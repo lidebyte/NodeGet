@@ -1,4 +1,4 @@
-use crate::AGENT_CONFIG;
+use crate::config_access::get_agent_config;
 use log::error;
 use nodeget_lib::error::NodegetError;
 use nodeget_lib::task::ExecuteTask;
@@ -16,16 +16,6 @@ const GRACE_AFTER_SIGTERM: Duration = Duration::from_secs(2);
 /// 命令执行结果类型
 pub type Result<T> = std::result::Result<T, NodegetError>;
 
-// 安全地获取 Agent 配置
-fn get_agent_config() -> Result<crate::AgentConfig> {
-    AGENT_CONFIG
-        .get()
-        .ok_or_else(|| NodegetError::Other("Agent config not initialized".to_owned()))?
-        .read()
-        .map(|guard| guard.clone())
-        .map_err(|_| NodegetError::Other("AGENT_CONFIG lock poisoned".to_owned()))
-}
-
 // 执行指定的命令
 //
 // 该函数直接执行 cmd + args，不提供字符串拼接 shell 的接口。
@@ -37,6 +27,10 @@ fn get_agent_config() -> Result<crate::AgentConfig> {
 // 成功时返回命令输出字符串，失败时返回错误信息
 pub async fn execute_command(task: ExecuteTask) -> Result<String> {
     let config = get_agent_config()?;
+    // 注意：字段名叫 "character" 但后续 `result.len() > max_chars` 等比较都以 UTF-8
+    // 字节长度为口径。多字节语言（中文 3B/字符）下实际能保留的字符数小于 `max_chars`。
+    // 截断时用 `is_char_boundary` 避免切碎 UTF-8，因此不会产生无效字符串，只是尺寸
+    // 语义不精确。review_agent.md #70 记录为待在 lib 侧统一字段含义后再调整。
     let max_chars = config.exec_max_character_or_default();
 
     if task.cmd.trim().is_empty() {
@@ -112,12 +106,41 @@ pub async fn execute_command(task: ExecuteTask) -> Result<String> {
 
             if result.len() > max_chars {
                 let original_len = result.len();
-                let split_at = result.ceil_char_boundary(original_len - max_chars);
-                let truncated_part = result.split_off(split_at);
-                result = format!(
-                    "[... Output truncated from {original_len} to {} bytes ...]\n{truncated_part}",
-                    truncated_part.len()
-                );
+                // 对 stdout+stderr 合并字符串做"头 + 尾"双端截断，让用户同时看到
+                // 命令开始时的输出与最终的错误信息，而不是像之前那样只保留尾部
+                // max_chars 字节 —— 若 stdout 巨大、stderr 只有几行，原始做法会把
+                // stdout 全丢掉，只剩 stderr 的一点尾巴，极易误导。
+                //
+                // 分配 head = max_chars / 2, tail = max_chars - head，并按 UTF-8
+                // 字符边界向内收缩（避免 ceil_char_boundary 这类 unstable API）。
+                let head_budget = max_chars / 2;
+                let tail_budget = max_chars - head_budget;
+
+                let mut head_end = head_budget.min(original_len);
+                while head_end > 0 && !result.is_char_boundary(head_end) {
+                    head_end -= 1;
+                }
+
+                let tail_start_raw = original_len.saturating_sub(tail_budget);
+                let mut tail_start = tail_start_raw.max(head_end);
+                while tail_start < original_len && !result.is_char_boundary(tail_start) {
+                    tail_start += 1;
+                }
+
+                if tail_start <= head_end {
+                    // head 与 tail 衔接，整体就是 head_end 之前的内容
+                    result.truncate(head_end);
+                } else {
+                    let tail_part = result[tail_start..].to_owned();
+                    let skipped = tail_start - head_end;
+                    result.truncate(head_end);
+                    use std::fmt::Write;
+                    let _ = write!(
+                        result,
+                        "\n[... Output truncated, {skipped} bytes omitted (original {original_len} bytes) ...]\n"
+                    );
+                    result.push_str(&tail_part);
+                }
             }
 
             Ok(result)

@@ -33,8 +33,10 @@ pub async fn tcping_target(target: String) -> Result<std::time::Duration> {
     timeout(PING_TIMEOUT, TcpStream::connect(target_host))
         .await
         .map_err(|_| NodegetError::Other("Tcp Ping Timeout".to_owned()))?
-        .map_err(|_| NodegetError::Other("Tcp Ping Error".to_owned()))
+        .map_err(|e| NodegetError::Other(format!("Tcp Ping Error: {e}")))
         .map(|stream| {
+            // `black_box` 阻止编译器把 TcpStream drop 移动到 `start.elapsed()` 之前
+            // —— connect() + 立即 close() 之间的耗时才是我们想测的。
             black_box(stream);
             start.elapsed()
         })

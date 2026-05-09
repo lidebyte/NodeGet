@@ -3,10 +3,15 @@ use nodeget_lib::self_update::{
 };
 
 pub async fn self_update(tag: &str) -> bool {
-    let current = canonical_exe_path().unwrap_or_else(|| {
-        eprintln!("Failed to get canonical exe path");
-        std::process::exit(1);
-    });
+    // 之前这里 `canonical_exe_path` 返回 None 时直接 `std::process::exit(1)`，
+    // 但 `self_update` 是 server 下发的一条 task；一条任务的前置检查失败
+    // 却把整个 agent 杀掉会导致所有 server 连接全部掉线 / reload 无法进行，
+    // 非常不合比例。现在失败走正常 task 失败路径（返回 false），让
+    // `tasks/mod.rs` 上报 error TaskEventResponse。
+    let Some(current) = canonical_exe_path() else {
+        log::error!("Failed to get canonical exe path");
+        return false;
+    };
 
     let (current_version, target_version, should_update) = check_if_update_needed(tag);
 
@@ -76,10 +81,10 @@ pub async fn self_update(tag: &str) -> bool {
         return false;
     }
 
-    log::info!("Downloaded {} bytes ", bytes.len());
+    log::info!("Downloaded {} bytes", bytes.len());
 
     if replace_binary(bytes.to_vec()) {
-        log::info!("Binary replaced successfully");
+        log::info!("Binary replaced successfully: {}", current.display());
     } else {
         log::error!("Failed to replace binary");
         return false;
@@ -94,6 +99,5 @@ pub async fn self_update(tag: &str) -> bool {
         }
     }
 
-    log::info!("Binary replaced successfully: {}", current.display());
     true
 }

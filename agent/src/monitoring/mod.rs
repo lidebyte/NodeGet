@@ -73,8 +73,17 @@ async fn get_global_disk() -> &'static Mutex<Disks> {
 // # 返回值
 // 返回两次刷新之间的持续时间
 async fn refresh_global_disk() -> Duration {
+    // 首次初始化时把 tracker 回调一秒，避免首轮 `now - last_time` 接近 0，
+    // 进而让下游速率计算（bytes / interval_secs）拿到可用于推导的分母。
+    // checked_sub 防御 monotonic clock 刚启动不满 1s 的极端场景。
     let time_tracker = DISK_TIME_TRACKER
-        .get_or_init(|| async { Mutex::new(Instant::now()) })
+        .get_or_init(|| async {
+            Mutex::new(
+                Instant::now()
+                    .checked_sub(Duration::from_secs(1))
+                    .unwrap_or_else(Instant::now),
+            )
+        })
         .await;
 
     let disk_mutex = get_global_disk().await;
@@ -126,8 +135,15 @@ async fn get_global_network() -> &'static Mutex<Networks> {
 // # 返回值
 // 返回两次刷新之间的持续时间
 async fn refresh_global_network() -> Duration {
+    // 与 `refresh_global_disk` 对齐：首次初始化回拨 1s，确保首轮 interval 不为零。
     let time_tracker = NETWORK_TIME_TRACKER
-        .get_or_init(|| async { Mutex::new(Instant::now()) })
+        .get_or_init(|| async {
+            Mutex::new(
+                Instant::now()
+                    .checked_sub(Duration::from_secs(1))
+                    .unwrap_or_else(Instant::now),
+            )
+        })
         .await;
 
     let network_mutex = get_global_network().await;

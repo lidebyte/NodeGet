@@ -21,10 +21,11 @@ use nodeget_lib::error::NodegetError;
 use nodeget_lib::utils::set_ntp_offset_ms;
 use nodeget_lib::utils::version::NodeGetVersion;
 use std::str::FromStr;
-use std::sync::{OnceLock, RwLock};
+use std::sync::{LazyLock, OnceLock, RwLock};
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
+mod config_access;
 mod monitoring;
 mod ntp;
 mod rpc;
@@ -32,7 +33,7 @@ mod tasks;
 
 static AGENT_ARGS: OnceLock<AgentArgs> = OnceLock::new();
 static AGENT_CONFIG: OnceLock<RwLock<AgentConfig>> = OnceLock::new();
-pub(crate) static RELOAD_NOTIFY: OnceLock<Notify> = OnceLock::new();
+pub(crate) static RELOAD_NOTIFY: LazyLock<Notify> = LazyLock::new(Notify::new);
 static NTP_INIT_DONE: OnceLock<bool> = OnceLock::new();
 
 fn parse_log_level(config: &AgentConfig) -> anyhow::Result<Level> {
@@ -68,11 +69,13 @@ fn abort_handles(handles: &mut Vec<JoinHandle<()>>) {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("Failed to install rustls crypto provider");
+    // rustls crypto provider 只能安装一次；`tasks/ip.rs` 懒加载路径也会尝试安装并用
+    // `let _ =` 吞错，这里同样忽略重复安装失败以保持两处策略一致，避免日后某个第三方
+    // 依赖也抢先安装后整个 agent 直接 panic。
+    let _ = rustls::crypto::ring::default_provider().install_default();
 
-    println!("Starting nodeget-agent");
+    // 此处不再 println! 启动横幅：config/logger 初始化完成后会 `info!("Starting nodeget-agent with config: {config:?}")`
+    // 提供等价信号；启动早期失败也会由 `main` 的 `anyhow::Result` 把错误输出到 stderr。
 
     let args = AgentArgs::par();
 
@@ -86,7 +89,6 @@ async fn main() -> anyhow::Result<()> {
 
     AGENT_ARGS.set(args.clone()).unwrap();
 
-    RELOAD_NOTIFY.get_or_init(Notify::new);
     let mut logger_initialized = false;
 
     loop {
@@ -110,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
         if NTP_INIT_DONE.get().is_none() {
             let ntp_server = config.ntp_server_or_default();
             let ntp_offset = ntp::fetch_ntp_offset(ntp_server).await;
-            println!("NTP time offset: {ntp_offset} ms");
+            info!("NTP time offset: {ntp_offset} ms");
             set_ntp_offset_ms(ntp_offset);
             let _ = NTP_INIT_DONE.set(true);
         }
@@ -124,21 +126,10 @@ async fn main() -> anyhow::Result<()> {
         let connect_timeout = config.connect_timeout_duration();
         let mut handles = rpc::multi_server::init_connections(servers, connect_timeout).await;
 
-        handles.push(tokio::spawn(async {
-            handle_static_monitoring_data_report().await;
-        }));
-
-        handles.push(tokio::spawn(async {
-            handle_dynamic_monitoring_data_report().await;
-        }));
-
-        handles.push(tokio::spawn(async {
-            handle_error_message().await;
-        }));
-
-        handles.push(tokio::spawn(async {
-            handle_task().await;
-        }));
+        handles.push(tokio::spawn(handle_static_monitoring_data_report()));
+        handles.push(tokio::spawn(handle_dynamic_monitoring_data_report()));
+        handles.push(tokio::spawn(handle_error_message()));
+        handles.push(tokio::spawn(handle_task()));
 
         tokio::select! {
             ctrl_c_result = tokio::signal::ctrl_c() => {
@@ -147,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
                 abort_handles(&mut handles);
                 break;
             }
-            () = RELOAD_NOTIFY.get().expect("Reload notify not initialized").notified() => {
+            () = RELOAD_NOTIFY.notified() => {
                 info!("Config reload requested, restarting runtime tasks...");
                 abort_handles(&mut handles);
             }
