@@ -23,6 +23,9 @@ pub async fn create(
     route_name: Option<String>,
     runtime_clean_time: Option<i64>,
     env: Option<Value>,
+    max_run_time: Option<i64>,
+    max_stack_size: Option<i64>,
+    max_heap_size: Option<i64>,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
         let name = name.trim().to_owned();
@@ -102,6 +105,9 @@ pub async fn create(
             route_name: Set(route_name.clone()),
             env: Set(env),
             runtime_clean_time: Set(runtime_clean_time),
+            max_run_time: Set(max_run_time),
+            max_stack_size: Set(max_stack_size),
+            max_heap_size: Set(max_heap_size),
             create_at: Set(now_ms),
             update_at: Set(now_ms),
         };
@@ -118,6 +124,10 @@ pub async fn create(
             "name": inserted.name,
             "description": inserted.description,
             "route_name": inserted.route_name,
+            "runtime_clean_time": inserted.runtime_clean_time,
+            "max_run_time": inserted.max_run_time,
+            "max_stack_size": inserted.max_stack_size,
+            "max_heap_size": inserted.max_heap_size,
             "create_at": inserted.create_at,
             "update_at": inserted.update_at
         });

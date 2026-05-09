@@ -95,7 +95,10 @@ const SERVER_ARCH_NAME: [(&str, &str); 10] = [
         "x86_64-unknown-linux-musl",
         "nodeget-server-linux-x86_64-musl",
     ),
-    ("x86_64-unknown-linux-gnu", "nodeget-server-linux-x86_64-gnu"),
+    (
+        "x86_64-unknown-linux-gnu",
+        "nodeget-server-linux-x86_64-gnu",
+    ),
     // Linux aarch64
     (
         "aarch64-unknown-linux-gnu",
@@ -123,7 +126,10 @@ const SERVER_ARCH_NAME: [(&str, &str); 10] = [
         "nodeget-server-linux-armv7-musleabihf",
     ),
     // Windows
-    ("x86_64-pc-windows-msvc", "nodeget-server-windows-x86_64.exe"),
+    (
+        "x86_64-pc-windows-msvc",
+        "nodeget-server-windows-x86_64.exe",
+    ),
     // macOS
     ("aarch64-apple-darwin", "nodeget-server-macos-aarch64"),
 ];
@@ -152,7 +158,7 @@ pub fn canonical_exe_path() -> Option<std::path::PathBuf> {
     Some(path)
 }
 
-pub fn check_if_update_needed(tag: &str) -> ((u32, u32, u32),(u32, u32, u32), bool) {
+pub fn check_if_update_needed(tag: &str) -> ((u32, u32, u32), (u32, u32, u32), bool) {
     let target_version = match parse_version(tag) {
         None => {
             return ((0, 0, 0), (0, 0, 0), false);
@@ -160,15 +166,19 @@ pub fn check_if_update_needed(tag: &str) -> ((u32, u32, u32),(u32, u32, u32), bo
         Some(v) => v,
     };
 
-    let current_version =
-        match parse_version(&format!("v{}", NodeGetVersion::get().cargo_version)) {
-            None => {
-                return ((0, 0, 0), target_version, false);
-            }
-            Some(v) => v,
-        };
+    let current_version = match parse_version(&format!("v{}", NodeGetVersion::get().cargo_version))
+    {
+        None => {
+            return ((0, 0, 0), target_version, false);
+        }
+        Some(v) => v,
+    };
 
-    (current_version,target_version, should_update(target_version, current_version))
+    (
+        current_version,
+        target_version,
+        should_update(target_version, current_version),
+    )
 }
 
 #[cfg(feature = "for-agent")]
@@ -194,7 +204,10 @@ pub fn get_url(tag: &str) -> Option<String> {
 pub fn get_server_url(tag: &str) -> Option<String> {
     let arch_str = NodeGetVersion::get().cargo_target_triple;
 
-    let (_, binary_name) = match SERVER_ARCH_NAME.iter().find(|(target, _)| *target == arch_str) {
+    let (_, binary_name) = match SERVER_ARCH_NAME
+        .iter()
+        .find(|(target, _)| *target == arch_str)
+    {
         Some(pair) => pair,
         None => {
             return None;
@@ -231,7 +244,6 @@ pub fn replace_binary(binary: Vec<u8>) -> bool {
     true
 }
 
-
 #[cfg(not(unix))]
 pub fn restart_process() -> ! {
     let current = canonical_exe_path().unwrap_or_else(|| {
@@ -267,9 +279,7 @@ pub fn restart_process_with_exec_v() -> ! {
     let path = CString::new(current.to_str().unwrap()).unwrap();
 
     // 每个参数转成独立的 CString，Vec 保活指针
-    let c_args: Vec<CString> = std::env::args()
-        .map(|s| CString::new(s).unwrap())
-        .collect();
+    let c_args: Vec<CString> = std::env::args().map(|s| CString::new(s).unwrap()).collect();
 
     let mut ptrs: Vec<*const c_char> = c_args.iter().map(|c| c.as_ptr()).collect();
     ptrs.push(ptr::null()); // argv 以 NULL 结尾

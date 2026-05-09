@@ -1,6 +1,6 @@
 [package]
 name = "nodeget-agent"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 
 [dependencies]
@@ -11,7 +11,7 @@ nodeget-lib = { path = "../nodeget-lib", features = ["for-agent"] }
 anyhow = "1.0"
 
 # Asynchronous runtime
-tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "signal", "process"] }
+tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "signal", "process", "io-util"] }
 futures-util = "0.3.31"
 
 # Logging

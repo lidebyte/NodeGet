@@ -69,15 +69,26 @@ async fn ping_ip(target: std::net::IpAddr) -> std::result::Result<std::time::Dur
 // # 返回值
 // 成功时返回往返时间，失败时返回错误信息
 pub async fn ping_target(target: String) -> Result<std::time::Duration> {
+    // DNS lookup under a hard timeout: a hung system resolver must not
+    // stall every ICMP ping. 2s matches PING_TIMEOUT so total latency
+    // stays bounded.
     let target_ip = match target.parse::<std::net::IpAddr>() {
         Ok(ip) => Some(ip),
-        Err(_) => match lookup_host(format!("{}:{}", target, 80)).await {
-            Ok(mut addrs) => addrs.next().map(|e| e.ip()),
-            Err(e) => {
-                error!("Resolving host error: {e}");
-                None
+        Err(_) => {
+            match tokio::time::timeout(PING_TIMEOUT, lookup_host(format!("{}:{}", target, 80)))
+                .await
+            {
+                Ok(Ok(mut addrs)) => addrs.next().map(|e| e.ip()),
+                Ok(Err(e)) => {
+                    error!("Resolving host error: {e}");
+                    None
+                }
+                Err(_) => {
+                    error!("Resolving host timed out after {}s", PING_TIMEOUT.as_secs());
+                    None
+                }
             }
-        },
+        }
     };
 
     let Some(target) = target_ip else {

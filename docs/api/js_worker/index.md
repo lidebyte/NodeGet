@@ -39,3 +39,19 @@ Js Worker 用于管理可复用的 JS 脚本，并在服务端运行这些脚本
 - `onCron(params, env, ctx)`：用于 `run_type = "cron"`
 
 详细约束见 [script](./script.md)。
+
+## 运行时资源限制
+
+每个 JS Worker 可以配置三项硬性资源上限（均可为 `null`，应用层提供默认值）：
+
+| 字段 | 单位 | 默认值 | 作用 |
+|---|---|---|---|
+| `max_run_time` | 毫秒 | `30000`（30 秒） | 单次执行墙上时钟上限。到时先通过 `rt.set_interrupt_handler` 抛不可捕获异常打断 JS（包括 `while(true){}` 等纯 CPU 死循环），同时外层 `tokio::time::timeout` 兜住 async 路径。 |
+| `max_stack_size` | 字节 | `1048576`（1 MiB） | QuickJS C 栈上限（`rt.set_max_stack_size`），影响函数递归深度。 |
+| `max_heap_size` | 字节 | `8388608`（8 MiB） | QuickJS 堆上限（`rt.set_memory_limit`），超限 JS 端抛 `InternalError: out of memory`。 |
+
+生效时机：
+
+- 创建：脚本首次被运行时按照 `max_*` 创建 runtime。
+- 更新：`js-worker_update` 会 evict 池中已有的 runtime；下一次运行时按新值重建。
+- 通过 RPC 传入的 `inlineCall(name, params, timeoutSec)` 的 `timeoutSec` 与目标脚本的 `max_run_time` 取较小值。

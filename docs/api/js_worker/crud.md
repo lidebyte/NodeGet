@@ -18,7 +18,10 @@
   "runtime_clean_time": 60000,       // 脚本 Runtime 空闲清理时间（毫秒），null 表示不自动清理
   "env": {                           // 可选，任意 JSON 结构，存入数据库并可在运行时传给脚本
     "region": "ap-east-1"
-  }
+  },
+  "max_run_time": 30000,             // 可选，单次执行总时长硬上限（毫秒）；null 用默认 30000
+  "max_stack_size": 1048576,         // 可选，QuickJS C 栈上限（字节）；null 用默认 1 MiB
+  "max_heap_size": 8388608           // 可选，QuickJS 堆上限（字节）；null 用默认 8 MiB
 }
 ```
 
@@ -30,6 +33,11 @@
 - `route_name`：可选。若设置则开启 HTTP 路由入口，对应路径前缀为 `/worker-route/{route_name}`。
 - `runtime_clean_time`：脚本 Runtime 空闲清理时间（毫秒），`null` 表示不自动清理。
 - `env`：可选，任意 JSON 结构，存入数据库并可在运行时传给脚本。
+- `max_run_time`：可选，单次执行从 runtime spawn 到返回值的墙上时钟上限（毫秒）。超时会先通过 QuickJS interrupt handler 抛不可捕获异常打断（包括纯 CPU 死循环如 `while(true){}`），同时外层 `tokio::time::timeout` 兜住 async 路径。`null` 或非正数 → 应用层默认 `30000`（30 秒）。
+- `max_stack_size`：可选，QuickJS C 栈字节数上限，对应 `rt.set_max_stack_size(...)`。控制递归深度。`null` 或非正数 → 应用层默认 `1048576`（1 MiB）。
+- `max_heap_size`：可选，QuickJS 堆内存字节数上限，对应 `rt.set_memory_limit(...)`。超限时 JS 端抛 `InternalError: out of memory`。`null` 或非正数 → 应用层默认 `8388608`（8 MiB）。
+
+> 三个限制字段在运行池（`js-worker_run`、HTTP route、`inlineCall`、`js-worker_get_rt_pool`）中的 runtime 上首次创建时生效；`update` 时内部会 evict 对应 worker，下次调用重建 runtime 时采用新值。
 
 ### 权限要求
 
@@ -44,6 +52,10 @@
   "name": "demo_worker",                       // 脚本名称
   "description": "demo worker for monitoring", // 脚本描述
   "route_name": "demo_route",                  // HTTP 路由名称
+  "runtime_clean_time": 60000,                 // 空闲清理时间（毫秒），null 表示不清理
+  "max_run_time": 30000,                       // 单次执行硬上限（毫秒），null 表示使用默认 30000
+  "max_stack_size": 1048576,                   // QuickJS C 栈上限（字节），null 表示使用默认 1 MiB
+  "max_heap_size": 8388608,                    // QuickJS 堆上限（字节），null 表示使用默认 8 MiB
   "create_at": 1774652000123,                  // 创建时间戳（毫秒）
   "update_at": 1774652000123                   // 更新时间戳（毫秒）
 }
@@ -66,7 +78,10 @@
     "runtime_clean_time": 60000,
     "env": {
       "project": "NodeGet"
-    }
+    },
+    "max_run_time": 30000,
+    "max_stack_size": 1048576,
+    "max_heap_size": 8388608
   },
   "id": 1
 }
@@ -83,6 +98,10 @@
     "name": "demo_worker",
     "description": "demo worker for monitoring",
     "route_name": "demo_route",
+    "runtime_clean_time": 60000,
+    "max_run_time": 30000,
+    "max_stack_size": 1048576,
+    "max_heap_size": 8388608,
     "create_at": 1774652000123,
     "update_at": 1774652000123
   }
@@ -118,6 +137,9 @@
   "route_name": "demo_route",                  // HTTP 路由名称
   "js_script_base64": "ZXhwb3J0IGRlZmF1bHQg...", // Base64 编码的 JS 源码
   "runtime_clean_time": 60000,                 // 空闲清理时间（毫秒）
+  "max_run_time": 30000,                       // 单次执行硬上限（毫秒），null 使用默认 30000
+  "max_stack_size": 1048576,                   // QuickJS C 栈上限（字节），null 使用默认 1 MiB
+  "max_heap_size": 8388608,                    // QuickJS 堆上限（字节），null 使用默认 8 MiB
   "env": {                                     // 脚本环境变量
     "region": "ap-east-1"
   },
@@ -154,6 +176,9 @@
     "route_name": "demo_route",
     "js_script_base64": "ZXhwb3J0IGRlZmF1bHQgeyBhc3luYyBvbkNhbGwocGFyYW1zLCBlbnYsIGN0eCkgeyByZXR1cm4geyBvazogdHJ1ZSB9OyB9IH07",
     "runtime_clean_time": 60000,
+    "max_run_time": 30000,
+    "max_stack_size": 1048576,
+    "max_heap_size": 8388608,
     "env": {
       "region": "ap-east-1"
     },
@@ -181,7 +206,10 @@
   "runtime_clean_time": 120000,      // 脚本 Runtime 空闲清理时间（毫秒），null 表示不自动清理
   "env": {                           // 可选，任意 JSON 结构
     "region": "ap-southeast-1"
-  }
+  },
+  "max_run_time": 60000,             // 可选，单次执行硬上限（毫秒）；null 重置为默认 30000
+  "max_stack_size": 2097152,         // 可选，QuickJS C 栈上限（字节）；null 重置为默认 1 MiB
+  "max_heap_size": 16777216          // 可选，QuickJS 堆上限（字节）；null 重置为默认 8 MiB
 }
 ```
 
@@ -193,8 +221,9 @@
 - `route_name`：可选；`null` 可关闭该脚本的 HTTP 路由绑定。
 - `runtime_clean_time`：脚本 Runtime 空闲清理时间（毫秒），`null` 表示不自动清理。
 - `env`：可选，任意 JSON 结构。
+- `max_run_time` / `max_stack_size` / `max_heap_size`：语义与 Create 一致。传 `null` 等价于清空数据库列，下次运行使用应用层默认值 30 秒 / 1 MiB / 8 MiB。
 - 更新后会重新预编译字节码。
-- 已存在的 Runtime 实例会被立即驱逐，后续运行会使用新版本脚本。
+- 已存在的 Runtime 实例会被立即驱逐，后续运行会使用新版本脚本与新的限制值。
 
 ### 权限要求
 
@@ -209,6 +238,10 @@
   "name": "demo_worker",           // 脚本名称
   "description": "demo worker v2", // 更新后的描述
   "route_name": "demo_route_v2",   // 更新后的路由名称
+  "runtime_clean_time": 120000,    // 更新后的空闲清理时间（毫秒）
+  "max_run_time": 60000,           // 更新后的单次执行硬上限（毫秒）
+  "max_stack_size": 2097152,       // 更新后的 C 栈上限（字节）
+  "max_heap_size": 16777216,       // 更新后的堆上限（字节）
   "update_at": 1774652666000       // 更新时间戳（毫秒）
 }
 ```
@@ -230,7 +263,10 @@
     "runtime_clean_time": 120000,
     "env": {
       "project": "NodeGet"
-    }
+    },
+    "max_run_time": 60000,
+    "max_stack_size": 2097152,
+    "max_heap_size": 16777216
   },
   "id": 1
 }
@@ -247,6 +283,10 @@
     "name": "demo_worker",
     "description": "demo worker v2",
     "route_name": "demo_route_v2",
+    "runtime_clean_time": 120000,
+    "max_run_time": 60000,
+    "max_stack_size": 2097152,
+    "max_heap_size": 16777216,
     "update_at": 1774652666000
   }
 }

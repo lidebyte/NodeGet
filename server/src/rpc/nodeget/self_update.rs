@@ -52,7 +52,7 @@ pub async fn self_update(token: String, tag: String) -> RpcResult<()> {
         let response = client
             .get(&url)
             .header("User-Agent", "NodeGet-Server")
-            .timeout(std::time::Duration::from_secs(120))
+            .timeout(std::time::Duration::from_mins(2))
             .send()
             .await
             .map_err(|e| NodegetError::Other(format!("Download request failed: {e}")))?;
@@ -87,8 +87,9 @@ pub async fn self_update(token: String, tag: String) -> RpcResult<()> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let current = nodeget_lib::self_update::canonical_exe_path()
-                .ok_or_else(|| NodegetError::Other("Failed to get canonical exe path".to_owned()))?;
+            let current = nodeget_lib::self_update::canonical_exe_path().ok_or_else(|| {
+                NodegetError::Other("Failed to get canonical exe path".to_owned())
+            })?;
             let perms = std::fs::Permissions::from_mode(0o755);
             if let Err(e) = std::fs::set_permissions(&current, perms) {
                 tracing::warn!(target: "server", error = %e, "Failed to set executable permission");
@@ -105,7 +106,8 @@ pub async fn self_update(token: String, tag: String) -> RpcResult<()> {
             {
                 nodeget_lib::self_update::restart_process();
             }
-            #[cfg(not(target_os = "windows"))]{
+            #[cfg(not(target_os = "windows"))]
+            {
                 nodeget_lib::self_update::restart_process_with_exec_v();
             }
         });
@@ -115,12 +117,10 @@ pub async fn self_update(token: String, tag: String) -> RpcResult<()> {
 
     match process_logic.await {
         Ok(result) => Ok(result),
-        Err(e) => {
-            Err(jsonrpsee::types::ErrorObject::owned(
-                e.error_code() as i32,
-                format!("{e}"),
-                None::<()>,
-            ))
-        }
+        Err(e) => Err(jsonrpsee::types::ErrorObject::owned(
+            e.error_code() as i32,
+            format!("{e}"),
+            None::<()>,
+        )),
     }
 }

@@ -1,4 +1,6 @@
-use super::{NodegetError, RELOAD_NOTIFY, RpcResult, SERVER_CONFIG_PATH, ServerConfig, TokenOrAuth};
+use super::{
+    NodegetError, RELOAD_NOTIFY, RpcResult, SERVER_CONFIG_PATH, ServerConfig, TokenOrAuth,
+};
 use crate::token::super_token::check_super_token;
 use std::path::Path;
 use tracing::{debug, trace};
@@ -27,10 +29,9 @@ fn validate_config_path(config_path: &str) -> anyhow::Result<&Path> {
 
     // 验证是文件而非目录
     if !canonical_path.is_file() {
-        return Err(NodegetError::InvalidInput(
-            "Config path must be a regular file".to_owned(),
-        )
-        .into());
+        return Err(
+            NodegetError::InvalidInput("Config path must be a regular file".to_owned()).into(),
+        );
     }
 
     Ok(path)
@@ -61,9 +62,9 @@ pub async fn read_config(token: String) -> RpcResult<String> {
         ensure_super_token(&token).await?;
         debug!(target: "server", "Super token verified for read_config");
 
-        let config_path = SERVER_CONFIG_PATH.get().ok_or_else(|| {
-            NodegetError::Other("Server config path not initialized".to_owned())
-        })?;
+        let config_path = SERVER_CONFIG_PATH
+            .get()
+            .ok_or_else(|| NodegetError::Other("Server config path not initialized".to_owned()))?;
 
         // 验证路径安全性，防止路径遍历
         validate_config_path(config_path)?;
@@ -100,9 +101,9 @@ pub async fn edit_config(token: String, config_string: String) -> RpcResult<bool
             .map_err(|e| NodegetError::ParseError(format!("Config parse error: {e}")))?;
         debug!(target: "server", "Config string parsed successfully");
 
-        let config_path = SERVER_CONFIG_PATH.get().ok_or_else(|| {
-            NodegetError::Other("Server config path not initialized".to_owned())
-        })?;
+        let config_path = SERVER_CONFIG_PATH
+            .get()
+            .ok_or_else(|| NodegetError::Other("Server config path not initialized".to_owned()))?;
 
         // 验证路径安全性，防止路径遍历
         validate_config_path(config_path)?;
@@ -112,9 +113,7 @@ pub async fn edit_config(token: String, config_string: String) -> RpcResult<bool
         let temp_path = format!("{config_path}.tmp");
         tokio::fs::write(&temp_path, config_string)
             .await
-            .map_err(|e| {
-                NodegetError::Other(format!("Failed to write temp config file: {e}"))
-            })?;
+            .map_err(|e| NodegetError::Other(format!("Failed to write temp config file: {e}")))?;
         debug!(target: "server", temp_path = %temp_path, "Temp config file written");
 
         tokio::fs::rename(&temp_path, config_path)

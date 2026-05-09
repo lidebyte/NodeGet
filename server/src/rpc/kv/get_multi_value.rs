@@ -53,25 +53,24 @@ pub async fn get_multi_value(
             let namespace = item.namespace;
             let key_pattern = item.key;
 
-            if !namespace_cache.contains_key(&namespace) {
-                if let Some(kv_store) = get_kv_store_optional(namespace.clone()).await? {
-                    namespace_cache.insert(namespace.clone(), kv_store);
-                }
+            if !namespace_cache.contains_key(&namespace)
+                && let Some(kv_store) = get_kv_store_optional(namespace.clone()).await?
+            {
+                namespace_cache.insert(namespace.clone(), kv_store);
             }
 
-            let kv_store = match namespace_cache.get(&namespace) {
-                Some(store) => store,
-                None => {
-                    // namespace 不存在：精确 key 返回 null，通配符跳过
-                    if wildcard_prefix(&key_pattern).is_none() {
-                        output.push(KvValueItem {
-                            namespace: namespace.clone(),
-                            key: key_pattern,
-                            value: Value::Null,
-                        });
-                    }
-                    continue;
+            let kv_store = if let Some(store) = namespace_cache.get(&namespace) {
+                store
+            } else {
+                // namespace 不存在：精确 key 返回 null，通配符跳过
+                if wildcard_prefix(&key_pattern).is_none() {
+                    output.push(KvValueItem {
+                        namespace: namespace.clone(),
+                        key: key_pattern,
+                        value: Value::Null,
+                    });
                 }
+                continue;
             };
 
             if let Some(prefix) = wildcard_prefix(&key_pattern) {

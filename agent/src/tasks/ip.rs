@@ -49,38 +49,36 @@ fn ensure_rustls_ring_provider() {
     });
 }
 
-async fn get_client(family: IpFamily) -> &'static Client {
+async fn get_client(family: IpFamily) -> Option<&'static Client> {
     match family {
-        IpFamily::Ipv4Only => {
-            CLIENT_V4
-                .get_or_init(|| async {
-                    ensure_rustls_ring_provider();
-                    Client::builder()
-                        .timeout(Duration::from_secs(5))
-                        .local_address(std::net::IpAddr::V4(Ipv4Addr::UNSPECIFIED))
-                        .build()
-                        .expect("Failed to build IPv4 reqwest client")
-                })
-                .await
-        }
-        IpFamily::Ipv6Only => {
-            CLIENT_V6
-                .get_or_init(|| async {
-                    ensure_rustls_ring_provider();
-                    Client::builder()
-                        .timeout(Duration::from_secs(5))
-                        .local_address(std::net::IpAddr::V6(Ipv6Addr::UNSPECIFIED))
-                        .build()
-                        .expect("Failed to build IPv6 reqwest client")
-                })
-                .await
-        }
+        IpFamily::Ipv4Only => CLIENT_V4
+            .get_or_try_init(|| async {
+                ensure_rustls_ring_provider();
+                Client::builder()
+                    .timeout(Duration::from_secs(5))
+                    .local_address(std::net::IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+                    .build()
+            })
+            .await
+            .map_err(|e| trace!("Failed to build IPv4 reqwest client: {e}"))
+            .ok(),
+        IpFamily::Ipv6Only => CLIENT_V6
+            .get_or_try_init(|| async {
+                ensure_rustls_ring_provider();
+                Client::builder()
+                    .timeout(Duration::from_secs(5))
+                    .local_address(std::net::IpAddr::V6(Ipv6Addr::UNSPECIFIED))
+                    .build()
+            })
+            .await
+            .map_err(|e| trace!("Failed to build IPv6 reqwest client: {e}"))
+            .ok(),
     }
 }
 
 // 通用 Get
 async fn fetch_text(url: &str, family: IpFamily) -> Option<String> {
-    let client = get_client(family).await;
+    let client = get_client(family).await?;
     client
         .get(url)
         .header(USER_AGENT, "curl/8.7.1")
@@ -131,13 +129,14 @@ pub async fn ip_ipinfo() -> IPInfo {
 }
 
 pub async fn ip_cloudflare() -> IPInfo {
+    // Use IP-literal URLs rather than `www.cloudflare.com` so DNS resolution
+    // never picks a family that conflicts with `local_address`. The TLS
+    // certificate served at 1.1.1.1 / 2606:4700:4700::1111 includes those
+    // IPs in its SAN list, and `/cdn-cgi/trace` is available on both
+    // anycast endpoints with the same `ip=<client-ip>` format.
     // IPv4 Task
     let ipv4: JoinHandle<Option<Ipv4Addr>> = tokio::spawn(async move {
-        let body = fetch_text(
-            "https://www.cloudflare.com/cdn-cgi/trace",
-            IpFamily::Ipv4Only,
-        )
-        .await?;
+        let body = fetch_text("https://1.1.1.1/cdn-cgi/trace", IpFamily::Ipv4Only).await?;
         let ip_str = parse_cloudflare_trace(&body)?;
         Ipv4Addr::from_str(&ip_str).ok()
     });
@@ -145,7 +144,7 @@ pub async fn ip_cloudflare() -> IPInfo {
     // IPv6 Task
     let ipv6: JoinHandle<Option<Ipv6Addr>> = tokio::spawn(async move {
         let body = fetch_text(
-            "https://www.cloudflare.com/cdn-cgi/trace",
+            "https://[2606:4700:4700::1111]/cdn-cgi/trace",
             IpFamily::Ipv6Only,
         )
         .await?;

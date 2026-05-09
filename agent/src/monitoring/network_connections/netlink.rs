@@ -130,7 +130,11 @@ fn netlink_inet_diag_only_count(request: &[u8]) -> io::Result<u64> {
         }
         let nr = nr as usize;
         if nr < NLMSG_HDRLEN {
-            return Err(io::Error::from_raw_os_error(libc::EINVAL));
+            // A batch shorter than the header is malformed but should not
+            // abort the outer drain loop; skip it and wait for the next
+            // recvfrom() which will typically deliver a well-formed batch
+            // (or NLMSG_DONE).
+            continue;
         }
 
         let slice = &buf[..nr];
@@ -152,9 +156,17 @@ fn count_netlink_messages(mut b: &[u8]) -> io::Result<(u64, bool)> {
 
     while b.len() >= NLMSG_HDRLEN {
         let (dlen, at_end) = netlink_message_header(b)?;
-        msgs += 1;
+        // DONE / ERROR are control messages, not actual connection records,
+        // so they must not be counted toward the caller's total.
         if at_end {
             done = true;
+            break;
+        }
+        msgs += 1;
+        // Defensive: an aligned length of zero would make the slice advance
+        // a no-op and the outer `while b.len() >= NLMSG_HDRLEN` loop spin
+        // forever. Bail out instead.
+        if dlen == 0 {
             break;
         }
         b = &b[dlen..];
@@ -169,8 +181,10 @@ fn netlink_message_header(b: &[u8]) -> io::Result<(usize, bool)> {
         return Err(io::Error::from_raw_os_error(libc::EINVAL));
     }
 
-    // Safely read the header (in native byte order)
-    let h = unsafe { &*(b.as_ptr() as *const libc::nlmsghdr) };
+    // Read the header via `ptr::read_unaligned` because the buffer comes
+    // from `recvfrom()` and has no alignment guarantee. On strict-alignment
+    // targets (e.g. ARMv7) a direct reference cast could produce SIGBUS.
+    let h: libc::nlmsghdr = unsafe { ptr::read_unaligned(b.as_ptr().cast::<libc::nlmsghdr>()) };
     let len = h.nlmsg_len as usize;
     let l = nlm_align_of(len as i32) as usize;
 

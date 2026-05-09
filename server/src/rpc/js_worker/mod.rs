@@ -30,6 +30,9 @@ pub trait Rpc {
         route_name: Option<String>,
         runtime_clean_time: Option<i64>,
         env: Option<Value>,
+        max_run_time: Option<i64>,
+        max_stack_size: Option<i64>,
+        max_heap_size: Option<i64>,
     ) -> RpcResult<Box<RawValue>>;
 
     #[method(name = "update")]
@@ -42,6 +45,9 @@ pub trait Rpc {
         route_name: Option<String>,
         runtime_clean_time: Option<i64>,
         env: Option<Value>,
+        max_run_time: Option<i64>,
+        max_stack_size: Option<i64>,
+        max_heap_size: Option<i64>,
     ) -> RpcResult<Box<RawValue>>;
 
     #[method(name = "delete")]
@@ -83,9 +89,12 @@ impl RpcServer for JsWorkerRpcImpl {
         route_name: Option<String>,
         runtime_clean_time: Option<i64>,
         env: Option<Value>,
+        max_run_time: Option<i64>,
+        max_stack_size: Option<i64>,
+        max_heap_size: Option<i64>,
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
-        let span = tracing::info_span!(target: "js_worker", "js-worker::create", token_key = tk, username = un, name = %name, description = ?description, route_name = ?route_name, runtime_clean_time = ?runtime_clean_time);
+        let span = tracing::info_span!(target: "js_worker", "js-worker::create", token_key = tk, username = un, name = %name, description = ?description, route_name = ?route_name, runtime_clean_time = ?runtime_clean_time, max_run_time = ?max_run_time, max_stack_size = ?max_stack_size, max_heap_size = ?max_heap_size);
         async {
             rpc_exec!(
                 create::create(
@@ -95,7 +104,10 @@ impl RpcServer for JsWorkerRpcImpl {
                     js_script_base64,
                     route_name,
                     runtime_clean_time,
-                    env
+                    env,
+                    max_run_time,
+                    max_stack_size,
+                    max_heap_size,
                 )
                 .await
             )
@@ -113,9 +125,12 @@ impl RpcServer for JsWorkerRpcImpl {
         route_name: Option<String>,
         runtime_clean_time: Option<i64>,
         env: Option<Value>,
+        max_run_time: Option<i64>,
+        max_stack_size: Option<i64>,
+        max_heap_size: Option<i64>,
     ) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
-        let span = tracing::info_span!(target: "js_worker", "js-worker::update", token_key = tk, username = un, name = %name, description = ?description, route_name = ?route_name, runtime_clean_time = ?runtime_clean_time);
+        let span = tracing::info_span!(target: "js_worker", "js-worker::update", token_key = tk, username = un, name = %name, description = ?description, route_name = ?route_name, runtime_clean_time = ?runtime_clean_time, max_run_time = ?max_run_time, max_stack_size = ?max_stack_size, max_heap_size = ?max_heap_size);
         async {
             rpc_exec!(
                 update::update(
@@ -125,7 +140,10 @@ impl RpcServer for JsWorkerRpcImpl {
                     js_script_base64,
                     route_name,
                     runtime_clean_time,
-                    env
+                    env,
+                    max_run_time,
+                    max_stack_size,
+                    max_heap_size,
                 )
                 .await
             )

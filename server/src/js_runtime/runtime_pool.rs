@@ -1,4 +1,7 @@
-use super::{JS_RT_MEMORY_LIMIT_BYTES, enrich_exception, init_js_runtime_globals, js_error};
+use super::{
+    RuntimeLimits, apply_runtime_limits, enrich_exception, init_js_runtime_globals,
+    install_kill_handler, js_error, spawn_kill_watchdog,
+};
 use nodeget_lib::js_runtime::{RunType, RuntimePoolInfo, RuntimePoolWorkerInfo};
 use nodeget_lib::utils::get_local_timestamp_ms_i64;
 use rquickjs::{AsyncContext, AsyncRuntime, Error, Module, Promise, Value as JsValue};
@@ -18,6 +21,11 @@ struct RuntimeState {
     rt: AsyncRuntime,
     ctx: AsyncContext,
     loaded_bytecode_hash: Option<u64>,
+    /// 本 worker 的 heap/stack 是在首次创建时固定的；记录下来以便后续 stats 或日志使用。
+    limits: RuntimeLimits,
+    /// interrupt handler 在 worker 创建时安装，kill_flag 被共享；每次 execute 前
+    /// `store(false)`，完成后一并处理。
+    kill_flag: Arc<AtomicBool>,
 }
 
 enum WorkerCommand {
@@ -27,6 +35,9 @@ enum WorkerCommand {
         run_type: RunType,
         params: Value,
         env: Value,
+        /// 本次执行的 max_run_time（ms）。heap/stack 已在 worker 创建时固定，
+        /// 这里只用于 per-call 硬超时看门狗。
+        max_run_time_ms: u64,
         response_tx: oneshot::Sender<Result<Value, String>>,
     },
     Shutdown,
@@ -58,6 +69,7 @@ impl RuntimeWorkerHandle {
         run_type: RunType,
         params: Value,
         env: Value,
+        max_run_time_ms: u64,
     ) -> anyhow::Result<Value> {
         trace!(target: "js_runtime", "sending execute command to worker");
         self.active_requests.fetch_add(1, Ordering::SeqCst);
@@ -72,6 +84,7 @@ impl RuntimeWorkerHandle {
                 run_type,
                 params,
                 env,
+                max_run_time_ms,
                 response_tx,
             };
 
@@ -126,6 +139,10 @@ impl JsRuntimePool {
 
     /// # Errors
     /// Returns an error if the worker channel is closed or script execution fails.
+    ///
+    /// `limits` 来自 `js_worker` 表的 max_run_time / max_stack_size / max_heap_size。
+    /// heap/stack 在 worker 首次创建时固定，update.rs 调用 `evict_worker` 强制下次
+    /// 重建时采用新值；`max_run_time_ms` 每次调用生效。
     pub async fn execute_script(
         &self,
         script_name: &str,
@@ -134,15 +151,22 @@ impl JsRuntimePool {
         params: Value,
         env: Value,
         runtime_clean_time_ms: Option<i64>,
+        limits: RuntimeLimits,
     ) -> anyhow::Result<Value> {
-        debug!(target: "js_runtime", script_name = %script_name, run_type = ?run_type, "executing script on pool");
-        let worker = self.get_or_init_worker(script_name)?;
+        debug!(target: "js_runtime", script_name = %script_name, run_type = ?run_type, max_run_time_ms = limits.max_run_time_ms, "executing script on pool");
+        let worker = self.get_or_init_worker(script_name, limits)?;
         worker.set_runtime_clean_time(runtime_clean_time_ms);
-        worker.execute(bytecode, run_type, params, env).await
+        worker
+            .execute(bytecode, run_type, params, env, limits.max_run_time_ms)
+            .await
     }
 
     #[allow(clippy::significant_drop_tightening)]
-    fn get_or_init_worker(&self, script_name: &str) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
+    fn get_or_init_worker(
+        &self,
+        script_name: &str,
+        limits: RuntimeLimits,
+    ) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
         debug!(target: "js_runtime", script_name = %script_name, "getting or initializing worker");
         {
             let workers = self.workers.read().map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -151,7 +175,7 @@ impl JsRuntimePool {
             }
         }
 
-        let worker = spawn_worker(script_name)?;
+        let worker = spawn_worker(script_name, limits)?;
 
         {
             let workers = self.workers.read().map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -330,8 +354,11 @@ pub fn init_global_pool() -> &'static Arc<JsRuntimePool> {
     pool
 }
 
-fn spawn_worker(script_name: &str) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
-    debug!(target: "js_runtime", script_name = %script_name, "spawning new worker thread");
+fn spawn_worker(
+    script_name: &str,
+    limits: RuntimeLimits,
+) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
+    debug!(target: "js_runtime", script_name = %script_name, max_run_time_ms = limits.max_run_time_ms, max_stack_size_bytes = limits.max_stack_size_bytes, max_heap_size_bytes = limits.max_heap_size_bytes, "spawning new worker thread");
     let script_name = script_name.to_owned();
     let (tx, rx) = std::sync::mpsc::channel::<WorkerCommand>();
 
@@ -348,13 +375,17 @@ fn spawn_worker(script_name: &str) -> anyhow::Result<Arc<RuntimeWorkerHandle>> {
 
     std::thread::Builder::new()
         .name(format!("js-rt-{script_name}"))
-        .spawn(move || worker_loop(&script_name, rx))
+        .spawn(move || worker_loop(&script_name, rx, limits))
         .map_err(|e| anyhow::anyhow!("Failed to spawn JS runtime worker thread: {e}"))?;
 
     Ok(handle)
 }
 
-fn worker_loop(script_name: &str, receiver: std::sync::mpsc::Receiver<WorkerCommand>) {
+fn worker_loop(
+    script_name: &str,
+    receiver: std::sync::mpsc::Receiver<WorkerCommand>,
+    limits: RuntimeLimits,
+) {
     trace!(target: "js_runtime", script_name = %script_name, "worker loop started");
     let host_rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -383,6 +414,7 @@ fn worker_loop(script_name: &str, receiver: std::sync::mpsc::Receiver<WorkerComm
                 run_type,
                 params,
                 env,
+                max_run_time_ms,
                 response_tx,
             } => {
                 let exec_result = host_rt.block_on(async {
@@ -394,6 +426,8 @@ fn worker_loop(script_name: &str, receiver: std::sync::mpsc::Receiver<WorkerComm
                         run_type,
                         params,
                         env,
+                        limits,
+                        max_run_time_ms,
                     )
                     .await
                     .map_err(|e| super::format_js_error(&e))
@@ -414,15 +448,20 @@ async fn execute_on_worker(
     run_type: RunType,
     params: Value,
     env: Value,
+    limits: RuntimeLimits,
+    max_run_time_ms: u64,
 ) -> Result<Value, Error> {
     trace!(target: "js_runtime", script_name = %script_name, "executing on worker");
     if runtime_state.is_none() {
-        *runtime_state = Some(create_runtime_state().await?);
+        *runtime_state = Some(create_runtime_state(limits).await?);
     }
 
     let state = runtime_state
         .as_mut()
         .ok_or_else(|| js_error("js_runtime", "Runtime state is missing"))?;
+
+    // 每次执行前清 flag（上一轮超时留下的 true 会立刻打断新执行）
+    state.kill_flag.store(false, Ordering::Relaxed);
 
     if state.loaded_bytecode_hash != Some(bytecode_hash) {
         let load_result: Result<(), Error> = state
@@ -454,46 +493,50 @@ async fn execute_on_worker(
         state.loaded_bytecode_hash = Some(bytecode_hash);
     }
 
-    let run_result: Result<Value, Error> = state
-        .ctx
-        .async_with(async |ctx| {
-            let run_type_handler = run_type.handler_name().to_owned();
-            ctx.globals()
-                .set("__nodeget_run_handler", run_type_handler)?;
+    // 以 OS 线程看门狗启动硬超时；async_with 里可能卡在纯 CPU 循环上，
+    // tokio::time::timeout 打不断它，必须靠 interrupt handler 读 kill_flag。
+    let effective_timeout = std::time::Duration::from_millis(max_run_time_ms);
+    let (cancel_tx, watchdog) =
+        spawn_kill_watchdog(Arc::clone(&state.kill_flag), effective_timeout);
 
-            let input_json = serde_json::to_string(&params).map_err(|e| {
-                js_error(
-                    "js_runner",
-                    format!("Failed to serialize input params: {e}"),
-                )
-            })?;
-            let input_js = ctx.json_parse(input_json).map_err(|e| {
-                js_error(
-                    "js_runner",
-                    format!("Failed to build input params in JS: {e}"),
-                )
-            })?;
-            ctx.globals().set("__nodeget_run_params", input_js)?;
+    let run_future = state.ctx.async_with(async |ctx| {
+        let run_type_handler = run_type.handler_name().to_owned();
+        ctx.globals()
+            .set("__nodeget_run_handler", run_type_handler)?;
 
-            let env_json = serde_json::to_string(&env)
-                .map_err(|e| js_error("js_runner", format!("Failed to serialize env: {e}")))?;
-            let env_js = ctx
-                .json_parse(env_json)
-                .map_err(|e| js_error("js_runner", format!("Failed to build env in JS: {e}")))?;
-            ctx.globals().set("__nodeget_env", env_js)?;
+        let input_json = serde_json::to_string(&params).map_err(|e| {
+            js_error(
+                "js_runner",
+                format!("Failed to serialize input params: {e}"),
+            )
+        })?;
+        let input_js = ctx.json_parse(input_json).map_err(|e| {
+            js_error(
+                "js_runner",
+                format!("Failed to build input params in JS: {e}"),
+            )
+        })?;
+        ctx.globals().set("__nodeget_run_params", input_js)?;
 
-            ctx.globals()
-                .set("__nodeget_current_script_name", script_name.to_owned())?;
-            let inline_caller_js = ctx.json_parse("null").map_err(|e| {
-                js_error(
-                    "js_runner",
-                    format!("Failed to set inline caller in JS: {e}"),
-                )
-            })?;
-            ctx.globals()
-                .set("__nodeget_inline_caller", inline_caller_js)?;
+        let env_json = serde_json::to_string(&env)
+            .map_err(|e| js_error("js_runner", format!("Failed to serialize env: {e}")))?;
+        let env_js = ctx
+            .json_parse(env_json)
+            .map_err(|e| js_error("js_runner", format!("Failed to build env in JS: {e}")))?;
+        ctx.globals().set("__nodeget_env", env_js)?;
 
-            let invoke_script = r#"
+        ctx.globals()
+            .set("__nodeget_current_script_name", script_name.to_owned())?;
+        let inline_caller_js = ctx.json_parse("null").map_err(|e| {
+            js_error(
+                "js_runner",
+                format!("Failed to set inline caller in JS: {e}"),
+            )
+        })?;
+        ctx.globals()
+            .set("__nodeget_inline_caller", inline_caller_js)?;
+
+        let invoke_script = r#"
             (async () => {
                 const entry = globalThis.__nodeget_entry;
                 const runHandler = globalThis.__nodeget_run_handler;
@@ -597,51 +640,74 @@ async fn execute_on_worker(
             })()
         "#;
 
-            let invoke_promise: Promise<'_> =
-                enrich_exception(&ctx, "js_invoke", ctx.eval(invoke_script))?;
-            let js_value: JsValue<'_> = enrich_exception(
-                &ctx,
-                "js_invoke",
-                invoke_promise.into_future::<JsValue<'_>>().await,
-            )?;
+        let invoke_promise: Promise<'_> =
+            enrich_exception(&ctx, "js_invoke", ctx.eval(invoke_script))?;
+        let js_value: JsValue<'_> = enrich_exception(
+            &ctx,
+            "js_invoke",
+            invoke_promise.into_future::<JsValue<'_>>().await,
+        )?;
 
-            if js_value.is_undefined() {
-                return Err(js_error(
-                    "json_parse",
-                    "Script must return a JSON-serializable value",
-                ));
-            }
+        if js_value.is_undefined() {
+            return Err(js_error(
+                "json_parse",
+                "Script must return a JSON-serializable value",
+            ));
+        }
 
-            let raw_json = if let Some(js_string) = js_value.as_string() {
-                js_string.to_string()?
-            } else {
-                let js_json_string = ctx.json_stringify(js_value)?.ok_or_else(|| {
-                    js_error(
-                        "json_parse",
-                        "Script return is not JSON-serializable (got function/symbol)",
-                    )
-                })?;
-                js_json_string.to_string()?
-            };
-
-            serde_json::from_str(&raw_json).map_err(|e| {
+        let raw_json = if let Some(js_string) = js_value.as_string() {
+            js_string.to_string()?
+        } else {
+            let js_json_string = ctx.json_stringify(js_value)?.ok_or_else(|| {
                 js_error(
                     "json_parse",
-                    format!("Script return is not valid JSON: {e}"),
+                    "Script return is not JSON-serializable (got function/symbol)",
                 )
-            })
+            })?;
+            js_json_string.to_string()?
+        };
+
+        serde_json::from_str(&raw_json).map_err(|e| {
+            js_error(
+                "json_parse",
+                format!("Script return is not valid JSON: {e}"),
+            )
         })
-        .await;
+    });
+    let run_outcome: Result<Value, Error> =
+        match tokio::time::timeout(effective_timeout, run_future).await {
+            Ok(result) => result,
+            Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
+        };
+    let _ = cancel_tx.send(());
+    let _ = watchdog.join();
 
     state.rt.idle().await;
-    run_result
+
+    // 判定是否是因为硬超时被 interrupt 打断。interrupt 会让 QuickJS 抛不可
+    // 捕获异常，但 runtime 内部可能仍残留 pending jobs / 待清理的 promise
+    // reactions。pool 场景下这个 AsyncRuntime 之后会继续服务新请求，残留
+    // 状态可能影响下一次执行——最稳的做法是丢弃当前 state，下次调用走
+    // `create_runtime_state` 重建一个干净的 runtime。
+    let killed_by_timeout = state.kill_flag.load(Ordering::Relaxed) && run_outcome.is_err();
+
+    if killed_by_timeout {
+        *runtime_state = None;
+        return Err(js_error(
+            "js_runner",
+            format!("JavaScript execution exceeded max_run_time_ms={max_run_time_ms}"),
+        ));
+    }
+    run_outcome
 }
 
 #[allow(clippy::future_not_send)]
-async fn create_runtime_state() -> Result<RuntimeState, Error> {
-    trace!(target: "js_runtime", "creating new runtime state");
+async fn create_runtime_state(limits: RuntimeLimits) -> Result<RuntimeState, Error> {
+    trace!(target: "js_runtime", max_run_time_ms = limits.max_run_time_ms, max_stack_size_bytes = limits.max_stack_size_bytes, max_heap_size_bytes = limits.max_heap_size_bytes, "creating new runtime state");
     let rt = AsyncRuntime::new()?;
-    rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
+    apply_runtime_limits(&rt, limits).await;
+    let kill_flag = Arc::new(AtomicBool::new(false));
+    install_kill_handler(&rt, Arc::clone(&kill_flag)).await;
     let ctx = AsyncContext::full(&rt).await?;
 
     let init_result: Result<(), Error> = ctx
@@ -655,6 +721,8 @@ async fn create_runtime_state() -> Result<RuntimeState, Error> {
         rt,
         ctx,
         loaded_bytecode_hash: None,
+        limits,
+        kill_flag,
     })
 }
 

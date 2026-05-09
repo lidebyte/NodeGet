@@ -454,6 +454,11 @@ async fn handle_js_worker_route(
     };
 
     let env = model.env.unwrap_or_else(|| serde_json::json!({}));
+    let limits = crate::js_runtime::RuntimeLimits::from_model(
+        model.max_run_time,
+        model.max_stack_size,
+        model.max_heap_size,
+    );
     let run_result = runtime_pool::init_global_pool()
         .execute_script(
             model.name.as_str(),
@@ -462,6 +467,7 @@ async fn handle_js_worker_route(
             params,
             env,
             model.runtime_clean_time,
+            limits,
         )
         .await;
 
