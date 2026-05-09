@@ -392,7 +392,7 @@ pub async fn resolve_kv_list_namespace_permission(
                 Scope::KvNamespace(namespace) => {
                     allowed_namespaces.insert(namespace.clone());
                 }
-                Scope::AgentUuid(_) | Scope::JsWorker(_) => {}
+                Scope::AgentUuid(_) | Scope::JsWorker(_) | Scope::StaticFile(_) => {}
             }
         }
     }

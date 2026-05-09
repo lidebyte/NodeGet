@@ -1,4 +1,3 @@
-use crate::AGENT_CONFIG;
 use crate::monitoring::gpu::{DynamicDataFromGpu, StaticDataFromGpu};
 use crate::monitoring::network_connections::calc_connections;
 use crate::monitoring::system_impls::{DynamicDataFromSystem, StaticDataFromSystem};
@@ -20,6 +19,21 @@ pub trait Monitor {
     async fn refresh_and_get() -> Self;
 }
 
+// review_agent.md 低优：`get_local_timestamp_ms().unwrap_or(0)` 把失败时间戳化为 1970，会被
+// server 误认为是一条真实的"很旧"数据。不改协议类型（`time: u64`）的前提下，至少把失败路径
+// 的日志升级为 error，方便事后排查时能在日志里找到这类"上报带 0 时间戳"的事件。
+fn timestamp_ms_with_error_log() -> u64 {
+    match get_local_timestamp_ms() {
+        Ok(ts) => ts,
+        Err(e) => {
+            log::error!(
+                "get_local_timestamp_ms failed, falling back to 0 which server may interpret as 1970: {e}"
+            );
+            0
+        }
+    }
+}
+
 // 静态监控数据的 Monitor trait 实现
 
 impl Monitor for StaticMonitoringData {
@@ -32,12 +46,7 @@ impl Monitor for StaticMonitoringData {
     async fn refresh_and_get() -> Self {
         let (system_data, gpu_data) =
             tokio::join!(StaticDataFromSystem::get(), StaticDataFromGpu::get());
-        let agent_uuid = AGENT_CONFIG
-            .get()
-            .expect("Agent config not initialized")
-            .read()
-            .expect("AGENT_CONFIG lock poisoned")
-            .agent_uuid;
+        let agent_uuid = crate::config_access::current_agent_uuid_string();
 
         let cpu = system_data.0.clone();
         let system = system_data.1.clone();
@@ -45,8 +54,8 @@ impl Monitor for StaticMonitoringData {
         let data_hash = Self::compute_data_hash(&cpu, &system, &gpu);
 
         Self {
-            uuid: agent_uuid.to_string(),
-            time: get_local_timestamp_ms().unwrap_or(0),
+            uuid: agent_uuid,
+            time: timestamp_ms_with_error_log(),
             data_hash,
             cpu,
             system,
@@ -66,35 +75,38 @@ impl Monitor for DynamicMonitoringData {
     // # 返回值
     // 返回包含代理 UUID、时间戳以及 CPU、内存、负载、系统、磁盘、网络和 GPU 动态数据的动态监控数据结构
     async fn refresh_and_get() -> Self {
-        let system_guard = DynamicDataFromSystem::refresh_and_get().await;
-        let (cpu, ram, load, system) = (
-            system_guard.0.clone(),
-            system_guard.1.clone(),
-            system_guard.2.clone(),
-            system_guard.3.clone(),
-        );
-        drop(system_guard);
-
-        let handle_disk = tokio::spawn(DataFromDisk::refresh_and_get());
-        let handle_network = tokio::spawn(DataFromNetwork::refresh_and_get());
-
-        let gpu_data = {
+        // 统一 `tokio::join!` 四路并发（对齐静态实现风格），4 个来源互不共享锁/全局资源：
+        //   - system: DynamicDataFromSystem 自己的 mutex
+        //   - gpu:    NVML mutex（gpu.rs 内部用 block_in_place 避免跨 await 阻塞调度）
+        //   - disk:   DISK_TIME_TRACKER + 全局 disks mutex
+        //   - network: NETWORK_TIME_TRACKER + 全局 networks mutex
+        // 之前版本 (review_agent.md #79) 用 `tokio::spawn + .await`，一是风格不统一，
+        // 二是会把每次采集拆成 3 个 task（含 JoinError fallback），这里的四路 await
+        // 都在同一个父 task 内——panic 直接 propagate，无须多层 fallback。
+        let system_fut = async {
+            let system_guard = DynamicDataFromSystem::refresh_and_get().await;
+            let cpu = system_guard.0.clone();
+            let ram = system_guard.1.clone();
+            let load = system_guard.2.clone();
+            let system = system_guard.3.clone();
+            drop(system_guard);
+            (cpu, ram, load, system)
+        };
+        let gpu_fut = async {
             let gpu_guard = DynamicDataFromGpu::refresh_and_get().await;
             gpu_guard.0.clone()
         };
+        let disk_fut = DataFromDisk::refresh_and_get();
+        let network_fut = DataFromNetwork::refresh_and_get();
 
-        let disk_data = handle_disk.await.unwrap();
-        let network_data = handle_network.await.unwrap();
-        let agent_uuid = AGENT_CONFIG
-            .get()
-            .expect("Agent config not initialized")
-            .read()
-            .expect("AGENT_CONFIG lock poisoned")
-            .agent_uuid;
+        let ((cpu, ram, load, system), gpu_data, disk_data, network_data) =
+            tokio::join!(system_fut, gpu_fut, disk_fut, network_fut);
+
+        let agent_uuid = crate::config_access::current_agent_uuid_string();
 
         Self {
-            uuid: agent_uuid.to_string(),
-            time: get_local_timestamp_ms().unwrap_or(0),
+            uuid: agent_uuid,
+            time: timestamp_ms_with_error_log(),
 
             cpu,
             ram,
@@ -122,6 +134,9 @@ impl DataFromDisk {
     // 返回包含所有磁盘动态数据的向量
     pub async fn refresh_and_get() -> Self {
         let interval_secs = refresh_global_disk().await.as_secs_f64();
+        // 首次 tick 或系统时钟异常可能返回 interval ≈ 0，除法会得到 inf（cast 成
+        // u64 后变成 u64::MAX），因此设一个下限。10ms 对应 100Hz 采样粒度，足够安全。
+        let safe_interval_secs = interval_secs.max(0.01);
         let disk_mutex = crate::monitoring::get_global_disk().await;
         let per_disk_vec = {
             let disks = disk_mutex.lock().await;
@@ -144,8 +159,8 @@ impl DataFromDisk {
                         is_removable: disk.is_removable(),
                         is_read_only: disk.is_read_only(),
 
-                        read_speed: (usage.read_bytes as f64 / interval_secs) as u64,
-                        write_speed: (usage.written_bytes as f64 / interval_secs) as u64,
+                        read_speed: (usage.read_bytes as f64 / safe_interval_secs) as u64,
+                        write_speed: (usage.written_bytes as f64 / safe_interval_secs) as u64,
                     }
                 })
                 .collect::<Vec<_>>()
@@ -170,6 +185,8 @@ impl DataFromNetwork {
     // 返回包含网络接口数据以及 UDP 和 TCP 连接数的网络数据结构
     pub async fn refresh_and_get() -> Self {
         let interval_secs = refresh_global_network().await.as_secs_f64();
+        // 同磁盘：首次或时钟异常的近 0 值会使速率变成 u64::MAX，加一个 10ms 下限。
+        let safe_interval_secs = interval_secs.max(0.01);
         let networks_mutex = crate::monitoring::get_global_network().await;
         let network_vec = {
             let networks = networks_mutex.lock().await;
@@ -179,8 +196,8 @@ impl DataFromNetwork {
                     interface_name: interface_name.clone(),
                     total_received: network.total_received(),
                     total_transmitted: network.total_transmitted(),
-                    receive_speed: (network.received() as f64 / interval_secs) as u64,
-                    transmit_speed: (network.transmitted() as f64 / interval_secs) as u64,
+                    receive_speed: (network.received() as f64 / safe_interval_secs) as u64,
+                    transmit_speed: (network.transmitted() as f64 / safe_interval_secs) as u64,
                 })
                 .collect()
         };

@@ -23,7 +23,7 @@ struct RuntimeState {
     loaded_bytecode_hash: Option<u64>,
     /// 本 worker 的 heap/stack 是在首次创建时固定的；记录下来以便后续 stats 或日志使用。
     limits: RuntimeLimits,
-    /// interrupt handler 在 worker 创建时安装，kill_flag 被共享；每次 execute 前
+    /// interrupt handler 在 worker `创建时安装，kill_flag` 被共享；每次 execute 前
     /// `store(false)`，完成后一并处理。
     kill_flag: Arc<AtomicBool>,
 }
@@ -35,7 +35,7 @@ enum WorkerCommand {
         run_type: RunType,
         params: Value,
         env: Value,
-        /// 本次执行的 max_run_time（ms）。heap/stack 已在 worker 创建时固定，
+        /// 本次执行的 `max_run_time（ms）。heap/stack` 已在 worker 创建时固定，
         /// 这里只用于 per-call 硬超时看门狗。
         max_run_time_ms: u64,
         response_tx: oneshot::Sender<Result<Value, String>>,
@@ -140,7 +140,7 @@ impl JsRuntimePool {
     /// # Errors
     /// Returns an error if the worker channel is closed or script execution fails.
     ///
-    /// `limits` 来自 `js_worker` 表的 max_run_time / max_stack_size / max_heap_size。
+    /// `limits` 来自 `js_worker` 表的 `max_run_time` / `max_stack_size` / `max_heap_size`。
     /// heap/stack 在 worker 首次创建时固定，update.rs 调用 `evict_worker` 强制下次
     /// 重建时采用新值；`max_run_time_ms` 每次调用生效。
     pub async fn execute_script(

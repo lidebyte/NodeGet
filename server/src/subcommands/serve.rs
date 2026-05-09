@@ -36,6 +36,11 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
     crate::monitoring_last_cache::MonitoringLastCache::init();
     debug!(target: "server", "Monitoring last cache initialized");
 
+    crate::static_file::cache::StaticCache::init()
+        .await
+        .expect("Failed to initialize static cache");
+    debug!(target: "server", "Static cache initialized");
+
     crate::crontab::cache::CrontabCache::init()
         .await
         .expect("Failed to initialize crontab cache");
@@ -89,6 +94,12 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
                         }
 
                         if req.method() == axum::http::Method::GET {
+                            let cache = crate::static_file::cache::StaticCache::global();
+                            if let Some(model) = cache.get_http_root().await {
+                                let path = req.uri().path().to_owned();
+                                let method = req.method().clone();
+                                return serve_static_file(&model.path, &path, model.cors, &method).await;
+                            }
                             return axum::response::Response::builder()
                                 .status(StatusCode::OK)
                                 .header(
@@ -102,6 +113,53 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
                         rpc_service.call(req).await.unwrap()
                     }
                 }),
+            )
+            .route(
+                "/nodeget/static/{name}",
+                any(
+                    |Path(name): Path<String>, req: axum::extract::Request| async move {
+                        let cache = crate::static_file::cache::StaticCache::global();
+                        let Some(model) = cache.get_by_name(&name).await else {
+                            return build_http_error(StatusCode::NOT_FOUND, "Static not found");
+                        };
+                        if req.method() == axum::http::Method::OPTIONS && model.cors {
+                            return axum::http::Response::builder()
+                                .status(StatusCode::NO_CONTENT)
+                                .header(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                                .header(axum::http::header::ACCESS_CONTROL_ALLOW_METHODS, "GET, HEAD, OPTIONS")
+                                .header(axum::http::header::ACCESS_CONTROL_ALLOW_HEADERS, "*")
+                                .body(jsonrpsee::server::HttpBody::default())
+                                .expect("Failed to build CORS response");
+                        }
+                        let method = req.method().clone();
+                        serve_static_file(&model.path, "/", model.cors, &method).await
+                    },
+                ),
+            )
+            .route(
+                "/nodeget/static/{name}/{*path}",
+                any(
+                    |Path((name, path)): Path<(String, String)>,
+                     req: axum::extract::Request| async move {
+                        let cache = crate::static_file::cache::StaticCache::global();
+                        let Some(model) = cache.get_by_name(&name).await else {
+                            return build_http_error(StatusCode::NOT_FOUND, "Static not found");
+                        };
+                        // 处理 OPTIONS 预检请求
+                        if req.method() == axum::http::Method::OPTIONS && model.cors {
+                            return axum::http::Response::builder()
+                                .status(StatusCode::NO_CONTENT)
+                                .header(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                                .header(axum::http::header::ACCESS_CONTROL_ALLOW_METHODS, "GET, HEAD, OPTIONS")
+                                .header(axum::http::header::ACCESS_CONTROL_ALLOW_HEADERS, "*")
+                                .body(jsonrpsee::server::HttpBody::default())
+                                .expect("Failed to build CORS response");
+                        }
+                        let file_path = if path.is_empty() { "/".to_string() } else { path };
+                        let method = req.method().clone();
+                        serve_static_file(&model.path, &file_path, model.cors, &method).await
+                    },
+                ),
             )
             .route(
                 "/worker-route/{route_name}",
@@ -128,11 +186,49 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
                     },
                 ),
             )
+            // 新的统一前缀 /nodeget/worker-route/*，与 /nodeget/static/* 保持一致。
+            // 旧的 /worker-route/* 保留用于过渡，后续版本将移除。
+            .route(
+                "/nodeget/worker-route/{route_name}",
+                any(
+                    |Path(route_name): Path<String>, req: axum::extract::Request| async move {
+                        handle_js_worker_route(route_name, req).await
+                    },
+                ),
+            )
+            .route(
+                "/nodeget/worker-route/{route_name}/",
+                any(
+                    |Path(route_name): Path<String>, req: axum::extract::Request| async move {
+                        handle_js_worker_route(route_name, req).await
+                    },
+                ),
+            )
+            .route(
+                "/nodeget/worker-route/{route_name}/{*path}",
+                any(
+                    |Path((route_name, _path)): Path<(String, String)>,
+                     req: axum::extract::Request| async move {
+                        handle_js_worker_route(route_name, req).await
+                    },
+                ),
+            )
             .route("/terminal", any(crate::terminal::terminal_ws_handler))
             .with_state(terminal_state)
             .fallback(any(move |req: axum::extract::Request| {
                 let mut rpc_service = jsonrpc_service.clone();
-                async move { rpc_service.call(req).await.unwrap() }
+                async move {
+                    if is_websocket_upgrade(req.headers()) {
+                        return rpc_service.call(req).await.unwrap();
+                    }
+                    let cache = crate::static_file::cache::StaticCache::global();
+                    if let Some(model) = cache.get_http_root().await {
+                        let path = req.uri().path().to_owned();
+                        let method = req.method().clone();
+                        return serve_static_file(&model.path, &path, model.cors, &method).await;
+                    }
+                    rpc_service.call(req).await.unwrap()
+                }
             }));
 
     init_crontab_worker();
@@ -517,6 +613,94 @@ async fn handle_js_worker_route(
         })
 }
 
+fn guess_mime_type(path: &std::path::Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("html" | "htm") => "text/html; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("js") => "application/javascript; charset=utf-8",
+        Some("json") => "application/json; charset=utf-8",
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("svg") => "image/svg+xml",
+        Some("ico") => "image/x-icon",
+        Some("woff2") => "font/woff2",
+        Some("woff") => "font/woff",
+        Some("ttf") => "font/ttf",
+        Some("txt") => "text/plain; charset=utf-8",
+        Some("xml") => "application/xml; charset=utf-8",
+        Some("wasm") => "application/wasm",
+        _ => "application/octet-stream",
+    }
+}
+
+async fn serve_static_file(
+    sub_path: &str,
+    path: &str,
+    cors: bool,
+    method: &axum::http::Method,
+) -> axum::http::Response<jsonrpsee::server::HttpBody> {
+    // 仅允许 GET / HEAD；其它方法（包括非 CORS 预检的 OPTIONS）返回 405
+    if method != axum::http::Method::GET && method != axum::http::Method::HEAD {
+        let mut builder = axum::http::Response::builder()
+            .status(StatusCode::METHOD_NOT_ALLOWED)
+            .header(axum::http::header::ALLOW, "GET, HEAD, OPTIONS");
+        if cors {
+            builder = builder.header(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+        }
+        return builder
+            .body(jsonrpsee::server::HttpBody::from("Method not allowed"))
+            .expect("Failed to build 405 response");
+    }
+
+    let static_path = crate::static_file::get_static_path();
+    let file_path = if path.is_empty() || path == "/" {
+        "index.html"
+    } else {
+        path.trim_start_matches('/')
+    };
+
+    let resolved =
+        match crate::static_file::resolve_safe_file_path(&static_path, sub_path, file_path) {
+            Ok(p) => p,
+            Err(e) => return build_static_error(StatusCode::BAD_REQUEST, format!("{e}"), cors),
+        };
+
+    let data = match tokio::fs::read(&resolved).await {
+        Ok(d) => d,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return build_static_error(StatusCode::NOT_FOUND, "File not found", cors);
+        }
+        Err(e) => {
+            return build_static_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read file: {e}"),
+                cors,
+            );
+        }
+    };
+
+    let content_type = guess_mime_type(&resolved);
+    let mut builder = axum::http::Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, content_type);
+
+    if cors {
+        builder = builder.header(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+    }
+
+    // HEAD 请求不返回 body
+    let body = if method == axum::http::Method::HEAD {
+        jsonrpsee::server::HttpBody::default()
+    } else {
+        jsonrpsee::server::HttpBody::from(data)
+    };
+
+    builder
+        .body(body)
+        .unwrap_or_else(|e| build_http_error(StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))
+}
+
 fn build_http_error(
     status: StatusCode,
     message: impl Into<String>,
@@ -527,6 +711,24 @@ fn build_http_error(
             axum::http::header::CONTENT_TYPE,
             "text/plain; charset=utf-8",
         )
+        .body(jsonrpsee::server::HttpBody::from(message.into()))
+        .expect("Failed to build error response")
+}
+
+/// 静态文件服务专用的错误响应：按需带上 CORS 头，便于浏览器读取错误信息
+fn build_static_error(
+    status: StatusCode,
+    message: impl Into<String>,
+    cors: bool,
+) -> axum::http::Response<jsonrpsee::server::HttpBody> {
+    let mut builder = axum::http::Response::builder().status(status).header(
+        axum::http::header::CONTENT_TYPE,
+        "text/plain; charset=utf-8",
+    );
+    if cors {
+        builder = builder.header(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+    }
+    builder
         .body(jsonrpsee::server::HttpBody::from(message.into()))
         .expect("Failed to build error response")
 }

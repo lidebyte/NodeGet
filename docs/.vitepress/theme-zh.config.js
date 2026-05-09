@@ -180,23 +180,36 @@ export const themeZhConfig = {
 					link: '/api/js_result/crud.md'
 				}]
 			},
-			// KV
-			{
-				text: 'KV',
-				collapsed: false,
-				items: [{
-					text: '介绍',
-					link: '/api/kv/index.md'
-				},
-				{
-					text: 'CRUD 操作',
-					link: '/api/kv/crud.md'
-				},
-				{
-					text: '特殊 Kv',
-					link: '/api/kv/special.md'
-				}]
-			}]
+            // KV
+            {
+                text: 'KV',
+                collapsed: false,
+                items: [{
+                    text: '介绍',
+                    link: '/api/kv/index.md'
+                },
+                {
+                    text: 'CRUD 操作',
+                    link: '/api/kv/crud.md'
+                },
+                {
+                    text: '特殊 Kv',
+                    link: '/api/kv/special.md'
+                }]
+            },
+            // Static
+            {
+                text: 'Static',
+                collapsed: false,
+                items: [{
+                    text: '介绍',
+                    link: '/api/static_file/index.md'
+                },
+                {
+                    text: 'CRUD 与文件操作',
+                    link: '/api/static_file/crud.md'
+                }]
+            }]
 		}]
 	},
 	socialLinks: [{

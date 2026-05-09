@@ -33,9 +33,9 @@ pub const DEFAULT_MAX_HEAP_SIZE_BYTES: usize = JS_RT_MEMORY_LIMIT_BYTES;
 pub struct RuntimeLimits {
     /// 执行时长硬上限（ms），外层 `tokio::time::timeout` + `set_interrupt_handler`。
     pub max_run_time_ms: u64,
-    /// QuickJS C 栈字节数上限，`set_max_stack_size`。
+    /// `QuickJS` C 栈字节数上限，`set_max_stack_size`。
     pub max_stack_size_bytes: usize,
-    /// QuickJS 堆字节数上限，`set_memory_limit`。
+    /// `QuickJS` 堆字节数上限，`set_memory_limit`。
     pub max_heap_size_bytes: usize,
 }
 
@@ -78,7 +78,7 @@ impl RuntimeLimits {
 
     /// 和调用方传入的软超时取 min，返回应该用于 `tokio::time::timeout` 的 Duration。
     ///
-    /// 语义：调用方（inline_call 的 `timeoutSec`）提出"我最多等这么久"，
+    /// `语义：调用方（inline_call` 的 `timeoutSec`）提出"我最多等这么久"，
     /// worker 配置的 `max_run_time_ms` 是"你最多跑这么久"——两者都要遵守，取较严的一个。
     #[must_use]
     pub fn effective_timeout(
@@ -101,7 +101,7 @@ impl Default for RuntimeLimits {
 
 /// 对刚创建的 `AsyncRuntime` 应用 heap / stack 限制。
 ///
-/// `set_memory_limit(0)` 在 QuickJS 里表示"无限"；我们始终传正数。
+/// `set_memory_limit(0)` 在 `QuickJS` 里表示"无限"；我们始终传正数。
 /// `set_max_stack_size` 必须在第一次执行脚本之前调用才有意义。
 async fn apply_runtime_limits(rt: &AsyncRuntime, limits: RuntimeLimits) {
     rt.set_memory_limit(limits.max_heap_size_bytes).await;
@@ -110,10 +110,10 @@ async fn apply_runtime_limits(rt: &AsyncRuntime, limits: RuntimeLimits) {
 
 /// 安装一个 interrupt handler，让 `set_kill_flag(true)` 能硬杀 JS 执行。
 ///
-/// QuickJS 会在 JS 解释循环的检查点（function 调用、循环边、指令数等）
-/// 回调 handler。返回 true 则 QuickJS 抛一个"不可捕获异常"，`try/catch`
+/// `QuickJS` 会在 JS 解释循环的检查点（function 调用、循环边、指令数等）
+/// 回调 handler。返回 true 则 `QuickJS` 抛一个"不可捕获异常"，`try/catch`
 /// 抓不住，脚本会被真正终止。我们把 flag 拿在外面：看门狗 OS 线程超时后
-/// `store(true)`，QuickJS 下一个检查点就被打断。
+/// `store(true)`，`QuickJS` 下一个检查点就被打断。
 ///
 /// 这样即便脚本里写的是 `while(true){}` 这种无 await 纯 CPU 循环，也能被杀。
 async fn install_kill_handler(rt: &AsyncRuntime, kill_flag: Arc<AtomicBool>) {
@@ -125,7 +125,7 @@ async fn install_kill_handler(rt: &AsyncRuntime, kill_flag: Arc<AtomicBool>) {
 ///
 /// 关键点：rquickjs 的 `async_with` 在执行同步 JS（纯 CPU 循环）时会阻塞
 /// 整个 tokio task，`tokio::time::timeout` 打不断，必须由一个**不在 tokio
-/// 里**的看门狗来 set kill_flag，让 QuickJS interrupt handler 在下个检查
+/// 里**的看门狗来 set `kill_flag，让` `QuickJS` interrupt handler 在下个检查
 /// 点读到 true 抛异常，才能真正硬杀 CPU 密集脚本。
 ///
 /// 返回 `(cancel_tx, join_handle)`；执行成功结束时 drop `cancel_tx`（或
@@ -140,9 +140,7 @@ fn spawn_kill_watchdog(
         .spawn(move || {
             // recv_timeout 返回 Err(Timeout) = 到点未被取消 → 置 flag
             // 返回 Ok(_) 或 Err(Disconnected) = 被取消 / sender drop → 正常退出
-            if let Err(std::sync::mpsc::RecvTimeoutError::Timeout) =
-                cancel_rx.recv_timeout(duration)
-            {
+            if cancel_rx.recv_timeout(duration) == Err(std::sync::mpsc::RecvTimeoutError::Timeout) {
                 kill_flag.store(true, Ordering::Relaxed);
             }
         })
@@ -321,7 +319,7 @@ pub fn compile_js_module_to_bytecode(js_code: impl AsRef<str>) -> Result<Vec<u8>
 /// Returns an error if building the host runtime or JS execution fails.
 ///
 /// `limits` 来自 `js_worker` 表，控制 heap / stack / 执行时长硬上限。
-/// `caller_soft_timeout` 是 inline_call / 调用方传入的软超时；与 `limits.max_run_time_ms`
+/// `caller_soft_timeout` 是 `inline_call` / 调用方传入的软超时；与 `limits.max_run_time_ms`
 /// 取较严的一个作为最终 `tokio::time::timeout` 时长。
 pub fn js_runner(
     js_code: JsCodeInput,

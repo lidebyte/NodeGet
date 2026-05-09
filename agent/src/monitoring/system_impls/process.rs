@@ -1,35 +1,43 @@
 #[cfg(target_os = "windows")]
 pub fn count_processes() -> u32 {
-    use windows_sys::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
-    use windows_sys::Win32::Foundation::{FALSE, GetLastError};
+    use windows_sys::Win32::Foundation::FALSE;
     use windows_sys::Win32::System::ProcessStatus::EnumProcesses;
+
     // 初始缓冲区容量
-    let mut mut_process_ids_capacity = 1024;
+    let mut cap: usize = 1024;
 
     loop {
         let mut bytes_returned: u32 = 0;
-        let mut process_ids: Vec<u32> = Vec::with_capacity(mut_process_ids_capacity);
+        let mut process_ids: Vec<u32> = vec![0; cap];
 
-        let result = unsafe {
+        let buf_bytes_u32: u32 = match u32::try_from(cap.saturating_mul(size_of::<u32>())) {
+            Ok(v) => v,
+            Err(_) => return 0, // cap 太大溢出 u32，放弃
+        };
+
+        let ok = unsafe {
             EnumProcesses(
-                process_ids.as_mut_ptr().cast(),
-                (mut_process_ids_capacity * size_of::<u32>()) as u32,
+                process_ids.as_mut_ptr(),
+                buf_bytes_u32,
                 &raw mut bytes_returned,
             )
         };
 
-        if result == FALSE {
-            let error_code = unsafe { GetLastError() };
-
-            if error_code == ERROR_INSUFFICIENT_BUFFER {
-                mut_process_ids_capacity += 1024; // 扩充缓冲区容量
-                continue;
-            }
-            return 0; // 其他错误
+        if ok == FALSE {
+            // EnumProcesses 在 buffer 小于实际需要时并**不会**返回
+            // ERROR_INSUFFICIENT_BUFFER：它会成功地返回 `bytes_returned == buf_bytes_u32`，
+            // 提示可能截断。因此这里的失败分支只处理真正的 API 错误，不再扩容。
+            return 0;
         }
 
-        let num_processes = bytes_returned / size_of::<u32>() as u32;
-        return num_processes;
+        // 当 bytes_returned 等于提供的 buffer 大小时，结果可能被截断，
+        // 按 MSDN 文档加倍重试直到不再饱和。
+        if bytes_returned == buf_bytes_u32 {
+            cap = cap.saturating_mul(2);
+            continue;
+        }
+
+        return bytes_returned / size_of::<u32>() as u32;
     }
 }
 

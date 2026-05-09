@@ -10,12 +10,26 @@ use sysinfo::System;
 use tokio::sync::{Mutex, MutexGuard, OnceCell};
 use virtualization_detect::detect_virtualization;
 
+/// 把 `count_processes()` 的同步 IO（Linux 下是遍历 `/proc`，Windows 下是 `EnumProcesses`）
+/// 卸到 tokio blocking 池，避免阻塞 runtime worker。失败时返回 0 与同步路径一致。
+async fn count_processes_async() -> u32 {
+    tokio::task::spawn_blocking(count_processes)
+        .await
+        .unwrap_or(0)
+}
+
 /// 获取精确的 OS 版本号
 ///
 /// 优先使用 sysinfo 的 `os_version()`（读取 `/etc/os-release` 的 `VERSION_ID`），
 /// 但某些发行版（如 Debian）的 `VERSION_ID` 只有主版本号（如 "11"），
 /// 需要 fallback 到发行版专属文件获取小版本号（如 "11.1"）。
-fn get_precise_os_version() -> String {
+///
+/// 采用 `tokio::fs` 的异步读取，避免在 tokio runtime worker 上做 blocking IO；
+/// `/etc/*` 本地文件几乎都是内存页缓存命中，开销极小。
+// 非 Linux 平台上函数体里没有 `.await`（Linux 专属分支被 `cfg` 剔除），clippy 会
+// 误报 unused_async；保留 async 签名便于调用点统一（跨平台 `.await` 写法相同）。
+#[cfg_attr(not(target_os = "linux"), allow(clippy::unused_async))]
+async fn get_precise_os_version() -> String {
     let version = System::os_version().unwrap_or_default();
 
     #[cfg(target_os = "linux")]
@@ -23,7 +37,7 @@ fn get_precise_os_version() -> String {
         let distro = System::distribution_id();
         // Debian: /etc/debian_version 包含精确版本号（如 "11.1"）
         if distro == "debian" {
-            if let Ok(v) = std::fs::read_to_string("/etc/debian_version") {
+            if let Ok(v) = tokio::fs::read_to_string("/etc/debian_version").await {
                 let v = v.trim();
                 if !v.is_empty() {
                     return v.to_string();
@@ -32,7 +46,7 @@ fn get_precise_os_version() -> String {
         }
         // Alpine: /etc/alpine-release 包含精确版本号（如 "3.18.4"）
         if distro == "alpine" {
-            if let Ok(v) = std::fs::read_to_string("/etc/alpine-release") {
+            if let Ok(v) = tokio::fs::read_to_string("/etc/alpine-release").await {
                 let v = v.trim();
                 if !v.is_empty() {
                     return v.to_string();
@@ -41,7 +55,7 @@ fn get_precise_os_version() -> String {
         }
         // RHEL/CentOS: /etc/redhat-release 包含 "... release X.Y ..."
         if distro == "rhel" || distro == "centos" || distro == "rocky" || distro == "almalinux" {
-            if let Ok(content) = std::fs::read_to_string("/etc/redhat-release") {
+            if let Ok(content) = tokio::fs::read_to_string("/etc/redhat-release").await {
                 // 格式: "CentOS Linux release 7.9.2009 (Core)"
                 if let Some(pos) = content.find("release ") {
                     let after = &content[pos + 8..];
@@ -112,7 +126,7 @@ impl StaticDataFromSystem {
                 system_name: System::name().unwrap_or_default(),
                 system_kernel: System::kernel_version().unwrap_or_default(),
                 system_kernel_version: System::long_os_version().unwrap_or_default(),
-                system_os_version: get_precise_os_version(),
+                system_os_version: get_precise_os_version().await,
                 system_os_long_version: System::long_os_version().unwrap_or_default(),
                 distribution_id: System::distribution_id(),
                 system_host_name: System::host_name().unwrap_or_default(),
@@ -195,7 +209,7 @@ impl DynamicDataFromSystem {
             DynamicSystemData {
                 boot_time: System::boot_time(),
                 uptime: System::uptime(),
-                process_count: u64::from(count_processes()),
+                process_count: u64::from(count_processes_async().await),
             },
         )
     }
@@ -229,7 +243,7 @@ impl DynamicDataFromSystem {
 
         self.3.boot_time = System::boot_time();
         self.3.uptime = System::uptime();
-        self.3.process_count = u64::from(count_processes());
+        self.3.process_count = u64::from(count_processes_async().await);
     }
 
     // 异步刷新并获取动态系统数据

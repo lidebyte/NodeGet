@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::AGENT_CONFIG;
 use crate::rpc::wrap_json_into_rpc_with_id_1;
+use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
 use nodeget_lib::config::agent::Server;
@@ -144,55 +144,24 @@ async fn connection_manager(
 
         let (mut ws_write, mut ws_read) = ws_stream.split();
 
-        // 校验 Server UUID
-        {
-            let rpc = wrap_json_into_rpc_with_id_1("nodeget-server_uuid", vec![]);
-            if let Err(e) = ws_write.send(Message::Text(Utf8Bytes::from(rpc))).await {
-                error!("[{name}] Write error (uuid check): {e}, triggering reconnect...");
+        // 校验 Server UUID，区分"网络错误"与"UUID 不匹配"两种情形
+        // (review_agent.md #71)。
+        match verify_server_uuid(name, &server.server_uuid, &mut ws_write, &mut ws_read).await {
+            UuidVerification::Ok => {}
+            UuidVerification::Transport(reason) => {
+                // 网络层问题：写失败、读超时、连接早关。触发 connect_with_retry
+                // 的指数退避即可，不需要额外长 sleep。
+                error!("[{name}] Server UUID check transport error: {reason}. reconnecting...");
                 continue;
             }
-
-            // 读取响应，带 5 秒超时
-            let uuid_response = match timeout(Duration::from_secs(5), ws_read.next()).await {
-                Ok(Some(Ok(Message::Text(text)))) => {
-                    // 解析 JSON-RPC 响应中的 result 字段
-                    serde_json::from_str::<serde_json::Value>(&text)
-                        .ok()
-                        .and_then(|v| v.get("result")?.as_str().map(String::from))
-                }
-                Ok(Some(Ok(_))) => None,
-                Ok(Some(Err(e))) => {
-                    error!("[{name}] Read error during uuid check: {e}, triggering reconnect...");
-                    continue;
-                }
-                Ok(None) => {
-                    error!("[{name}] Connection closed during uuid check, triggering reconnect...");
-                    continue;
-                }
-                Err(_) => {
-                    error!("[{name}] Timeout waiting for uuid response, triggering reconnect...");
-                    continue;
-                }
-            };
-
-            match uuid_response {
-                Some(remote_uuid) if remote_uuid == server.server_uuid => {
-                    debug!("[{name}] Server UUID verified: {remote_uuid}");
-                }
-                Some(remote_uuid) => {
-                    error!(
-                        "[{name}] Server UUID mismatch: expected '{}', got '{remote_uuid}'. Skipping this server.",
-                        server.server_uuid
-                    );
-                    sleep(Duration::from_secs(30)).await;
-                    continue;
-                }
-                None => {
-                    error!(
-                        "[{name}] Failed to parse server UUID response, triggering reconnect..."
-                    );
-                    continue;
-                }
+            UuidVerification::Mismatch { expected, got } => {
+                // 对端身份错误。多半是 url 配错 / 反代到错了集群；短时间内狂连意义不大，
+                // 继续用旧的 30s 冷却防止刷屏。
+                error!(
+                    "[{name}] Server UUID mismatch: expected '{expected}', got '{got}'. Waiting 30s before retry."
+                );
+                sleep(Duration::from_secs(30)).await;
+                continue;
             }
         }
 
@@ -203,15 +172,7 @@ async fn connection_manager(
                     "task_register_task",
                     vec![
                         serde_json::Value::String(token.clone()),
-                        serde_json::Value::String(
-                            AGENT_CONFIG
-                                .get()
-                                .expect("Agent config not initialized")
-                                .read()
-                                .expect("AGENT_CONFIG lock poisoned")
-                                .agent_uuid
-                                .to_string(),
-                        ),
+                        serde_json::Value::String(crate::config_access::current_agent_uuid_string()),
                     ],
                 );
 
@@ -224,13 +185,39 @@ async fn connection_manager(
 
                 match timeout(Duration::from_secs(5), ws_read.next()).await {
                     Ok(Some(Ok(Message::Text(text)))) => {
-                        let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
-                        if v.get("error").is_some() {
-                            error!("[{name}] Task subscription rejected: {v}, reconnecting...");
-                            continue;
-                        }
-                        if v.get("result").is_some() {
-                            info!("[{name}] Task listener registered successfully");
+                        // 显式解析 JSON-RPC 响应：只在 id 与请求匹配、没有 error 且有 result
+                        // 时才视为注册成功。任何不符合预期的响应都触发重连，避免把错位消息
+                        // 当成 ack 吞掉。
+                        match serde_json::from_str::<serde_json::Value>(&text) {
+                            Ok(v) => {
+                                let id_ok =
+                                    v.get("id").and_then(serde_json::Value::as_u64) == Some(1);
+                                if !id_ok {
+                                    error!(
+                                        "[{name}] Task subscription ack id mismatch: {v}, reconnecting..."
+                                    );
+                                    continue;
+                                }
+                                if v.get("error").is_some() {
+                                    error!(
+                                        "[{name}] Task subscription rejected: {v}, reconnecting..."
+                                    );
+                                    continue;
+                                }
+                                if v.get("result").is_none() {
+                                    error!(
+                                        "[{name}] Task subscription ack missing result: {v}, reconnecting..."
+                                    );
+                                    continue;
+                                }
+                                info!("[{name}] Task listener registered successfully");
+                            }
+                            Err(e) => {
+                                error!(
+                                    "[{name}] Failed to parse task subscription ack: {e}, raw={text}, reconnecting..."
+                                );
+                                continue;
+                            }
                         }
                     }
                     Err(_) => {
@@ -253,7 +240,6 @@ async fn connection_manager(
                         debug!("[{name}] Non-text message during subscription ack");
                     }
                 }
-                let () = ();
             }
         }
 
@@ -296,7 +282,7 @@ async fn connection_manager(
                                     && let Some(err) = check.error {
                                         error!("[{name}] RPC Error Response: {}: {}", err.code, err.message);
                                     }
-                            if let Err(_) = downlink_tx.send(msg) {
+                            if downlink_tx.send(msg).is_err() {
                                 warn!("[{name}] Downlink send skipped (no active receivers)");
                             }
                         }
@@ -319,17 +305,13 @@ async fn connection_manager(
                     loop { tokio::time::sleep(Duration::from_hours(1)).await; }
                 }
                 } => {
-                    let agent_uuid = AGENT_CONFIG
-                        .get()
-                        .expect("Agent not initialized")
-                        .read()
-                        .expect("AGENT_CONFIG poisoned")
-                        .agent_uuid;
                     let rpc = wrap_json_into_rpc_with_id_1(
                         "task_register_task",
                         vec![
                             serde_json::Value::String(token.clone()),
-                            serde_json::Value::String(agent_uuid.to_string()),
+                            serde_json::Value::String(
+                                crate::config_access::current_agent_uuid_string(),
+                            ),
                         ],
                     );
                     if let Err(e) = ws_write.send(Message::Text(Utf8Bytes::from(rpc))).await {
@@ -346,9 +328,70 @@ async fn connection_manager(
     }
 }
 
+/// 针对单次 WebSocket 握手后 server-uuid 校验的结果。
+///
+/// 拆出这个 enum 是为了让 caller 能区分"网络问题"（重试即可）与"对端身份错误"
+/// （大概率配置/DNS/反向代理错路，狂连无意义），分别走不同的退避。详见
+/// `review_agent.md` #71。
+enum UuidVerification {
+    /// 对端返回的 server uuid 和 agent 侧配置一致，握手通过。
+    Ok,
+    /// 写失败、读失败、连接早关、读超时、响应格式错等。连带 `{reason}` 仅用于日志。
+    Transport(String),
+    /// 对端 uuid 与预期不一致；expected 是 agent 配置的值，got 是对端返回的值。
+    Mismatch { expected: String, got: String },
+}
+
+/// 向刚建立的 WebSocket 发起 `nodeget-server_uuid` 请求并校验响应。
+///
+/// 注意：这个函数消耗的是 split 后的可变引用，调用方需要在校验通过后继续使用同一对
+/// `ws_write`/`ws_read`。我们借走引用而非 `&mut WebSocketStream` 是为了配合后续
+/// 收发循环 —— 那里也基于 split 后的 sink / stream。
+async fn verify_server_uuid(
+    name: &str,
+    expected_uuid: &str,
+    ws_write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+    ws_read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+) -> UuidVerification {
+    let rpc = wrap_json_into_rpc_with_id_1("nodeget-server_uuid", vec![]);
+    if let Err(e) = ws_write.send(Message::Text(Utf8Bytes::from(rpc))).await {
+        return UuidVerification::Transport(format!("write error: {e}"));
+    }
+
+    let remote_uuid = match timeout(Duration::from_secs(5), ws_read.next()).await {
+        Ok(Some(Ok(Message::Text(text)))) => serde_json::from_str::<serde_json::Value>(&text)
+            .ok()
+            .and_then(|v| v.get("result")?.as_str().map(String::from)),
+        Ok(Some(Ok(_))) => {
+            return UuidVerification::Transport(
+                "unexpected non-text frame during uuid check".to_owned(),
+            );
+        }
+        Ok(Some(Err(e))) => return UuidVerification::Transport(format!("read error: {e}")),
+        Ok(None) => return UuidVerification::Transport("connection closed".to_owned()),
+        Err(_) => return UuidVerification::Transport("response timeout (5s)".to_owned()),
+    };
+
+    match remote_uuid {
+        Some(got) if got == expected_uuid => {
+            debug!("[{name}] Server UUID verified: {got}");
+            UuidVerification::Ok
+        }
+        Some(got) => UuidVerification::Mismatch {
+            expected: expected_uuid.to_owned(),
+            got,
+        },
+        None => UuidVerification::Transport("response missing `result` field".to_owned()),
+    }
+}
+
 // 带重试机制的 WebSocket 连接
 //
-// 尝试连接到指定的 WebSocket URL，如果失败则进行重试
+// 尝试连接到指定的 WebSocket URL，如果失败则进行指数退避重试，无固定重试上限。
+//
+// # 退避策略
+// `wait = clamp(base * 2^(retry-1), base, cap)`，再叠加 ±20% 的随机抖动，
+// 以避免多 agent / 多 server 在服务端恢复瞬间集体重连造成雪崩。
 //
 // # 参数
 // * `name` - 服务器名称（用于日志）
@@ -356,13 +399,18 @@ async fn connection_manager(
 // * `connect_timeout` - 每次 WebSocket 建连尝试的超时时间
 //
 // # 返回值
-// 成功时返回 WebSocket 流，失败时返回错误
+// 建连成功后返回 WebSocket 流；调用方退出任务（如 `JoinHandle::abort` 取消）会终止循环。
 async fn connect_with_retry(
     name: &str,
     url: &str,
     connect_timeout: Duration,
 ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>> {
-    let mut retry_count = 0;
+    use rand::Rng;
+
+    const BASE_BACKOFF: Duration = Duration::from_secs(1);
+    const MAX_BACKOFF: Duration = Duration::from_mins(1);
+
+    let mut retry_count: u32 = 0;
     loop {
         match timeout(connect_timeout, connect_async(url)).await {
             Ok(Ok((ws_stream, _))) => return Ok(ws_stream),
@@ -377,15 +425,25 @@ async fn connect_with_retry(
             }
         }
 
-        retry_count += 1;
-        if retry_count >= 30 {
-            return Err(NodegetError::AgentConnectionError(format!(
-                "Failed to connect to {name} after {retry_count} retries"
-            )));
-        }
-        let wait_secs = if retry_count < 5 { 2 } else { 5 };
-        debug!("[{name}] Retry attempt {retry_count} in {wait_secs}s...");
-        sleep(Duration::from_secs(wait_secs)).await;
+        retry_count = retry_count.saturating_add(1);
+
+        // 指数退避：base * 2^(retry-1)，截断到 MAX_BACKOFF
+        let exp_secs = BASE_BACKOFF.as_secs().saturating_mul(
+            1u64.checked_shl(retry_count.saturating_sub(1).min(16))
+                .unwrap_or(1),
+        );
+        let base_wait = Duration::from_secs(exp_secs).min(MAX_BACKOFF);
+
+        // ±20% jitter，避免与其它 agent 同时重连
+        let jitter_factor: f64 = rand::rng().random_range(0.8..1.2);
+        let wait =
+            Duration::from_secs_f64(base_wait.as_secs_f64() * jitter_factor).min(MAX_BACKOFF);
+
+        debug!(
+            "[{name}] Retry attempt {retry_count} in {}ms...",
+            wait.as_millis()
+        );
+        sleep(wait).await;
     }
 }
 

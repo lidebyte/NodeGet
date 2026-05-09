@@ -109,7 +109,7 @@ max_connections = 10
 - 仅在非 Windows 平台生效。
 - `enable_unix_socket = true` 时，Server 会在保留原 `ws_listener` 的同时，额外监听 `unix_socket_path`。
 - `unix_socket_path` 未配置时默认 `/var/lib/nodeget.sock`。
-- Unix Socket 与 TCP 共享同一套 Axum 主路由（包括 JSON-RPC HTTP 路由与 `/worker-route/*`）。
+- Unix Socket 与 TCP 共享同一套 Axum 主路由（包括 JSON-RPC HTTP 路由、`/nodeget/worker-route/*`、`/nodeget/static/*` 等）。
 - 启动时会尝试移除已有同名 socket 文件；服务重载/退出时会清理 socket 文件。
 
 示例（通过 Unix Socket 调用 JSON-RPC）：

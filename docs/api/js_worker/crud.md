@@ -10,18 +10,28 @@
 
 ```json
 {
-  "token": "demo_token",            // 鉴权 Token
-  "name": "demo_worker",            // 脚本唯一名称
-  "description": "demo worker for monitoring", // 可选，脚本描述
-  "js_script_base64": "ZXhwb3J0IGRlZmF1bHQg...", // Base64 编码后的 UTF-8 JS 源码
-  "route_name": "demo_route",       // 可选，HTTP 路由入口，路径前缀为 /worker-route/{route_name}
-  "runtime_clean_time": 60000,       // 脚本 Runtime 空闲清理时间（毫秒），null 表示不自动清理
-  "env": {                           // 可选，任意 JSON 结构，存入数据库并可在运行时传给脚本
+  "token": "demo_token",
+  // 鉴权 Token
+  "name": "demo_worker",
+  // 脚本唯一名称
+  "description": "demo worker for monitoring",
+  // 可选，脚本描述
+  "js_script_base64": "ZXhwb3J0IGRlZmF1bHQg...",
+  // Base64 编码后的 UTF-8 JS 源码
+  "route_name": "demo_route",
+  // 可选，HTTP 路由入口，路径前缀为 /nodeget/worker-route/{route_name}（旧 /worker-route 仍兼容）
+  "runtime_clean_time": 60000,
+  // 脚本 Runtime 空闲清理时间（毫秒），null 表示不自动清理
+  "env": {
+    // 可选，任意 JSON 结构，存入数据库并可在运行时传给脚本
     "region": "ap-east-1"
   },
-  "max_run_time": 30000,             // 可选，单次执行总时长硬上限（毫秒）；null 用默认 30000
-  "max_stack_size": 1048576,         // 可选，QuickJS C 栈上限（字节）；null 用默认 1 MiB
-  "max_heap_size": 8388608           // 可选，QuickJS 堆上限（字节）；null 用默认 8 MiB
+  "max_run_time": 30000,
+  // 可选，单次执行总时长硬上限（毫秒）；null 用默认 30000
+  "max_stack_size": 1048576,
+  // 可选，QuickJS C 栈上限（字节）；null 用默认 1 MiB
+  "max_heap_size": 8388608
+  // 可选，QuickJS 堆上限（字节）；null 用默认 8 MiB
 }
 ```
 
@@ -30,14 +40,20 @@
 - `name`：脚本唯一名称。
 - `description`：可选，脚本描述。
 - `js_script_base64`：Base64 编码后的 UTF-8 JS 源码。
-- `route_name`：可选。若设置则开启 HTTP 路由入口，对应路径前缀为 `/worker-route/{route_name}`。
+- `route_name`：可选。若设置则开启 HTTP 路由入口，对应路径前缀为 `/nodeget/worker-route/{route_name}`（旧
+  `/worker-route/{route_name}` 仍保留兼容，后续版本将移除）。
 - `runtime_clean_time`：脚本 Runtime 空闲清理时间（毫秒），`null` 表示不自动清理。
 - `env`：可选，任意 JSON 结构，存入数据库并可在运行时传给脚本。
-- `max_run_time`：可选，单次执行从 runtime spawn 到返回值的墙上时钟上限（毫秒）。超时会先通过 QuickJS interrupt handler 抛不可捕获异常打断（包括纯 CPU 死循环如 `while(true){}`），同时外层 `tokio::time::timeout` 兜住 async 路径。`null` 或非正数 → 应用层默认 `30000`（30 秒）。
-- `max_stack_size`：可选，QuickJS C 栈字节数上限，对应 `rt.set_max_stack_size(...)`。控制递归深度。`null` 或非正数 → 应用层默认 `1048576`（1 MiB）。
-- `max_heap_size`：可选，QuickJS 堆内存字节数上限，对应 `rt.set_memory_limit(...)`。超限时 JS 端抛 `InternalError: out of memory`。`null` 或非正数 → 应用层默认 `8388608`（8 MiB）。
+- `max_run_time`：可选，单次执行从 runtime spawn 到返回值的墙上时钟上限（毫秒）。超时会先通过 QuickJS interrupt handler
+  抛不可捕获异常打断（包括纯 CPU 死循环如 `while(true){}`），同时外层 `tokio::time::timeout` 兜住 async 路径。`null`
+  或非正数 → 应用层默认 `30000`（30 秒）。
+- `max_stack_size`：可选，QuickJS C 栈字节数上限，对应 `rt.set_max_stack_size(...)`。控制递归深度。`null` 或非正数 → 应用层默认
+  `1048576`（1 MiB）。
+- `max_heap_size`：可选，QuickJS 堆内存字节数上限，对应 `rt.set_memory_limit(...)`。超限时 JS 端抛
+  `InternalError: out of memory`。`null` 或非正数 → 应用层默认 `8388608`（8 MiB）。
 
-> 三个限制字段在运行池（`js-worker_run`、HTTP route、`inlineCall`、`js-worker_get_rt_pool`）中的 runtime 上首次创建时生效；`update` 时内部会 evict 对应 worker，下次调用重建 runtime 时采用新值。
+> 三个限制字段在运行池（`js-worker_run`、HTTP route、`inlineCall`、`js-worker_get_rt_pool`）中的 runtime 上首次创建时生效；
+`update` 时内部会 evict 对应 worker，下次调用重建 runtime 时采用新值。
 
 ### 权限要求
 
@@ -48,16 +64,26 @@
 
 ```json
 {
-  "id": 1,                                     // 数据库中的记录 ID
-  "name": "demo_worker",                       // 脚本名称
-  "description": "demo worker for monitoring", // 脚本描述
-  "route_name": "demo_route",                  // HTTP 路由名称
-  "runtime_clean_time": 60000,                 // 空闲清理时间（毫秒），null 表示不清理
-  "max_run_time": 30000,                       // 单次执行硬上限（毫秒），null 表示使用默认 30000
-  "max_stack_size": 1048576,                   // QuickJS C 栈上限（字节），null 表示使用默认 1 MiB
-  "max_heap_size": 8388608,                    // QuickJS 堆上限（字节），null 表示使用默认 8 MiB
-  "create_at": 1774652000123,                  // 创建时间戳（毫秒）
-  "update_at": 1774652000123                   // 更新时间戳（毫秒）
+  "id": 1,
+  // 数据库中的记录 ID
+  "name": "demo_worker",
+  // 脚本名称
+  "description": "demo worker for monitoring",
+  // 脚本描述
+  "route_name": "demo_route",
+  // HTTP 路由名称
+  "runtime_clean_time": 60000,
+  // 空闲清理时间（毫秒），null 表示不清理
+  "max_run_time": 30000,
+  // 单次执行硬上限（毫秒），null 表示使用默认 30000
+  "max_stack_size": 1048576,
+  // QuickJS C 栈上限（字节），null 表示使用默认 1 MiB
+  "max_heap_size": 8388608,
+  // QuickJS 堆上限（字节），null 表示使用默认 8 MiB
+  "create_at": 1774652000123,
+  // 创建时间戳（毫秒）
+  "update_at": 1774652000123
+  // 更新时间戳（毫秒）
 }
 ```
 
@@ -118,8 +144,10 @@
 
 ```json
 {
-  "token": "demo_token",  // 鉴权 Token
-  "name": "demo_worker"   // 脚本唯一名称
+  "token": "demo_token",
+  // 鉴权 Token
+  "name": "demo_worker"
+  // 脚本唯一名称
 }
 ```
 
@@ -132,19 +160,30 @@
 
 ```json
 {
-  "name": "demo_worker",                       // 脚本名称
-  "description": "demo worker for monitoring", // 脚本描述
-  "route_name": "demo_route",                  // HTTP 路由名称
-  "js_script_base64": "ZXhwb3J0IGRlZmF1bHQg...", // Base64 编码的 JS 源码
-  "runtime_clean_time": 60000,                 // 空闲清理时间（毫秒）
-  "max_run_time": 30000,                       // 单次执行硬上限（毫秒），null 使用默认 30000
-  "max_stack_size": 1048576,                   // QuickJS C 栈上限（字节），null 使用默认 1 MiB
-  "max_heap_size": 8388608,                    // QuickJS 堆上限（字节），null 使用默认 8 MiB
-  "env": {                                     // 脚本环境变量
+  "name": "demo_worker",
+  // 脚本名称
+  "description": "demo worker for monitoring",
+  // 脚本描述
+  "route_name": "demo_route",
+  // HTTP 路由名称
+  "js_script_base64": "ZXhwb3J0IGRlZmF1bHQg...",
+  // Base64 编码的 JS 源码
+  "runtime_clean_time": 60000,
+  // 空闲清理时间（毫秒）
+  "max_run_time": 30000,
+  // 单次执行硬上限（毫秒），null 使用默认 30000
+  "max_stack_size": 1048576,
+  // QuickJS C 栈上限（字节），null 使用默认 1 MiB
+  "max_heap_size": 8388608,
+  // QuickJS 堆上限（字节），null 使用默认 8 MiB
+  "env": {
+    // 脚本环境变量
     "region": "ap-east-1"
   },
-  "create_at": 1774652000123,                  // 创建时间戳（毫秒）
-  "update_at": 1774652000123                   // 更新时间戳（毫秒）
+  "create_at": 1774652000123,
+  // 创建时间戳（毫秒）
+  "update_at": 1774652000123
+  // 更新时间戳（毫秒）
 }
 ```
 
@@ -198,18 +237,28 @@
 
 ```json
 {
-  "token": "demo_token",            // 鉴权 Token
-  "name": "demo_worker",            // 脚本唯一名称
-  "description": "demo worker v2",  // 可选，脚本描述；传 null 可清空描述
-  "js_script_base64": "ZXhwb3J0IGRlZmF1bHQg...", // Base64 编码后的 UTF-8 JS 源码
-  "route_name": "demo_route_v2",    // 可选，HTTP 路由名称；null 可关闭路由绑定
-  "runtime_clean_time": 120000,      // 脚本 Runtime 空闲清理时间（毫秒），null 表示不自动清理
-  "env": {                           // 可选，任意 JSON 结构
+  "token": "demo_token",
+  // 鉴权 Token
+  "name": "demo_worker",
+  // 脚本唯一名称
+  "description": "demo worker v2",
+  // 可选，脚本描述；传 null 可清空描述
+  "js_script_base64": "ZXhwb3J0IGRlZmF1bHQg...",
+  // Base64 编码后的 UTF-8 JS 源码
+  "route_name": "demo_route_v2",
+  // 可选，HTTP 路由名称；null 可关闭路由绑定
+  "runtime_clean_time": 120000,
+  // 脚本 Runtime 空闲清理时间（毫秒），null 表示不自动清理
+  "env": {
+    // 可选，任意 JSON 结构
     "region": "ap-southeast-1"
   },
-  "max_run_time": 60000,             // 可选，单次执行硬上限（毫秒）；null 重置为默认 30000
-  "max_stack_size": 2097152,         // 可选，QuickJS C 栈上限（字节）；null 重置为默认 1 MiB
-  "max_heap_size": 16777216          // 可选，QuickJS 堆上限（字节）；null 重置为默认 8 MiB
+  "max_run_time": 60000,
+  // 可选，单次执行硬上限（毫秒）；null 重置为默认 30000
+  "max_stack_size": 2097152,
+  // 可选，QuickJS C 栈上限（字节）；null 重置为默认 1 MiB
+  "max_heap_size": 16777216
+  // 可选，QuickJS 堆上限（字节）；null 重置为默认 8 MiB
 }
 ```
 
@@ -221,7 +270,8 @@
 - `route_name`：可选；`null` 可关闭该脚本的 HTTP 路由绑定。
 - `runtime_clean_time`：脚本 Runtime 空闲清理时间（毫秒），`null` 表示不自动清理。
 - `env`：可选，任意 JSON 结构。
-- `max_run_time` / `max_stack_size` / `max_heap_size`：语义与 Create 一致。传 `null` 等价于清空数据库列，下次运行使用应用层默认值 30 秒 / 1 MiB / 8 MiB。
+- `max_run_time` / `max_stack_size` / `max_heap_size`：语义与 Create 一致。传 `null` 等价于清空数据库列，下次运行使用应用层默认值
+  30 秒 / 1 MiB / 8 MiB。
 - 更新后会重新预编译字节码。
 - 已存在的 Runtime 实例会被立即驱逐，后续运行会使用新版本脚本与新的限制值。
 
@@ -234,15 +284,24 @@
 
 ```json
 {
-  "success": true,                  // 是否成功
-  "name": "demo_worker",           // 脚本名称
-  "description": "demo worker v2", // 更新后的描述
-  "route_name": "demo_route_v2",   // 更新后的路由名称
-  "runtime_clean_time": 120000,    // 更新后的空闲清理时间（毫秒）
-  "max_run_time": 60000,           // 更新后的单次执行硬上限（毫秒）
-  "max_stack_size": 2097152,       // 更新后的 C 栈上限（字节）
-  "max_heap_size": 16777216,       // 更新后的堆上限（字节）
-  "update_at": 1774652666000       // 更新时间戳（毫秒）
+  "success": true,
+  // 是否成功
+  "name": "demo_worker",
+  // 脚本名称
+  "description": "demo worker v2",
+  // 更新后的描述
+  "route_name": "demo_route_v2",
+  // 更新后的路由名称
+  "runtime_clean_time": 120000,
+  // 更新后的空闲清理时间（毫秒）
+  "max_run_time": 60000,
+  // 更新后的单次执行硬上限（毫秒）
+  "max_stack_size": 2097152,
+  // 更新后的 C 栈上限（字节）
+  "max_heap_size": 16777216,
+  // 更新后的堆上限（字节）
+  "update_at": 1774652666000
+  // 更新时间戳（毫秒）
 }
 ```
 
@@ -302,8 +361,10 @@
 
 ```json
 {
-  "token": "demo_token",  // 鉴权 Token
-  "name": "demo_worker"   // 脚本唯一名称
+  "token": "demo_token",
+  // 鉴权 Token
+  "name": "demo_worker"
+  // 脚本唯一名称
 }
 ```
 
@@ -318,8 +379,10 @@
 
 ```json
 {
-  "success": true,      // 是否成功
-  "rows_affected": 1    // 影响的数据库行数
+  "success": true,
+  // 是否成功
+  "rows_affected": 1
+  // 影响的数据库行数
 }
 ```
 
@@ -362,16 +425,22 @@
 
 ```json
 {
-  "token": "demo_token",          // 鉴权 Token
-  "js_script_name": "demo_worker", // 要运行的脚本名称
-  "run_type": "call",             // 可选，call / inline_call / cron / route，默认 call
-  "params": {                     // 必填，任意 JSON，传给脚本入口函数第一个参数
+  "token": "demo_token",
+  // 鉴权 Token
+  "js_script_name": "demo_worker",
+  // 要运行的脚本名称
+  "run_type": "call",
+  // 可选，call / inline_call / cron / route，默认 call
+  "params": {
+    // 必填，任意 JSON，传给脚本入口函数第一个参数
     "hello": "world"
   },
-  "env": {                        // 可选，传入时使用请求里的 env；不传时使用数据库中该脚本保存的 env
+  "env": {
+    // 可选，传入时使用请求里的 env；不传时使用数据库中该脚本保存的 env
     "override": true
   },
-  "compile_mode": "bytecode"      // 可选，bytecode / source，默认 bytecode
+  "compile_mode": "bytecode"
+  // 可选，bytecode / source，默认 bytecode
 }
 ```
 
@@ -428,7 +497,8 @@
 
 ```json
 {
-  "id": 123 // js_result 表中的记录 ID
+  "id": 123
+  // js_result 表中的记录 ID
 }
 ```
 
@@ -495,7 +565,8 @@
 
 ```json
 {
-  "token": "demo_token" // 鉴权 Token
+  "token": "demo_token"
+  // 鉴权 Token
 }
 ```
 
@@ -556,7 +627,8 @@
 
 ```json
 {
-  "token": "demo_token" // 鉴权 Token
+  "token": "demo_token"
+  // 鉴权 Token
 }
 ```
 
@@ -571,14 +643,20 @@
 
 ```json
 {
-  "total_workers": 2,          // 当前池中 Worker 总数
+  "total_workers": 2,
+  // 当前池中 Worker 总数
   "workers": [
     {
-      "script_name": "demo_worker",    // 脚本名称
-      "active_requests": 0,            // 当前活跃请求数
-      "last_used_ms": 1774652000123,   // 最后使用时间戳（毫秒）
-      "idle_ms": 4200,                 // 空闲时长（毫秒）
-      "runtime_clean_time_ms": 60000   // 空闲清理阈值（毫秒）
+      "script_name": "demo_worker",
+      // 脚本名称
+      "active_requests": 0,
+      // 当前活跃请求数
+      "last_used_ms": 1774652000123,
+      // 最后使用时间戳（毫秒）
+      "idle_ms": 4200,
+      // 空闲时长（毫秒）
+      "runtime_clean_time_ms": 60000
+      // 空闲清理阈值（毫秒）
     }
   ]
 }

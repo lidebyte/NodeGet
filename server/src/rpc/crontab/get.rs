@@ -186,8 +186,8 @@ async fn extract_allowed_uuids(token_info: &Token) -> anyhow::Result<Vec<Cron>> 
                 Scope::AgentUuid(uuid) => {
                     allowed_uuids.push(*uuid);
                 }
-                Scope::KvNamespace(_) | Scope::JsWorker(_) => {
-                    // KvNamespace scope 不适用于 crontab 权限检查，忽略
+                Scope::KvNamespace(_) | Scope::JsWorker(_) | Scope::StaticFile(_) => {
+                    // 不适用于 crontab 权限检查，忽略
                 }
             }
         }

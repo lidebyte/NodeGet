@@ -16,6 +16,7 @@ pub mod js_result;
 pub mod js_worker;
 pub mod kv;
 pub mod nodeget;
+pub mod static_file;
 pub mod task;
 pub mod token;
 
@@ -114,6 +115,7 @@ fn build_modules() -> RpcModule<NodegetServerRpcImpl> {
     use crate::rpc::js_worker::RpcServer as JsWorkerRpcServer;
     use crate::rpc::kv::RpcServer as KvRpcServer;
     use crate::rpc::nodeget::RpcServer as NodeGetRpcServer;
+    use crate::rpc::static_file::RpcServer as StaticFileRpcServer;
     use crate::rpc::task::RpcServer as TaskRpcServer;
     use crate::rpc::token::RpcServer as TokenRpcServer;
 
@@ -150,6 +152,10 @@ fn build_modules() -> RpcModule<NodegetServerRpcImpl> {
 
     rpc_module
         .merge(js_result::JsResultRpcImpl.into_rpc())
+        .unwrap();
+
+    rpc_module
+        .merge(static_file::StaticFileRpcImpl.into_rpc())
         .unwrap();
 
     rpc_module

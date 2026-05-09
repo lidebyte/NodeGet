@@ -47,7 +47,8 @@ async function handler(params, env, ctx) {}
     - `ctx.runType`：当前入口名（`"onCall"` / `"onInlineCall"` / `"onCron"` / `"onRoute"`）
     - `ctx.workerName`：当前 Worker 的名字
     - `ctx.inlineCall(js_worker_name, params, timeout_sec?)`：调用另一个 JS Worker 的 `onInlineCall`，返回其结果；会写入
-      `js_result`。`timeout_sec` 为可选软超时（秒，正有限数），最终生效超时取 `timeout_sec` 与目标 Worker `max_run_time` 中较小者。
+      `js_result`。`timeout_sec` 为可选软超时（秒，正有限数），最终生效超时取 `timeout_sec` 与目标 Worker `max_run_time`
+      中较小者。
     - `ctx.inlineCaller`：调用者脚本名（如 A 通过 `inlineCall` 调 B，则 B 中该值为 `"A"`；顶层调用为 `null`）
 
 `onRoute` 入口签名：
@@ -132,4 +133,4 @@ export default {
 
 - 创建/更新时会进行"仅编译"预检查，不会执行业务逻辑。
 - 真正执行发生在 `js-worker_run`。
-- HTTP 路由调用发生在 `/worker-route/{route_name}`。
+- HTTP 路由调用发生在 `/nodeget/worker-route/{route_name}`（旧 `/worker-route/{route_name}` 仍兼容，后续版本将移除）。

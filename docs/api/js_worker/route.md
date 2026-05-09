@@ -2,10 +2,19 @@
 
 当 `js_worker.route_name` 不为 `null` 时，该脚本会启用 HTTP 路由入口。
 
-路由路径：
+路由路径（推荐）：
 
-- `http://{host}/worker-route/{route_name}`
-- `http://{host}/worker-route/{route_name}/*`
+- `http://{host}/nodeget/worker-route/{route_name}`
+- `http://{host}/nodeget/worker-route/{route_name}/*`
+
+::: tip 路径迁移说明
+旧的 `/worker-route/{route_name}` 与 `/worker-route/{route_name}/*` 仍然可用，行为与新路径**完全一致**，仅为给接入方提供迁移过渡。
+
+**为什么迁移：** NodeGet 内置 HTTP 端点正在统一到 `/nodeget/` 前缀下（当前还有 `/nodeget/static/*`
+），可以避免与业务自定义路径冲突，同时也便于反向代理规则统一。
+
+**建议：** 新接入请直接使用 `/nodeget/worker-route/`；已有接入请在方便时将反向代理 / 客户端中的调用地址切换到新前缀。后续版本会移除旧路径。
+:::
 
 ## 启用方式
 
@@ -15,6 +24,8 @@
 
 - `route_name` 必须唯一（数据库唯一索引）
 - 只允许字符：`a-z A-Z 0-9 . _ -`
+- 长度最长 128 字符
+- 不能是 `.` / `..` 等纯点组合
 - 请求体大小限制为 **8 MB**，超出会返回 HTTP 413 错误
 
 ## 脚本入口
@@ -72,5 +83,5 @@ export default {
 请求：
 
 ```bash
-curl -i http://127.0.0.1:2211/worker-route/demo_route/hello
+curl -i http://127.0.0.1:2211/nodeget/worker-route/demo_route/hello
 ```

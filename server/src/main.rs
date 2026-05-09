@@ -27,6 +27,7 @@ mod logging;
 pub(crate) mod monitoring_buffer;
 pub(crate) mod monitoring_uuid_cache;
 mod rpc_timing;
+mod static_file;
 pub(crate) mod static_hash_cache;
 
 pub(crate) mod monitoring_last_cache;

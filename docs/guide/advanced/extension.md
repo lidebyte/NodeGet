@@ -32,33 +32,33 @@ demo-extension
 
 ```json
 {
-    "name":"my-extenstion",
-    "icon":"assets/icon.svg",
-    "routes":[
-        {
-            "type":"node",
-            "name":"extension-test-1",
-            "icon":"assets/route-icon.svg",
-            "entry":"index.html"
-        },
-        {
-            "type":"global",
-            "name":"extension-test-2",
-            "icon":"assets/route-icon.svg",
-            "entry":"index.html"
-        }
-    ],
-    "limits":[
-        // 这里由用户输入，Token 所需要的权限列表
-    ],
-    // 非关键字段，仅记录用
-    "version": "1.0",
-    "description": "Just an extension demo.",
-    "extension_version": 1,
-    "author":"",
-    "repository":"",
-    "homepage":"",
-    "license":"",
+  "name": "my-extenstion",
+  "icon": "assets/icon.svg",
+  "routes": [
+    {
+      "type": "node",
+      "name": "extension-test-1",
+      "icon": "assets/route-icon.svg",
+      "entry": "index.html"
+    },
+    {
+      "type": "global",
+      "name": "extension-test-2",
+      "icon": "assets/route-icon.svg",
+      "entry": "index.html"
+    }
+  ],
+  "limits": [
+    // 这里由用户输入，Token 所需要的权限列表
+  ],
+  // 非关键字段，仅记录用
+  "version": "1.0",
+  "description": "Just an extension demo.",
+  "extension_version": 1,
+  "author": "",
+  "repository": "",
+  "homepage": "",
+  "license": ""
 }
 ```
 
@@ -71,7 +71,7 @@ demo-extension
 - 用户确认后**创建对应的 Token**
 - 生成一个随机的 UUID 代表扩展的 ID，这里暂定为 `Extension_UUID`
 - 把 `resources` 目录下的静态文件利用后文提到的**静态文件服务上传**到
-  `https://主控域名/worker-route/static-worker-route/Extension_UUID/` 路由下
+  `https://主控域名/nodeget/worker-route/static-worker-route/Extension_UUID/` 路由下
 - 动态注册前端路由
 - 把 `app.json` 和 `Extension_UUID`、Token 等信息**储存到 Kv 内**，namespace 为 `extension-infomation`，key 是
   `Extension_UUID`
@@ -83,7 +83,7 @@ demo-extension
 下面是这个 Worker 暴露的接口：
 
 ```js
-const resourceURL = 'https://WS_HOST/worker-route/static-worker-route/{Extension_UUID}/hello';
+const resourceURL = 'https://WS_HOST/nodeget/worker-route/static-worker-route/{Extension_UUID}/hello';
 
 // 储存静态资源
 fetch(resourceURL,{
@@ -102,7 +102,8 @@ fetch(resourceURL).then(r => r.text()).then(console.log)
 因此，在文件上传完成后，其实只是在网页上开一个 `iframe`，类似于：
 
 ```html
-<iframe src="https://WS_HOST/worker-route/static-worker-route/Extension_UUID/{entry}#?token={}&node=${AGENT_UUID}&theme={theme}"></iframe>
+
+<iframe src="https://WS_HOST/nodeget/worker-route/static-worker-route/Extension_UUID/{entry}#?token={}&node=${AGENT_UUID}&theme={theme}"></iframe>
 ```
 
 ## 插件开发及分发

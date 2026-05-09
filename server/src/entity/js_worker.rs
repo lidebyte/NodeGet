@@ -16,11 +16,11 @@ pub struct Model {
     pub route_name: Option<String>,
     pub env: Option<Json>,
     pub runtime_clean_time: Option<i64>,
-    /// 单次执行总时长硬上限（ms）。NULL 时应用层兜底为 `DEFAULT_MAX_RUN_TIME_MS`（30_000）。
+    /// 单次执行总时长硬上限（ms）。NULL 时应用层兜底为 `DEFAULT_MAX_RUN_TIME_MS`（`30_000`）。
     pub max_run_time: Option<i64>,
-    /// QuickJS C 栈上限（bytes）。NULL 时应用层兜底为 `DEFAULT_MAX_STACK_SIZE_BYTES`（1 MiB）。
+    /// `QuickJS` C 栈上限（bytes）。NULL 时应用层兜底为 `DEFAULT_MAX_STACK_SIZE_BYTES`（1 MiB）。
     pub max_stack_size: Option<i64>,
-    /// QuickJS 堆内存上限（bytes）。NULL 时应用层兜底为 `DEFAULT_MAX_HEAP_SIZE_BYTES`（8 MiB）。
+    /// `QuickJS` 堆内存上限（bytes）。NULL 时应用层兜底为 `DEFAULT_MAX_HEAP_SIZE_BYTES`（8 MiB）。
     pub max_heap_size: Option<i64>,
     pub create_at: i64,
     pub update_at: i64,

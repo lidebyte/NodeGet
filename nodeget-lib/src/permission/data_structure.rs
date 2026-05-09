@@ -41,6 +41,8 @@ pub enum Scope {
     KvNamespace(String),
     // JsWorker 作用域，通过名称指定
     JsWorker(String),
+    // 静态文件服务作用域，通过名称指定
+    StaticFile(String),
 }
 
 // 权限枚举，定义不同类型的操作权限
@@ -74,6 +76,8 @@ pub enum Permission {
     JsResult(JsResult),
     // 动态监控摘要权限
     DynamicMonitoringSummary(DynamicMonitoringSummary),
+    // 静态文件服务权限
+    StaticFile(StaticFile),
 }
 
 // 静态监控权限枚举
@@ -200,4 +204,13 @@ pub enum JsWorker {
 pub enum JsResult {
     Read(String),
     Delete(String),
+}
+
+// 静态文件服务权限枚举
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StaticFile {
+    Read,
+    Write,
+    Delete,
 }

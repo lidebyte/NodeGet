@@ -1,6 +1,7 @@
+use crate::config_access::get_agent_config;
 use crate::rpc::multi_server::{send_to, subscribe_to};
 use crate::rpc::{JsonRpcTask, wrap_json_into_rpc_with_id_1};
-use crate::{AGENT_ARGS, AGENT_CONFIG, RELOAD_NOTIFY};
+use crate::{AGENT_ARGS, RELOAD_NOTIFY};
 use log::{error, info, warn};
 use nodeget_lib::config::agent::AgentConfig;
 use nodeget_lib::error::NodegetError;
@@ -21,16 +22,6 @@ pub type Result<T> = anyhow::Result<T>;
 /// ICMP/TCP/HTTP ping 与 execute / `http_request` 的预期上限，又不
 /// 会让真正卡住的任务在 agent 进程里无限堆积。
 const TASK_MAX_TIMEOUT: Duration = Duration::from_mins(10);
-
-// 安全地获取 Agent 配置
-fn get_agent_config() -> Result<AgentConfig> {
-    AGENT_CONFIG
-        .get()
-        .ok_or_else(|| NodegetError::Other("Agent config not initialized".to_owned()))?
-        .read()
-        .map(|guard| guard.clone())
-        .map_err(|_| NodegetError::Other("AGENT_CONFIG lock poisoned".to_owned()).into())
-}
 
 // 任务执行模块
 mod execute;
@@ -186,6 +177,17 @@ pub async fn handle_task() {
                 };
 
             let mut per_task = JoinSet::new();
+            // 这里是 per-server 的"per-message JoinSet"：与外层 `server_tasks`
+            // 构成两级 JoinSet 而非两级 tokio::spawn（review_agent.md #69 把这个误读成
+            // "嵌套 spawn"）。两级 JoinSet 的好处是：
+            //   1. 外层 server 任务被 abort（例如配置热重载）时，JoinSet 本身随作用域 drop，
+            //      从而级联 abort 所有在飞的 per-message 任务，不需要额外的
+            //      CancellationToken。
+            //   2. server 间互相隔离：一个 server 的 broadcast channel 关闭只会结束
+            //      自己的 per_task JoinSet，不影响别的 server。
+            // task_token / server_name 在外层 clone 一次、在 spawn 内 move，是 async move
+            // 闭包必须的开销；再减少也需要换用 Arc，但 token 通常只有几十字节，抗不过
+            // 切换至 Arc 带来的 cache-line 争用，权衡后维持 clone。
 
             loop {
                 let message = match rx.recv().await {
@@ -213,6 +215,14 @@ pub async fn handle_task() {
                         Err(_) => return,
                     };
 
+                    // 协议上 server 把推送给 agent 的任务 RPC 和 agent 订阅的 RPC
+                    // 共用同一个 method 字符串 "task_register_task"：
+                    //   - 订阅阶段：agent → server， params 里带 {token}；
+                    //   - 任务下发：server → agent， params 里带 TaskEvent。
+                    // 这里处理的是"服务器下发的任务"，因此过滤 method；不等于则 silently
+                    // 丢弃（多数情况是订阅 ack 或其它共享通道里的 RPC）。
+                    // TODO: 协议修订时应改成 task_subscribe /
+                    // task_dispatch 两个独立 method，完全避免此类共享含义。
                     if json_rpc.method != "task_register_task" {
                         return;
                     }
@@ -290,18 +300,51 @@ pub async fn handle_task() {
                         }
                     };
 
-                    let server_token_value = match serde_json::to_value(server_token) {
+                    let server_token_value = match serde_json::to_value(&server_token) {
                         Ok(v) => v,
                         Err(e) => {
+                            // server_token 就是一个 String，理论上这里不可能失败；
+                            // 但即便真失败了，我们也宁愿把 token 直接以字符串塞进 JSON
+                            // 载荷（server 侧仍能从 error_message 里定位问题），也好过
+                            // 直接 return 让任务在 server 一侧永远悬挂。
                             error!("Failed to serialize server token: {e}");
-                            return;
+                            serde_json::Value::String(server_token.clone())
                         }
                     };
-                    let response_value = match serde_json::to_value(response) {
+                    let response_value = match serde_json::to_value(&response) {
                         Ok(v) => v,
                         Err(e) => {
+                            // 原始 `response` 只含 primitive 字段（u32/String/bool/Option<…>），
+                            // `to_value` 几乎不可能失败；真失败了仍需回 ack 防止 server 把任务
+                            // 标为永远 pending (review_agent.md #62)。这里退化成最小 error ack：
+                            // 只带 task_id 与原始错误，丢掉 task_event_result 复杂结构。
                             error!("Failed to serialize response: {e}");
-                            return;
+                            let fallback = TaskEventResponse {
+                                task_id: response.task_id,
+                                agent_uuid: response.agent_uuid,
+                                task_token: response.task_token.clone(),
+                                timestamp: response.timestamp,
+                                success: false,
+                                error_message: Some(format!(
+                                    "agent failed to serialize task response: {e}"
+                                )),
+                                task_event_result: None,
+                            };
+                            serde_json::to_value(&fallback).unwrap_or_else(|inner| {
+                                // 兜底再兜底：手写一个最小 JSON 对象。
+                                error!("Fallback response also failed to serialize: {inner}");
+                                serde_json::json!({
+                                    "task_id": response.task_id,
+                                    "agent_uuid": response.agent_uuid,
+                                    "task_token": response.task_token,
+                                    "timestamp": response.timestamp,
+                                    "success": false,
+                                    "error_message": format!(
+                                        "agent failed to serialize task response: {e}"
+                                    ),
+                                    "task_event_result": serde_json::Value::Null,
+                                })
+                            })
                         }
                     };
                     let rpc = wrap_json_into_rpc_with_id_1(
@@ -319,11 +362,7 @@ pub async fn handle_task() {
                             "[{server_name}] EditConfig applied successfully, restarting agent..."
                         );
                         time::sleep(Duration::from_millis(300)).await;
-                        if let Some(notify) = RELOAD_NOTIFY.get() {
-                            notify.notify_one();
-                        } else {
-                            error!("Reload notify is not initialized");
-                        }
+                        RELOAD_NOTIFY.notify_one();
                     }
 
                     if should_self_update_restart {
