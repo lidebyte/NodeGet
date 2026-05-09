@@ -39,6 +39,9 @@ pub async fn read(token: String, name: String) -> RpcResult<Box<RawValue>> {
             "route_name": model.route_name,
             "js_script_base64": js_script_base64,
             "runtime_clean_time": model.runtime_clean_time,
+            "max_run_time": model.max_run_time,
+            "max_stack_size": model.max_stack_size,
+            "max_heap_size": model.max_heap_size,
             "env": model.env,
             "create_at": model.create_at,
             "update_at": model.update_at

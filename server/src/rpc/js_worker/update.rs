@@ -24,6 +24,9 @@ pub async fn update(
     route_name: Option<String>,
     runtime_clean_time: Option<i64>,
     env: Option<Value>,
+    max_run_time: Option<i64>,
+    max_stack_size: Option<i64>,
+    max_heap_size: Option<i64>,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
         let name = name.trim().to_owned();
@@ -97,6 +100,9 @@ pub async fn update(
         active_model.description = Set(description);
         active_model.route_name = Set(route_name);
         active_model.runtime_clean_time = Set(runtime_clean_time);
+        active_model.max_run_time = Set(max_run_time);
+        active_model.max_stack_size = Set(max_stack_size);
+        active_model.max_heap_size = Set(max_heap_size);
         active_model.env = Set(env);
         active_model.update_at = Set(now_ms);
 
@@ -114,6 +120,10 @@ pub async fn update(
             "name": updated.name,
             "description": updated.description,
             "route_name": updated.route_name,
+            "runtime_clean_time": updated.runtime_clean_time,
+            "max_run_time": updated.max_run_time,
+            "max_stack_size": updated.max_stack_size,
+            "max_heap_size": updated.max_heap_size,
             "update_at": updated.update_at
         });
 

@@ -5,6 +5,8 @@ use rquickjs::{
 };
 use serde_json::Value;
 use std::ffi::CString;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{debug, error, trace};
 use uuid::Uuid;
 
@@ -14,6 +16,141 @@ pub mod runtime_pool;
 pub(crate) mod server_runtime;
 
 pub(crate) const JS_RT_MEMORY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+
+/// `max_run_time` 的应用层默认值（ms）。见 `js_worker.max_run_time`，NULL 时兜底。
+pub const DEFAULT_MAX_RUN_TIME_MS: u64 = 30_000;
+/// `max_stack_size` 的应用层默认值（bytes）。QuickJS 本身默认 256 KiB，我们提到 1 MiB。
+pub const DEFAULT_MAX_STACK_SIZE_BYTES: usize = 1024 * 1024;
+/// `max_heap_size` 的应用层默认值（bytes）。与历史常量 `JS_RT_MEMORY_LIMIT_BYTES` 一致。
+pub const DEFAULT_MAX_HEAP_SIZE_BYTES: usize = JS_RT_MEMORY_LIMIT_BYTES;
+
+/// 来自 DB 的可选限制三元组，外加应用层默认兜底。
+///
+/// 三个字段对应 `js_worker` 表的 `max_run_time` / `max_stack_size` / `max_heap_size`。
+/// 调用方拿到 `Option<i64>` 直接塞进 `RuntimeLimits::from_model`，后续所有 runtime
+/// setup / 超时处理都走同一路径。
+#[derive(Clone, Copy, Debug)]
+pub struct RuntimeLimits {
+    /// 执行时长硬上限（ms），外层 `tokio::time::timeout` + `set_interrupt_handler`。
+    pub max_run_time_ms: u64,
+    /// QuickJS C 栈字节数上限，`set_max_stack_size`。
+    pub max_stack_size_bytes: usize,
+    /// QuickJS 堆字节数上限，`set_memory_limit`。
+    pub max_heap_size_bytes: usize,
+}
+
+impl RuntimeLimits {
+    /// 从 `js_worker` 表三个可选字段构造；NULL / 非正数 / 超出 usize 范围 → 兜底默认值。
+    #[must_use]
+    pub fn from_model(
+        max_run_time_ms: Option<i64>,
+        max_stack_size_bytes: Option<i64>,
+        max_heap_size_bytes: Option<i64>,
+    ) -> Self {
+        fn pos_u64(v: Option<i64>, default: u64) -> u64 {
+            match v {
+                Some(n) if n > 0 => u64::try_from(n).unwrap_or(default),
+                _ => default,
+            }
+        }
+        fn pos_usize(v: Option<i64>, default: usize) -> usize {
+            match v {
+                Some(n) if n > 0 => usize::try_from(n).unwrap_or(default),
+                _ => default,
+            }
+        }
+        Self {
+            max_run_time_ms: pos_u64(max_run_time_ms, DEFAULT_MAX_RUN_TIME_MS),
+            max_stack_size_bytes: pos_usize(max_stack_size_bytes, DEFAULT_MAX_STACK_SIZE_BYTES),
+            max_heap_size_bytes: pos_usize(max_heap_size_bytes, DEFAULT_MAX_HEAP_SIZE_BYTES),
+        }
+    }
+
+    /// 纯默认，不读 DB 时的构造方式（compile、辅助路径等）。
+    #[must_use]
+    pub const fn defaults() -> Self {
+        Self {
+            max_run_time_ms: DEFAULT_MAX_RUN_TIME_MS,
+            max_stack_size_bytes: DEFAULT_MAX_STACK_SIZE_BYTES,
+            max_heap_size_bytes: DEFAULT_MAX_HEAP_SIZE_BYTES,
+        }
+    }
+
+    /// 和调用方传入的软超时取 min，返回应该用于 `tokio::time::timeout` 的 Duration。
+    ///
+    /// 语义：调用方（inline_call 的 `timeoutSec`）提出"我最多等这么久"，
+    /// worker 配置的 `max_run_time_ms` 是"你最多跑这么久"——两者都要遵守，取较严的一个。
+    #[must_use]
+    pub fn effective_timeout(
+        self,
+        caller_soft_timeout: Option<std::time::Duration>,
+    ) -> std::time::Duration {
+        let hard = std::time::Duration::from_millis(self.max_run_time_ms);
+        match caller_soft_timeout {
+            Some(soft) => hard.min(soft),
+            None => hard,
+        }
+    }
+}
+
+impl Default for RuntimeLimits {
+    fn default() -> Self {
+        Self::defaults()
+    }
+}
+
+/// 对刚创建的 `AsyncRuntime` 应用 heap / stack 限制。
+///
+/// `set_memory_limit(0)` 在 QuickJS 里表示"无限"；我们始终传正数。
+/// `set_max_stack_size` 必须在第一次执行脚本之前调用才有意义。
+async fn apply_runtime_limits(rt: &AsyncRuntime, limits: RuntimeLimits) {
+    rt.set_memory_limit(limits.max_heap_size_bytes).await;
+    rt.set_max_stack_size(limits.max_stack_size_bytes).await;
+}
+
+/// 安装一个 interrupt handler，让 `set_kill_flag(true)` 能硬杀 JS 执行。
+///
+/// QuickJS 会在 JS 解释循环的检查点（function 调用、循环边、指令数等）
+/// 回调 handler。返回 true 则 QuickJS 抛一个"不可捕获异常"，`try/catch`
+/// 抓不住，脚本会被真正终止。我们把 flag 拿在外面：看门狗 OS 线程超时后
+/// `store(true)`，QuickJS 下一个检查点就被打断。
+///
+/// 这样即便脚本里写的是 `while(true){}` 这种无 await 纯 CPU 循环，也能被杀。
+async fn install_kill_handler(rt: &AsyncRuntime, kill_flag: Arc<AtomicBool>) {
+    rt.set_interrupt_handler(Some(Box::new(move || {
+        kill_flag.load(Ordering::Relaxed)
+    })))
+    .await;
+}
+
+/// 启动硬超时看门狗：独立 OS 线程，到时间仍未被 cancel 就 `store(true)`。
+///
+/// 关键点：rquickjs 的 `async_with` 在执行同步 JS（纯 CPU 循环）时会阻塞
+/// 整个 tokio task，`tokio::time::timeout` 打不断，必须由一个**不在 tokio
+/// 里**的看门狗来 set kill_flag，让 QuickJS interrupt handler 在下个检查
+/// 点读到 true 抛异常，才能真正硬杀 CPU 密集脚本。
+///
+/// 返回 `(cancel_tx, join_handle)`；执行成功结束时 drop `cancel_tx`（或
+/// `send(())`）让看门狗线程立即退出，再 `join_handle.join()` 回收。
+fn spawn_kill_watchdog(
+    kill_flag: Arc<AtomicBool>,
+    duration: std::time::Duration,
+) -> (std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>) {
+    let (cancel_tx, cancel_rx) = std::sync::mpsc::channel::<()>();
+    let handle = std::thread::Builder::new()
+        .name("js-runner-watchdog".to_owned())
+        .spawn(move || {
+            // recv_timeout 返回 Err(Timeout) = 到点未被取消 → 置 flag
+            // 返回 Ok(_) 或 Err(Disconnected) = 被取消 / sender drop → 正常退出
+            if let Err(std::sync::mpsc::RecvTimeoutError::Timeout) =
+                cancel_rx.recv_timeout(duration)
+            {
+                kill_flag.store(true, Ordering::Relaxed);
+            }
+        })
+        .expect("failed to spawn js-runner-watchdog OS thread");
+    (cancel_tx, handle)
+}
 
 pub fn js_error(stage: &'static str, message: impl Into<String>) -> Error {
     Error::new_from_js_message(stage, "String", message.into())
@@ -184,6 +321,10 @@ pub fn compile_js_module_to_bytecode(js_code: impl AsRef<str>) -> Result<Vec<u8>
 
 /// # Errors
 /// Returns an error if building the host runtime or JS execution fails.
+///
+/// `limits` 来自 `js_worker` 表，控制 heap / stack / 执行时长硬上限。
+/// `caller_soft_timeout` 是 inline_call / 调用方传入的软超时；与 `limits.max_run_time_ms`
+/// 取较严的一个作为最终 `tokio::time::timeout` 时长。
 pub fn js_runner(
     js_code: JsCodeInput,
     run_type: RunType,
@@ -191,9 +332,10 @@ pub fn js_runner(
     env_value: Value,
     current_script_name: Option<String>,
     inline_caller: Option<String>,
-    execution_timeout: Option<std::time::Duration>,
+    caller_soft_timeout: Option<std::time::Duration>,
+    limits: RuntimeLimits,
 ) -> Result<Value, Error> {
-    debug!(target: "js_runtime", run_type = ?run_type, has_inline_caller = inline_caller.is_some(), "executing JS runner");
+    debug!(target: "js_runtime", run_type = ?run_type, has_inline_caller = inline_caller.is_some(), max_run_time_ms = limits.max_run_time_ms, max_stack_size_bytes = limits.max_stack_size_bytes, max_heap_size_bytes = limits.max_heap_size_bytes, "executing JS runner");
     let host_rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -202,12 +344,18 @@ pub fn js_runner(
             js_error("js_runner", format!("Failed to build host runtime: {e}"))
         })?;
 
-    host_rt.block_on(async move {
-        let execute = async {
-            let rt = AsyncRuntime::new()?;
-            rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
-            let ctx = AsyncContext::full(&rt).await?;
+    let effective_timeout = limits.effective_timeout(caller_soft_timeout);
 
+    host_rt.block_on(async move {
+        let rt = AsyncRuntime::new()?;
+        apply_runtime_limits(&rt, limits).await;
+        // interrupt handler + 共享 kill_flag：外层 timeout 过后 store(true)，
+        // QuickJS 下次检查点抛 uncatchable，纯 CPU while(true){} 也能打断。
+        let kill_flag = Arc::new(AtomicBool::new(false));
+        install_kill_handler(&rt, Arc::clone(&kill_flag)).await;
+
+        let ctx = AsyncContext::full(&rt).await?;
+        let execute = async {
             let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
                 init_js_runtime_globals(&ctx)?;
                 let global = ctx.globals();
@@ -431,38 +579,59 @@ pub fn js_runner(
             js_result
         };
 
-        match execution_timeout {
-            Some(duration) => match tokio::time::timeout(duration, execute).await {
-                Ok(result) => result,
-                Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
-            },
-            None => execute.await,
+        // 硬超时路径：OS 线程看门狗 + interrupt handler 打断 CPU 循环，
+        // 外层 tokio::time::timeout 捕捉 async 路径上的挂起（await 点停在
+        // 远端 I/O 等）。两层共同保障 max_run_time_ms 兜得住。
+        let (cancel_tx, watchdog) = spawn_kill_watchdog(Arc::clone(&kill_flag), effective_timeout);
+        let outcome = match tokio::time::timeout(effective_timeout, execute).await {
+            Ok(result) => result,
+            Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
+        };
+        // 执行完/超时都 cancel 看门狗并回收线程
+        let _ = cancel_tx.send(());
+        let _ = watchdog.join();
+        if kill_flag.load(Ordering::Relaxed) && outcome.is_err() {
+            return Err(js_error(
+                "js_runner",
+                format!(
+                    "JavaScript execution exceeded max_run_time_ms={}",
+                    limits.max_run_time_ms
+                ),
+            ));
         }
+        outcome
     })
 }
 
 /// # Errors
 /// Returns an error if building the host runtime or JS execution fails.
+///
+/// 见 `js_runner` 的 `limits` 说明，语义一致。
 pub fn js_runner_source_mode(
     source_code: &str,
     script_name: &str,
     run_type: RunType,
     input_params: Value,
     env_value: Value,
-    execution_timeout: Option<std::time::Duration>,
+    caller_soft_timeout: Option<std::time::Duration>,
+    limits: RuntimeLimits,
 ) -> Result<Value, Error> {
-    debug!(target: "js_runtime", script_name = %script_name, run_type = ?run_type, "executing JS runner in source mode");
+    debug!(target: "js_runtime", script_name = %script_name, run_type = ?run_type, max_run_time_ms = limits.max_run_time_ms, "executing JS runner in source mode");
     let host_rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| js_error("js_runner", format!("Failed to build host runtime: {e}")))?;
 
-    host_rt.block_on(async move {
-        let execute = async {
-            let rt = AsyncRuntime::new()?;
-            rt.set_memory_limit(JS_RT_MEMORY_LIMIT_BYTES).await;
-            let ctx = AsyncContext::full(&rt).await?;
+    let effective_timeout = limits.effective_timeout(caller_soft_timeout);
 
+    host_rt.block_on(async move {
+        let rt = AsyncRuntime::new()?;
+        apply_runtime_limits(&rt, limits).await;
+        let kill_flag = Arc::new(AtomicBool::new(false));
+        install_kill_handler(&rt, Arc::clone(&kill_flag)).await;
+
+        let ctx = AsyncContext::full(&rt).await?;
+        let execute = async {
             let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
                 init_js_runtime_globals(&ctx)?;
                 let global = ctx.globals();
@@ -663,12 +832,22 @@ pub fn js_runner_source_mode(
             js_result
         };
 
-        match execution_timeout {
-            Some(duration) => match tokio::time::timeout(duration, execute).await {
-                Ok(result) => result,
-                Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
-            },
-            None => execute.await,
+        let (cancel_tx, watchdog) = spawn_kill_watchdog(Arc::clone(&kill_flag), effective_timeout);
+        let outcome = match tokio::time::timeout(effective_timeout, execute).await {
+            Ok(result) => result,
+            Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
+        };
+        let _ = cancel_tx.send(());
+        let _ = watchdog.join();
+        if kill_flag.load(Ordering::Relaxed) && outcome.is_err() {
+            return Err(js_error(
+                "js_runner",
+                format!(
+                    "JavaScript execution exceeded max_run_time_ms={}",
+                    limits.max_run_time_ms
+                ),
+            ));
         }
+        outcome
     })
 }

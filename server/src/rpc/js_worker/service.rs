@@ -1,6 +1,7 @@
 use crate::entity::{js_result, js_worker};
 use crate::js_runtime::js_runner_source_mode;
 use crate::js_runtime::runtime_pool;
+use crate::js_runtime::RuntimeLimits;
 use crate::rpc::RpcHelper;
 use crate::rpc::js_worker::JsWorkerRpcImpl;
 use nodeget_lib::error::NodegetError;
@@ -39,6 +40,11 @@ pub async fn enqueue_defined_js_worker_run(
         ))
     })?;
     let runtime_clean_time = model.runtime_clean_time;
+    let limits = RuntimeLimits::from_model(
+        model.max_run_time,
+        model.max_stack_size,
+        model.max_heap_size,
+    );
     let resolved_env =
         env_override.unwrap_or_else(|| model.env.unwrap_or_else(|| serde_json::json!({})));
     let run_type_text = run_type.as_str().to_owned();
@@ -71,6 +77,7 @@ pub async fn enqueue_defined_js_worker_run(
                 params,
                 resolved_env,
                 runtime_clean_time,
+                limits,
             )
             .await;
 
@@ -150,6 +157,11 @@ pub async fn run_inline_call_and_record_result(
             "js_worker '{script_name}' has no precompiled bytecode"
         ))
     })?;
+    let limits = RuntimeLimits::from_model(
+        model.max_run_time,
+        model.max_stack_size,
+        model.max_heap_size,
+    );
     let env = model.env.unwrap_or_else(|| serde_json::json!({}));
 
     let start_time = get_local_timestamp_ms_i64().unwrap_or(0);
@@ -179,6 +191,7 @@ pub async fn run_inline_call_and_record_result(
             Some(target_script_name),
             inline_caller,
             timeout_duration,
+            limits,
         )
         .map_err(|e| {
             NodegetError::Other(format!(
@@ -256,6 +269,11 @@ pub async fn enqueue_source_js_worker_run(
     let worker_id = model.id;
     let worker_name = model.name.clone();
     let source_code = model.js_script;
+    let limits = RuntimeLimits::from_model(
+        model.max_run_time,
+        model.max_stack_size,
+        model.max_heap_size,
+    );
     let resolved_env =
         env_override.unwrap_or_else(|| model.env.unwrap_or_else(|| serde_json::json!({})));
     let run_type_text = run_type.as_str().to_owned();
@@ -289,7 +307,9 @@ pub async fn enqueue_source_js_worker_run(
                 run_type,
                 params,
                 resolved_env,
-                Some(std::time::Duration::from_mins(5)),
+                // source mode 没有调用方软超时；效果完全由 limits.max_run_time_ms 决定
+                None,
+                limits,
             )
         })
         .await
