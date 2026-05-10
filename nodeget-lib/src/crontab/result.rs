@@ -1,5 +1,6 @@
+#[derive(Debug, Clone)]
 pub struct CrontabResult {
-    id: i64,
+    pub id: i64,
 
     pub cron_id: i64,
     pub cron_name: String,

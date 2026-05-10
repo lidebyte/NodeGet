@@ -411,6 +411,67 @@
 }
 ```
 
+## List
+
+列出某个静态目录下的所有相对文件路径。
+
+### 方法
+
+调用方法名为 `static_list`，需要提供以下参数：
+
+```json
+{
+  "token": "demo_token",
+  "name": "my-site"
+}
+```
+
+### 权限要求
+
+- Permission: `StaticFile::Read`
+- Scope: `StaticFile(name)` 或 `Global`
+
+### 返回值
+
+返回该静态目录下所有文件的相对路径数组，**按字典序排序**，统一使用 `/` 作为分隔符（跨平台一致）：
+
+```json
+["404.html", "docs/1.md", "docs/guide/intro.md", "index.html"]
+```
+
+注意事项：
+
+- 只列出**文件**，不包括目录本身
+- 软链接不会被跟随，避免越权访问 `{static_path}/{path}/` 外部内容
+- 磁盘目录不存在（例如刚 `static_create` 但还没上传）时返回空数组 `[]`
+- 路径中包含非 UTF-8 分段的文件会被跳过（仅日志告警）
+
+### 完整示例
+
+请求:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "static_list",
+  "params": {
+    "token": "demo_token",
+    "name": "my-site"
+  },
+  "id": 1
+}
+```
+
+响应:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": ["404.html", "docs/1.md", "index.html"]
+}
+```
+
 ## HTTP 访问静态文件
 
 ### 默认路由

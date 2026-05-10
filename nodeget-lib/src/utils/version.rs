@@ -69,7 +69,8 @@ impl NodeGetVersion {
 
 impl Display for NodeGetVersion {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!(
+        write!(
+            f,
             "NodeGet {} Version: {}\nGit Branch: {}\nCommit SHA: {}\nCommit Date: {}\nCommit Message: {}\nBuild Time: {}\nTarget Triple: {}\nRustc Channel: {}\nRustc Version: {}\nRustc Commit Date: {}\nRustc Commit Hash: {}\nRustc LLVM Version: {}",
             self.binary_type,
             self.cargo_version,
@@ -84,6 +85,6 @@ impl Display for NodeGetVersion {
             self.rustc_commit_date,
             self.rustc_commit_hash,
             self.rustc_llvm_version
-        ))
+        )
     }
 }

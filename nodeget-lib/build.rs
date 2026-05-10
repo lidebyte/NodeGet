@@ -21,13 +21,12 @@ fn main() {
     let commit_ts = run("git", &["log", "-1", "--format=%cI"]);
     let commit_msg = run("git", &["log", "-1", "--format=%s"]);
 
-    // Build timestamp (ISO 8601)
+    // Build timestamp (seconds since UNIX epoch)
     let build_time = {
         let d = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
-        // Simple UTC timestamp — good enough for display
         format!("{d}")
     };
 

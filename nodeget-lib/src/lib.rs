@@ -4,8 +4,7 @@
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
     clippy::similar_names,
-    clippy::too_many_lines,
-    dead_code
+    clippy::too_many_lines
 )]
 
 // 配置管理模块，处理 Agent 和 Server 的配置

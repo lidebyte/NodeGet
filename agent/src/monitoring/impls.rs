@@ -51,7 +51,8 @@ impl Monitor for StaticMonitoringData {
         let cpu = system_data.0.clone();
         let system = system_data.1.clone();
         let gpu = gpu_data.0.clone();
-        let data_hash = Self::compute_data_hash(&cpu, &system, &gpu);
+        let data_hash = Self::compute_data_hash(&cpu, &system, &gpu)
+            .expect("Static monitoring data should always be serializable");
 
         Self {
             uuid: agent_uuid,

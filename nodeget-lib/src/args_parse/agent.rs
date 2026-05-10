@@ -23,7 +23,7 @@ impl AgentArgs {
                 .next()
                 .unwrap_or_else(|| "nodeget-agent".to_owned());
             if let Err(e) = Self::try_parse_from(vec![bin_name, "-h".to_owned()]) {
-                println!("{e}");
+                tracing::info!("{e}");
                 std::process::exit(0);
             }
         }

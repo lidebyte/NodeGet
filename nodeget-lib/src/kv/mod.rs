@@ -22,9 +22,9 @@ impl KVStore {
     /// # 返回值
     /// 返回一个新的 `KVStore` 实例
     #[must_use]
-    pub fn new(namespace: String) -> Self {
+    pub fn new(namespace: impl Into<String>) -> Self {
         Self {
-            namespace,
+            namespace: namespace.into(),
             kv: HashMap::new(),
         }
     }

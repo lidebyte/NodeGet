@@ -2,6 +2,7 @@ use anyhow::Context;
 use base64::Engine as _;
 use nodeget_lib::error::NodegetError;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+use std::collections::VecDeque;
 use std::path::{Component, Path, PathBuf};
 use tracing::{debug, error, warn};
 
@@ -411,5 +412,227 @@ pub async fn delete_file(name: &str, file_path: &str) -> anyhow::Result<()> {
             error!(target: "static", name = %name, sub_path = %model.path, file = %file_path, error = %e, "failed to delete file");
             Err(NodegetError::IoError(format!("Failed to delete file: {e}")).into())
         }
+    }
+}
+
+/// 递归列出某个 static 记录目录下所有文件的相对路径
+///
+/// 返回的路径以 `/` 作为分隔符（跨平台一致），相对于 `{static_path}/{sub_path}/`。
+/// 例如 `["index.html", "docs/1.md"]`。
+///
+/// 行为：
+/// - 如果磁盘目录不存在，视为空目录返回 `vec![]`，而非报错（static 记录刚建但没上传文件是正常态）。
+/// - 不跟随符号链接（防止 symlink 逃逸 static 目录）。
+/// - 只列出普通文件，跳过目录、符号链接、socket 等。
+/// - 结果按字典序排序，保证稳定输出。
+pub async fn list_file(name: &str) -> anyhow::Result<Vec<String>> {
+    validate_name(name)?;
+    let model = cache::StaticCache::global()
+        .get_by_name(name)
+        .await
+        .ok_or_else(|| NodegetError::NotFound(format!("Static '{name}' not found")))?;
+
+    let static_path = get_static_path();
+    let base = Path::new(&static_path).join(&model.path);
+
+    let files = tokio::task::spawn_blocking(move || collect_files(&base))
+        .await
+        .map_err(|e| NodegetError::Other(format!("Failed to join file listing task: {e}")))??;
+
+    debug!(target: "static", name = %name, sub_path = %model.path, count = files.len(), "file list produced");
+    Ok(files)
+}
+
+/// 同步递归收集 `base` 下所有普通文件，返回相对 `base` 的路径字符串。
+///
+/// 使用显式栈而非递归调用，避免极深目录栈溢出。
+fn collect_files(base: &Path) -> anyhow::Result<Vec<String>> {
+    // 目录不存在或不是目录 → 返回空列表（对应 static 记录创建后还没上传文件的情况）
+    match std::fs::metadata(base) {
+        Ok(m) if m.is_dir() => {}
+        Ok(_) => return Ok(Vec::new()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => {
+            return Err(
+                NodegetError::IoError(format!("Failed to stat static dir: {e}")).into(),
+            );
+        }
+    }
+
+    let mut out: Vec<String> = Vec::new();
+    let mut queue: VecDeque<PathBuf> = VecDeque::new();
+    queue.push_back(base.to_path_buf());
+
+    while let Some(dir) = queue.pop_front() {
+        let read = match std::fs::read_dir(&dir) {
+            Ok(r) => r,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Err(NodegetError::IoError(format!(
+                    "Failed to read dir {}: {e}",
+                    dir.display()
+                ))
+                .into());
+            }
+        };
+
+        for entry in read {
+            let entry = entry.map_err(|e| {
+                NodegetError::IoError(format!(
+                    "Failed to read dir entry in {}: {e}",
+                    dir.display()
+                ))
+            })?;
+
+            // 使用 symlink_metadata 以识别符号链接本身，不跟随
+            let meta = match entry.path().symlink_metadata() {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!(target: "static", path = %entry.path().display(), error = %e, "skip entry: cannot stat");
+                    continue;
+                }
+            };
+            let ft = meta.file_type();
+
+            if ft.is_symlink() {
+                // 不跟随符号链接，避免逃逸根目录
+                continue;
+            }
+
+            let path = entry.path();
+            if ft.is_dir() {
+                queue.push_back(path);
+            } else if ft.is_file() {
+                // 构造相对路径，使用 '/' 分隔符；遇到非 UTF-8 段则跳过整个文件
+                if let Ok(rel) = path.strip_prefix(base) {
+                    let mut parts: Vec<&str> = Vec::new();
+                    let mut ok = true;
+                    for c in rel.components() {
+                        if let Component::Normal(s) = c {
+                            if let Some(s) = s.to_str() {
+                                parts.push(s);
+                            } else {
+                                ok = false;
+                                break;
+                            }
+                        } else {
+                            // 不预期出现非 Normal 组件（来自 walk 结果），保险起见跳过
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if ok && !parts.is_empty() {
+                        out.push(parts.join("/"));
+                    } else if !ok {
+                        warn!(target: "static", path = %path.display(), "skip file: non-UTF-8 path component");
+                    }
+                }
+            }
+            // 其他类型（socket、fifo 等）跳过
+        }
+    }
+
+    out.sort();
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    /// 生成一个进程内唯一的临时目录路径（不依赖外部 crate）
+    fn unique_tempdir() -> PathBuf {
+        let n = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let p = std::env::temp_dir().join(format!(
+            "nodeget-static-test-{}-{n}-{ts}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&p).expect("create tempdir");
+        p
+    }
+
+    fn write_file(base: &Path, rel: &str, content: &[u8]) {
+        let p = base.join(rel);
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(p, content).unwrap();
+    }
+
+    #[test]
+    fn collect_files_missing_dir_returns_empty() {
+        let base = std::env::temp_dir().join("nodeget-static-test-does-not-exist-xyz");
+        let files = collect_files(&base).unwrap();
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn collect_files_empty_dir_returns_empty() {
+        let base = unique_tempdir();
+        let files = collect_files(&base).unwrap();
+        assert!(files.is_empty());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn collect_files_flat_and_nested() {
+        let base = unique_tempdir();
+        write_file(&base, "index.html", b"<html/>");
+        write_file(&base, "docs/1.md", b"# 1");
+        write_file(&base, "docs/sub/2.md", b"# 2");
+        write_file(&base, "assets/logo.png", b"\x89PNG");
+
+        let files = collect_files(&base).unwrap();
+        // 字典序
+        assert_eq!(
+            files,
+            vec![
+                "assets/logo.png".to_owned(),
+                "docs/1.md".to_owned(),
+                "docs/sub/2.md".to_owned(),
+                "index.html".to_owned(),
+            ]
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn collect_files_skips_directories_without_files() {
+        let base = unique_tempdir();
+        std::fs::create_dir_all(base.join("empty_dir/nested")).unwrap();
+        write_file(&base, "a.txt", b"a");
+
+        let files = collect_files(&base).unwrap();
+        assert_eq!(files, vec!["a.txt".to_owned()]);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collect_files_does_not_follow_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let base = unique_tempdir();
+        let outside = unique_tempdir();
+        write_file(&outside, "secret.txt", b"secret");
+        write_file(&base, "real.txt", b"real");
+
+        // 在 base 下创建指向 outside 的符号链接
+        let link = base.join("link-to-outside");
+        symlink(&outside, &link).unwrap();
+
+        let files = collect_files(&base).unwrap();
+        // 不应跟随 symlink 进入 outside，也不应把 link 本身列为文件
+        assert_eq!(files, vec!["real.txt".to_owned()]);
+
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&outside);
     }
 }
