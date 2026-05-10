@@ -57,6 +57,18 @@ pub async fn cleanup_expired_data_postgres(db: &DatabaseConnection) -> Result<Cl
         result.crontab_result = deleted;
     }
 
+    // 若本轮清理删除过任何 monitoring/task 数据，重建 AgentUuidCache 以剔除已空 UUID
+    if result.static_monitoring
+        + result.dynamic_monitoring
+        + result.dynamic_monitoring_summary
+        + result.task
+        > 0
+    {
+        if let Err(e) = crate::agent_uuid_cache::AgentUuidCache::resync().await {
+            tracing::error!(target: "agent_uuid", error = %e, "Failed to resync AgentUuidCache after postgres cleanup");
+        }
+    }
+
     Ok(result)
 }
 

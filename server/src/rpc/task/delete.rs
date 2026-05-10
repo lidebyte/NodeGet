@@ -217,6 +217,13 @@ pub async fn delete(
         );
 
         debug!(target: "task", rows_affected, condition_count, "Task delete completed");
+
+        if rows_affected > 0 {
+            if let Err(e) = crate::agent_uuid_cache::AgentUuidCache::resync().await {
+                error!(target: "agent_uuid", error = %e, "Failed to resync AgentUuidCache after task::delete");
+            }
+        }
+
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
     };
