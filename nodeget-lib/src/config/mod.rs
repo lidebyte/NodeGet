@@ -60,7 +60,10 @@ fn replace_auto_gen_uuid(content: &str, key: &str, uuid: &str) -> String {
                         // first_char 是 ASCII 单字节字符， slicing at [1..] 安全
                         let rest = &after_trimmed[1..];
                         // 使用 get(..8) 替代直接索引，防止非 ASCII 边界 panic
-                        if rest.get(..8).is_some_and(|s| s.eq_ignore_ascii_case("auto_gen")) {
+                        if rest
+                            .get(..8)
+                            .is_some_and(|s| s.eq_ignore_ascii_case("auto_gen"))
+                        {
                             let after_value = &rest[8..];
                             new_content.push_str(before);
                             new_content.push(' ');

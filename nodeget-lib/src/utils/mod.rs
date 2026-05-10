@@ -76,9 +76,8 @@ pub fn get_local_timestamp_ms() -> Result<u64> {
 /// 当系统时间获取失败或转换失败时返回错误
 pub fn get_local_timestamp_ms_i64() -> Result<i64> {
     get_local_timestamp_ms().and_then(|ts| {
-        i64::try_from(ts).map_err(|e| {
-            NodegetError::Other(format!("Timestamp conversion error: {e}")).into()
-        })
+        i64::try_from(ts)
+            .map_err(|e| NodegetError::Other(format!("Timestamp conversion error: {e}")).into())
     })
 }
 

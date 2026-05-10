@@ -635,7 +635,10 @@ fn is_case_only_rename(from: &Path, to: &Path) -> bool {
     }
 
     // 同 inode（证明底层是同一个文件，也即 case-insensitive FS 视为同名）
-    let (Ok(fm), Ok(tm)) = (std::fs::symlink_metadata(from), std::fs::symlink_metadata(to)) else {
+    let (Ok(fm), Ok(tm)) = (
+        std::fs::symlink_metadata(from),
+        std::fs::symlink_metadata(to),
+    ) else {
         return false;
     };
     fm.dev() == tm.dev() && fm.ino() == tm.ino()
@@ -658,19 +661,14 @@ fn non_atomic_check_and_rename(
 }
 
 /// 将 IO 错误转换为统一的业务错误
-fn map_rename_error(
-    err: &std::io::Error,
-    from_display: &str,
-    to_display: &str,
-) -> anyhow::Error {
+fn map_rename_error(err: &std::io::Error, from_display: &str, to_display: &str) -> anyhow::Error {
     match err.kind() {
         std::io::ErrorKind::NotFound => {
             NodegetError::NotFound(format!("Source file not found: {from_display}")).into()
         }
-        std::io::ErrorKind::AlreadyExists => NodegetError::InvalidInput(format!(
-            "Destination already exists: {to_display}"
-        ))
-        .into(),
+        std::io::ErrorKind::AlreadyExists => {
+            NodegetError::InvalidInput(format!("Destination already exists: {to_display}")).into()
+        }
         _ => {
             // 某些 libc 实现将 EEXIST 映射为 ErrorKind::Other 而非 AlreadyExists
             #[cfg(unix)]
@@ -711,9 +709,7 @@ fn collect_files(base: &Path) -> anyhow::Result<Vec<FileInfo>> {
         Ok(_) => return Ok(Vec::new()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => {
-            return Err(
-                NodegetError::IoError(format!("Failed to stat static dir: {e}")).into(),
-            );
+            return Err(NodegetError::IoError(format!("Failed to stat static dir: {e}")).into());
         }
     }
 
@@ -1016,8 +1012,7 @@ mod tests {
         std::fs::hard_link(&from, &to).unwrap();
         // 此时 from 与 to 是两个不同的文件名，指向同一 inode
 
-        let err =
-            atomic_rename_no_replace(&from, &to, "original.txt", "hardlink.txt").unwrap_err();
+        let err = atomic_rename_no_replace(&from, &to, "original.txt", "hardlink.txt").unwrap_err();
         match extract_nodeget_error(&err) {
             NodegetError::InvalidInput(_) => {}
             other => panic!("expected InvalidInput (dest exists), got: {other:?}"),
