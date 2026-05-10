@@ -1,4 +1,5 @@
 use crate::config::deserialize_uuid_or_auto;
+use crate::config::replace_auto_gen_uuid;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
@@ -158,7 +159,7 @@ impl AgentConfig {
     /// 当文件读取失败或TOML解析失败时返回错误
     pub async fn get_and_parse_config(
         path: impl AsRef<Path>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let content = fs::read_to_string(path.as_ref()).await?;
 
         // 检查并替换 auto_gen
@@ -170,43 +171,13 @@ impl AgentConfig {
 
         let config_content = if is_auto_gen {
             let new_uuid = uuid::Uuid::new_v4().to_string();
-            let mut new_content = String::with_capacity(content.len() + 32);
-            for line in content.lines() {
-                let trimmed = line.trim_start();
-                if trimmed.starts_with('#') || trimmed.is_empty() {
-                    new_content.push_str(line);
-                    new_content.push('\n');
-                    continue;
-                }
-                let key_end = trimmed
-                    .find(|c: char| c == '=' || c.is_ascii_whitespace())
-                    .unwrap_or(trimmed.len());
-                if key_end == 10 && trimmed[..key_end].eq_ignore_ascii_case("agent_uuid") {
-                    if let Some(eq_pos) = line.find('=') {
-                        let before = &line[..eq_pos + 1];
-                        let after = &line[eq_pos + 1..];
-                        let after_trimmed = after.trim_start();
-                        if let Some(first_char) = after_trimmed.chars().next() {
-                            if first_char == '\"' || first_char == '\'' {
-                                let rest = &after_trimmed[1..];
-                                if rest.len() >= 8 && rest[..8].eq_ignore_ascii_case("auto_gen") {
-                                    let after_value = &rest[8..];
-                                    new_content.push_str(before);
-                                    new_content.push(' ');
-                                    new_content.push(first_char);
-                                    new_content.push_str(&new_uuid);
-                                    new_content.push_str(after_value);
-                                    new_content.push('\n');
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                }
-                new_content.push_str(line);
-                new_content.push('\n');
-            }
-            fs::write(path.as_ref(), &new_content).await?;
+            let new_content = replace_auto_gen_uuid(&content, "agent_uuid", &new_uuid);
+
+            // 原子写入：先写 .tmp，成功后 rename，避免崩溃导致配置文件损坏
+            let tmp_path = path.as_ref().with_extension("tmp");
+            fs::write(&tmp_path, &new_content).await?;
+            fs::rename(&tmp_path, path.as_ref()).await?;
+
             new_content
         } else {
             content

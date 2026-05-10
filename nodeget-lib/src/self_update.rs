@@ -181,63 +181,55 @@ pub fn check_if_update_needed(tag: &str) -> ((u32, u32, u32), (u32, u32, u32), b
     )
 }
 
-#[cfg(feature = "for-agent")]
-pub fn get_url(tag: &str) -> Option<String> {
+#[cfg(any(feature = "for-agent", feature = "for-server"))]
+fn build_release_url(arch_name: &[(&str, &str)], tag: &str) -> Option<String> {
     let arch_str = NodeGetVersion::get().cargo_target_triple;
 
-    let (_, binary_name) = match ARCH_NAME.iter().find(|(target, _)| *target == arch_str) {
+    let (_, binary_name) = match arch_name.iter().find(|(target, _)| *target == arch_str) {
         Some(pair) => pair,
         None => {
             return None;
         }
     };
 
-    let url = format!(
+    Some(format!(
         "https://install.nodeget.com/releases/{}?tag={}",
         binary_name, tag
-    );
+    ))
+}
 
-    Some(url)
+#[cfg(feature = "for-agent")]
+pub fn get_url(tag: &str) -> Option<String> {
+    build_release_url(&ARCH_NAME, tag)
 }
 
 #[cfg(feature = "for-server")]
 pub fn get_server_url(tag: &str) -> Option<String> {
-    let arch_str = NodeGetVersion::get().cargo_target_triple;
-
-    let (_, binary_name) = match SERVER_ARCH_NAME
-        .iter()
-        .find(|(target, _)| *target == arch_str)
-    {
-        Some(pair) => pair,
-        None => {
-            return None;
-        }
-    };
-
-    let url = format!(
-        "https://install.nodeget.com/releases/{}?tag={}",
-        binary_name, tag
-    );
-
-    Some(url)
+    build_release_url(&SERVER_ARCH_NAME, tag)
 }
 
 pub fn replace_binary(binary: Vec<u8>) -> bool {
     let current = match canonical_exe_path() {
         Some(p) => p,
-        None => return false,
+        None => {
+            tracing::error!("Failed to get canonical exe path for binary replacement");
+            return false;
+        }
     };
 
     let mut backup = current.as_os_str().to_os_string();
     backup.push(".old");
 
     if std::fs::rename(&current, &backup).is_err() {
+        tracing::error!("Failed to rename current binary to backup");
         return false;
     }
 
     if std::fs::write(&current, &binary).is_err() {
         // Try to restore backup
-        let _ = std::fs::rename(&backup, &current);
+        if let Err(e) = std::fs::rename(&backup, &current) {
+            tracing::error!(error = %e, "Failed to restore backup during rollback");
+        }
         return false;
     }
 
@@ -247,19 +239,19 @@ pub fn replace_binary(binary: Vec<u8>) -> bool {
 #[cfg(not(unix))]
 pub fn restart_process() -> ! {
     let current = canonical_exe_path().unwrap_or_else(|| {
-        eprintln!("Failed to get canonical exe path");
+        tracing::error!("Failed to get canonical exe path");
         std::process::exit(1);
     });
 
     let mut args = std::env::args();
     let _ = args.next(); // skip program name
 
-    println!("Restarting agent: {}", current.display());
+    tracing::info!("Restarting agent: {}", current.display());
 
     match std::process::Command::new(&current).args(args).spawn() {
         Ok(_) => std::process::exit(0),
         Err(e) => {
-            eprintln!("Failed to restart: {e}");
+            tracing::error!("Failed to restart: {e}");
             std::process::exit(1);
         }
     }
@@ -272,7 +264,7 @@ pub fn restart_process_with_exec_v() -> ! {
     use std::ptr;
 
     let current = canonical_exe_path().unwrap_or_else(|| {
-        eprintln!("Failed to get canonical exe path");
+        tracing::error!("Failed to get canonical exe path");
         std::process::exit(1);
     });
 
@@ -284,13 +276,15 @@ pub fn restart_process_with_exec_v() -> ! {
     let mut ptrs: Vec<*const c_char> = c_args.iter().map(|c| c.as_ptr()).collect();
     ptrs.push(ptr::null()); // argv 以 NULL 结尾
 
-    println!("Starting execv...");
+    tracing::info!("Starting execv...");
 
+    // SAFETY: `path` 和 `ptrs` 均来自有效的 CString 和已 NULL 结尾的 argv 数组，
+    // 满足 `execv(const char *pathname, char *const argv[])` 的 C 契约。
     unsafe {
         libc::execv(path.as_ptr(), ptrs.as_ptr());
-
-        // execv 只在失败时返回
-        eprintln!("execv failed: {}", std::io::Error::last_os_error());
-        std::process::exit(1);
     }
+
+    // execv 只在失败时返回
+    tracing::error!("execv failed: {}", std::io::Error::last_os_error());
+    std::process::exit(1);
 }

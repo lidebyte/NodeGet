@@ -20,6 +20,18 @@ pub struct StaticMonitoringData {
     pub gpu: Vec<StaticGpuData>,
 }
 
+/// 将 u64 安全饱和转换为 i64，超过 i64::MAX 时返回 i64::MAX，避免静默回绕
+#[must_use]
+fn u64_to_i64_saturating(value: u64) -> i64 {
+    i64::try_from(value).unwrap_or(i64::MAX)
+}
+
+/// 将 u64 安全饱和转换为 i32，超过 i32::MAX 时返回 i32::MAX，避免静默回绕
+#[must_use]
+fn u64_to_i32_saturating(value: u64) -> i32 {
+    i32::try_from(value).unwrap_or(i32::MAX)
+}
+
 impl StaticMonitoringData {
     /// 根据 cpu / system / gpu 三个字段的内容计算确定性 SHA-256 哈希。
     ///
@@ -27,14 +39,15 @@ impl StaticMonitoringData {
     /// 拼接为一个确定性字符串后取 SHA-256。
     /// 同一组数据无论 JSON 序列化时 key 顺序如何，都会得到相同的哈希值。
     ///
-    /// # Panics
-    /// Panics if serializing any of the fields fails (should never happen with valid data).
-    #[must_use]
+    /// # Errors
+    ///
+    /// 当任何字段的序列化失败时返回 `serde_json::Error`。
+    /// 对于仅包含标准可序列化类型的结构体，此情况在实际上不会发生。
     pub fn compute_data_hash(
         cpu: &StaticCPUData,
         system: &StaticSystemData,
         gpu: &[StaticGpuData],
-    ) -> Vec<u8> {
+    ) -> Result<Vec<u8>, serde_json::Error> {
         fn canonicalize(v: &serde_json::Value) -> serde_json::Value {
             match v {
                 serde_json::Value::Object(map) => {
@@ -52,15 +65,15 @@ impl StaticMonitoringData {
             }
         }
 
-        let cpu_val = canonicalize(&serde_json::to_value(cpu).unwrap());
-        let sys_val = canonicalize(&serde_json::to_value(system).unwrap());
-        let gpu_val = canonicalize(&serde_json::to_value(gpu).unwrap());
+        let cpu_val = canonicalize(&serde_json::to_value(cpu)?);
+        let sys_val = canonicalize(&serde_json::to_value(system)?);
+        let gpu_val = canonicalize(&serde_json::to_value(gpu)?);
 
         let canonical = format!("{cpu_val}\n{sys_val}\n{gpu_val}");
 
         let hash = Sha256::digest(canonical.as_bytes());
         // 取前 16 字节 (128 bit) 足够去重
-        hash[..16].to_vec()
+        Ok(hash[..16].to_vec())
     }
 }
 
@@ -234,27 +247,27 @@ impl From<&DynamicMonitoringData> for DynamicMonitoringSummaryData {
             time: data.time,
             cpu_usage: scale_cpu_percent_to_i16(data.cpu.total_cpu_usage),
             gpu_usage: data.gpu.first().map(|g| i16::from(g.utilization_gpu)),
-            used_swap: Some(data.ram.used_swap as i64),
-            total_swap: Some(data.ram.total_swap as i64),
-            used_memory: Some(data.ram.used_memory as i64),
-            total_memory: Some(data.ram.total_memory as i64),
-            available_memory: Some(data.ram.available_memory as i64),
+            used_swap: Some(u64_to_i64_saturating(data.ram.used_swap)),
+            total_swap: Some(u64_to_i64_saturating(data.ram.total_swap)),
+            used_memory: Some(u64_to_i64_saturating(data.ram.used_memory)),
+            total_memory: Some(u64_to_i64_saturating(data.ram.total_memory)),
+            available_memory: Some(u64_to_i64_saturating(data.ram.available_memory)),
             load_one: scale_load_to_i16(data.load.one),
             load_five: scale_load_to_i16(data.load.five),
             load_fifteen: scale_load_to_i16(data.load.fifteen),
-            uptime: Some(data.system.uptime as i32),
-            boot_time: Some(data.system.boot_time as i64),
-            process_count: Some(data.system.process_count as i32),
-            total_space: Some(total_space as i64),
-            available_space: Some(available_space as i64),
-            read_speed: Some(read_speed as i64),
-            write_speed: Some(write_speed as i64),
-            tcp_connections: Some(data.network.tcp_connections as i32),
-            udp_connections: Some(data.network.udp_connections as i32),
-            total_received: Some(total_received as i64),
-            total_transmitted: Some(total_transmitted as i64),
-            transmit_speed: Some(transmit_speed as i64),
-            receive_speed: Some(receive_speed_net as i64),
+            uptime: Some(u64_to_i32_saturating(data.system.uptime)),
+            boot_time: Some(u64_to_i64_saturating(data.system.boot_time)),
+            process_count: Some(u64_to_i32_saturating(data.system.process_count)),
+            total_space: Some(u64_to_i64_saturating(total_space)),
+            available_space: Some(u64_to_i64_saturating(available_space)),
+            read_speed: Some(u64_to_i64_saturating(read_speed)),
+            write_speed: Some(u64_to_i64_saturating(write_speed)),
+            tcp_connections: Some(u64_to_i32_saturating(data.network.tcp_connections)),
+            udp_connections: Some(u64_to_i32_saturating(data.network.udp_connections)),
+            total_received: Some(u64_to_i64_saturating(total_received)),
+            total_transmitted: Some(u64_to_i64_saturating(total_transmitted)),
+            transmit_speed: Some(u64_to_i64_saturating(transmit_speed)),
+            receive_speed: Some(u64_to_i64_saturating(receive_speed_net)),
         }
     }
 }

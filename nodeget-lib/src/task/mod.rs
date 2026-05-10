@@ -111,16 +111,14 @@ impl TaskEventType {
     /// 从延迟创建对应的结果类型
     /// 用于 Ping/TcpPing/HttpPing 任务
     ///
-    /// # Panics
-    /// 当任务类型不是 Ping/TcpPing/HttpPing 时会 panic
-    #[must_use]
-    pub fn result_from_duration(&self, duration: Duration) -> TaskEventResult {
+    /// 其他任务类型返回 `None`
+    pub fn result_from_duration(&self, duration: Duration) -> Option<TaskEventResult> {
         let millis = duration.as_secs_f64() * 1000.0;
         match self {
-            Self::Ping(_) => TaskEventResult::Ping(millis),
-            Self::TcpPing(_) => TaskEventResult::TcpPing(millis),
-            Self::HttpPing(_) => TaskEventResult::HttpPing(millis),
-            _ => panic!("result_from_duration only valid for ping tasks"),
+            Self::Ping(_) => Some(TaskEventResult::Ping(millis)),
+            Self::TcpPing(_) => Some(TaskEventResult::TcpPing(millis)),
+            Self::HttpPing(_) => Some(TaskEventResult::HttpPing(millis)),
+            _ => None,
         }
     }
 

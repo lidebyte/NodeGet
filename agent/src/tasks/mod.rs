@@ -61,17 +61,29 @@ async fn execute_task(
     match task_type {
         TaskEventType::Ping(target) => ping::icmp::ping_target(target.clone())
             .await
-            .map(|d| task_type.result_from_duration(d))
+            .and_then(|d| {
+                task_type.result_from_duration(d).ok_or_else(|| {
+                    NodegetError::Other("Invalid task type for ping duration".to_owned())
+                })
+            })
             .map_err(|e| NodegetError::Other(format!("{e}")).into()),
 
         TaskEventType::TcpPing(target) => ping::tcp::tcping_target(target.clone())
             .await
-            .map(|d| task_type.result_from_duration(d))
+            .and_then(|d| {
+                task_type.result_from_duration(d).ok_or_else(|| {
+                    NodegetError::Other("Invalid task type for tcp ping duration".to_owned())
+                })
+            })
             .map_err(|e| NodegetError::Other(format!("{e}")).into()),
 
         TaskEventType::HttpPing(target) => ping::http::httping_target(target.clone())
             .await
-            .map(|d| task_type.result_from_duration(d))
+            .and_then(|d| {
+                task_type.result_from_duration(d).ok_or_else(|| {
+                    NodegetError::Other("Invalid task type for http ping duration".to_owned())
+                })
+            })
             .map_err(|e| NodegetError::Other(format!("{e}")).into()),
 
         TaskEventType::HttpRequest(request) => http_request::execute_http_request(request.clone())

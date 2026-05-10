@@ -10,6 +10,7 @@ mod auth;
 mod create;
 mod delete;
 mod delete_file;
+mod list;
 mod read;
 mod read_file;
 mod update;
@@ -68,6 +69,9 @@ pub trait Rpc {
         name: String,
         path: String,
     ) -> RpcResult<Box<RawValue>>;
+
+    #[method(name = "list")]
+    async fn list(&self, token: String, name: String) -> RpcResult<Box<RawValue>>;
 }
 
 pub struct StaticFileRpcImpl;
@@ -159,6 +163,14 @@ impl RpcServer for StaticFileRpcImpl {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "static", "static::delete_file", token_key = tk, username = un, name = %name, path = %path);
         async { rpc_exec!(delete_file::delete_file_rpc(token, name, path).await) }
+            .instrument(span)
+            .await
+    }
+
+    async fn list(&self, token: String, name: String) -> RpcResult<Box<RawValue>> {
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "static", "static::list", token_key = tk, username = un, name = %name);
+        async { rpc_exec!(list::list_rpc(token, name).await) }
             .instrument(span)
             .await
     }

@@ -74,9 +74,12 @@ pub fn get_local_timestamp_ms() -> Result<u64> {
 /// # Errors
 ///
 /// 当系统时间获取失败或转换失败时返回错误
-#[allow(clippy::cast_possible_wrap)]
 pub fn get_local_timestamp_ms_i64() -> Result<i64> {
-    get_local_timestamp_ms().map(|ts| ts as i64)
+    get_local_timestamp_ms().and_then(|ts| {
+        i64::try_from(ts).map_err(|e| {
+            NodegetError::Other(format!("Timestamp conversion error: {e}")).into()
+        })
+    })
 }
 
 /// 生成指定长度的随机字符串
