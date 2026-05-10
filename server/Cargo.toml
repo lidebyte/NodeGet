@@ -1,6 +1,6 @@
 [package]
 name = "nodeget-server"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 description = "Next-generation server monitoring and management tools"
 license = "AGPL-3"
@@ -59,6 +59,9 @@ llrt_util = { git = "https://github.com/awslabs/llrt.git", default-features = fa
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 rquickjs = { version = "0.11", git = "https://github.com/delskayn/rquickjs.git", default-features = false, features = ["futures", "bindgen"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2.175", default-features = false }
 
 [features]
 default = []
