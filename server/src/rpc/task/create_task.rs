@@ -78,6 +78,10 @@ pub async fn create_task(
         let task_id = result.last_insert_id;
         debug!(target: "task", id = task_id, "Task created");
 
+        crate::agent_uuid_cache::AgentUuidCache::global()
+            .notify_seen(target_uuid)
+            .await;
+
         let task = TaskEvent {
             task_id: task_id.cast_unsigned(),
             task_token: token,

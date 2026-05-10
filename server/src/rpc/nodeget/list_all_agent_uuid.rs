@@ -1,4 +1,4 @@
-use super::{NodegetServerRpcImpl, RpcHelper};
+use crate::agent_uuid_cache::AgentUuidCache;
 use crate::token::get::get_token;
 use crate::token::super_token::check_super_token;
 use jsonrpsee::core::RpcResult;
@@ -6,17 +6,11 @@ use nodeget_lib::error::NodegetError;
 use nodeget_lib::permission::data_structure::{NodeGet, Permission, Scope};
 use nodeget_lib::permission::token_auth::TokenOrAuth;
 use nodeget_lib::utils::get_local_timestamp_ms_i64;
-use sea_orm::{FromQueryResult, Statement};
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::collections::HashSet;
 use tracing::{debug, trace};
 use uuid::Uuid;
-
-#[derive(FromQueryResult)]
-struct UuidRow {
-    uuid: Uuid,
-}
 
 enum AgentUuidListPermission {
     All,
@@ -33,8 +27,7 @@ pub async fn list_all_agent_uuid(token: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
         let permission = resolve_list_agent_uuid_permission(&token).await?;
 
-        let db = NodegetServerRpcImpl::get_db()?;
-        let all_uuids = fetch_all_agent_uuids(db).await?;
+        let all_uuids = AgentUuidCache::global().list_all().await;
         let uuids = match permission {
             AgentUuidListPermission::All => all_uuids,
             AgentUuidListPermission::Scoped(allowed) => all_uuids
@@ -155,45 +148,4 @@ async fn resolve_list_agent_uuid_permission(
 
     trace!(target: "server", allowed_count = allowed_scoped_uuids.len(), "Scoped agent UUID permission resolved");
     Ok(AgentUuidListPermission::Scoped(allowed_scoped_uuids))
-}
-
-async fn fetch_all_agent_uuids(db: &sea_orm::DatabaseConnection) -> anyhow::Result<Vec<Uuid>> {
-    debug!(target: "server", "fetching all agent uuids");
-
-    let db_backend = db.get_database_backend();
-
-    // Use EXISTS with indexed lookups on uuid_id instead of full-table UNION scan.
-    // Each subquery hits the (uuid_id, timestamp) composite index, O(agent_count × 3 index hits).
-    let sql = r"
-        SELECT uuid FROM monitoring_uuid WHERE
-          EXISTS (SELECT 1 FROM static_monitoring WHERE uuid_id = monitoring_uuid.id LIMIT 1) OR
-          EXISTS (SELECT 1 FROM dynamic_monitoring WHERE uuid_id = monitoring_uuid.id LIMIT 1) OR
-          EXISTS (SELECT 1 FROM dynamic_monitoring_summary WHERE uuid_id = monitoring_uuid.id LIMIT 1)
-    ";
-    let rows = UuidRow::find_by_statement(Statement::from_string(db_backend, sql.to_string()))
-        .all(db)
-        .await
-        .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
-
-    let mut uuid_set = std::collections::BTreeSet::<Uuid>::new();
-    for row in rows {
-        uuid_set.insert(row.uuid);
-    }
-
-    // Also include UUIDs from task table (not covered by monitoring tables)
-    let sql = r"SELECT uuid FROM task";
-    let statement = Statement::from_string(db_backend, sql.to_string());
-    let rows = UuidRow::find_by_statement(statement)
-        .all(db)
-        .await
-        .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
-
-    for row in rows {
-        uuid_set.insert(row.uuid);
-    }
-
-    let uuids: Vec<Uuid> = uuid_set.into_iter().collect();
-    debug!(target: "server", uuid_count = uuids.len(), "Fetched all agent UUIDs");
-
-    Ok(uuids)
 }

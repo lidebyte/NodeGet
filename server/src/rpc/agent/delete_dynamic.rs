@@ -132,6 +132,12 @@ pub async fn delete_dynamic(
 
         debug!(target: "monitoring", rows_affected = rows_affected, conditions = conditions.len(), "Dynamic monitoring delete completed");
 
+        if rows_affected > 0 {
+            if let Err(e) = crate::agent_uuid_cache::AgentUuidCache::resync().await {
+                error!(target: "agent_uuid", error = %e, "Failed to resync AgentUuidCache after delete_dynamic");
+            }
+        }
+
         let json_str = format!(
             "{{\"success\":true,\"deleted\":{},\"condition_count\":{}}}",
             rows_affected,

@@ -202,12 +202,20 @@ export const themeZhConfig = {
                 text: 'Static',
                 collapsed: false,
                 items: [{
-                    text: '介绍',
-                    link: '/api/static_file/index.md'
+                    text: 'Bucket 配置管理',
+                    link: '/api/static_bucket/index.md'
                 },
                 {
-                    text: 'CRUD 与文件操作',
-                    link: '/api/static_file/crud.md'
+                    text: 'Bucket 配置 CRUD',
+                    link: '/api/static_bucket/crud.md'
+                },
+                {
+                    text: 'Bucket File 文件操作',
+                    link: '/api/static_bucket_file/index.md'
+                },
+                {
+                    text: 'Bucket File 文件 CRUD',
+                    link: '/api/static_bucket_file/crud.md'
                 }]
             }]
 		}]

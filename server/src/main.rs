@@ -20,6 +20,7 @@ mod rpc;
 // 终端模块，处理终端连接
 mod terminal;
 // 令牌模块，处理令牌相关功能
+pub(crate) mod agent_uuid_cache;
 mod crontab;
 pub mod js_runtime;
 mod kv;

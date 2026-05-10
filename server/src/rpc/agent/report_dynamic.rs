@@ -46,6 +46,10 @@ pub async fn report_dynamic(
             .await
             .map_err(|e| NodegetError::DatabaseError(format!("UUID cache error: {e}")))?;
 
+        crate::agent_uuid_cache::AgentUuidCache::global()
+            .notify_seen(agent_uuid)
+            .await;
+
         // Update in-memory last-cache (used by multi-last queries, zero DB hit)
         crate::monitoring_last_cache::MonitoringLastCache::global()
             .update_dynamic(
