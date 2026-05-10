@@ -11,6 +11,7 @@ mod create;
 mod delete;
 mod delete_file;
 mod list;
+mod list_file;
 mod read;
 mod read_file;
 mod update;
@@ -71,7 +72,10 @@ pub trait Rpc {
     ) -> RpcResult<Box<RawValue>>;
 
     #[method(name = "list")]
-    async fn list(&self, token: String, name: String) -> RpcResult<Box<RawValue>>;
+    async fn list(&self, token: String) -> RpcResult<Box<RawValue>>;
+
+    #[method(name = "list_file")]
+    async fn list_file(&self, token: String, name: String) -> RpcResult<Box<RawValue>>;
 }
 
 pub struct StaticFileRpcImpl;
@@ -167,10 +171,18 @@ impl RpcServer for StaticFileRpcImpl {
             .await
     }
 
-    async fn list(&self, token: String, name: String) -> RpcResult<Box<RawValue>> {
+    async fn list(&self, token: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
-        let span = tracing::info_span!(target: "static", "static::list", token_key = tk, username = un, name = %name);
-        async { rpc_exec!(list::list_rpc(token, name).await) }
+        let span = tracing::info_span!(target: "static", "static::list", token_key = tk, username = un);
+        async { rpc_exec!(list::list_rpc(token).await) }
+            .instrument(span)
+            .await
+    }
+
+    async fn list_file(&self, token: String, name: String) -> RpcResult<Box<RawValue>> {
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "static", "static::list_file", token_key = tk, username = un, name = %name);
+        async { rpc_exec!(list_file::list_file_rpc(token, name).await) }
             .instrument(span)
             .await
     }

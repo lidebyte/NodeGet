@@ -1,22 +1,35 @@
-use crate::rpc::static_file::auth::check_static_permission;
-use crate::static_file::list_file;
+use crate::static_file::list_all_names;
+use crate::token::super_token::check_super_token;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
-use nodeget_lib::permission::data_structure::StaticFile;
+use nodeget_lib::permission::token_auth::TokenOrAuth;
 use serde_json::value::RawValue;
-use tracing::debug;
+use tracing::{debug, warn};
 
-pub async fn list_rpc(token: String, name: String) -> RpcResult<Box<RawValue>> {
+pub async fn list_rpc(token: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        debug!(target: "static", name = %name, "processing static_list request");
+        debug!(target: "static", "processing static_list request");
 
-        check_static_permission(&token, &name, StaticFile::Read).await?;
-        debug!(target: "static", name = %name, "static_list permission check passed");
+        let token_or_auth = TokenOrAuth::from_full_token(&token)
+            .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
-        let files = list_file(&name).await?;
+        let is_super_token = check_super_token(&token_or_auth)
+            .await
+            .map_err(|e| NodegetError::PermissionDenied(format!("{e}")))?;
 
-        let json_str = serde_json::to_string(&files).map_err(|e| {
-            NodegetError::SerializationError(format!("Failed to serialize file list: {e}"))
+        if !is_super_token {
+            warn!(target: "static", "non-supertoken attempted to list all static names");
+            return Err(NodegetError::PermissionDenied(
+                "Only SuperToken can list all static names".to_owned(),
+            )
+            .into());
+        }
+
+        let names = list_all_names().await;
+        debug!(target: "static", count = names.len(), "static_list completed");
+
+        let json_str = serde_json::to_string(&names).map_err(|e| {
+            NodegetError::SerializationError(format!("Failed to serialize static name list: {e}"))
         })?;
 
         RawValue::from_string(json_str)
