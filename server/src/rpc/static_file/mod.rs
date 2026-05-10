@@ -183,7 +183,8 @@ impl RpcServer for StaticFileRpcImpl {
 
     async fn list(&self, token: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
-        let span = tracing::info_span!(target: "static", "static::list", token_key = tk, username = un);
+        let span =
+            tracing::info_span!(target: "static", "static::list", token_key = tk, username = un);
         async { rpc_exec!(list::list_rpc(token).await) }
             .instrument(span)
             .await

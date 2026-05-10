@@ -442,15 +442,16 @@
 - 不能跨 static 移动：`from` 和 `to` 都在同一 `name` 的磁盘根目录内。
 - 源文件不存在 → 返回 `NotFound` 错误。
 - 目标路径已存在（含目录、符号链接）→ 返回 `InvalidInput` 错误，**不会静默覆盖**。
-  - Linux / macOS：使用 `renameat2(RENAME_NOREPLACE)` / `renamex_np(RENAME_EXCL)`
-    在内核层面原子校验，不存在 TOCTOU 竞争窗口。
-  - 其他平台（Windows / *BSD 等）：退化为 `stat` + `rename`，并发场景下有极小的竞争窗口。
+    - Linux / macOS：使用 `renameat2(RENAME_NOREPLACE)` / `renamex_np(RENAME_EXCL)`
+      在内核层面原子校验，不存在 TOCTOU 竞争窗口。
+    - 其他平台（Windows / *BSD 等）：退化为 `stat` + `rename`，并发场景下有极小的竞争窗口。
 - **大小写重命名**（如 `A.txt` → `a.txt`）：在 macOS APFS、Windows NTFS 等
   case-insensitive 文件系统上，`from` 与 `to` 指向同一 inode 时自动降级为普通 rename，
   允许变更大小写。
 - 自动创建 `to` 缺失的父目录。
 - `from == to` 视作 no-op，直接返回成功。
-- 与 `static_upload_file` / `static_delete_file` 一样，路径经 `resolve_safe_file_path` 校验，拒绝 `..` 穿透、绝对路径、反斜杠、Windows 盘符等。
+- 与 `static_upload_file` / `static_delete_file` 一样，路径经 `resolve_safe_file_path` 校验，拒绝 `..` 穿透、绝对路径、反斜杠、Windows
+  盘符等。
 
 ### 返回值
 
