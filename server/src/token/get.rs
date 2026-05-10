@@ -190,27 +190,30 @@ fn scope_matches(limit_scope: &Scope, req_scope: &Scope) -> bool {
         (Scope::JsWorker(limit_name), Scope::JsWorker(req_name)) => {
             wildcard_matches_pattern(req_name, limit_name)
         }
-        (Scope::StaticFile(limit_name), Scope::StaticFile(req_name)) => {
+        (Scope::StaticBucket(limit_name), Scope::StaticBucket(req_name)) => {
             wildcard_matches_pattern(req_name, limit_name)
         }
         (
-            Scope::AgentUuid(_) | Scope::KvNamespace(_) | Scope::JsWorker(_) | Scope::StaticFile(_),
+            Scope::AgentUuid(_)
+            | Scope::KvNamespace(_)
+            | Scope::JsWorker(_)
+            | Scope::StaticBucket(_),
             Scope::Global,
         )
         | (
             Scope::AgentUuid(_),
-            Scope::KvNamespace(_) | Scope::JsWorker(_) | Scope::StaticFile(_),
+            Scope::KvNamespace(_) | Scope::JsWorker(_) | Scope::StaticBucket(_),
         )
         | (
             Scope::KvNamespace(_),
-            Scope::AgentUuid(_) | Scope::JsWorker(_) | Scope::StaticFile(_),
+            Scope::AgentUuid(_) | Scope::JsWorker(_) | Scope::StaticBucket(_),
         )
         | (
             Scope::JsWorker(_),
-            Scope::AgentUuid(_) | Scope::KvNamespace(_) | Scope::StaticFile(_),
+            Scope::AgentUuid(_) | Scope::KvNamespace(_) | Scope::StaticBucket(_),
         )
         | (
-            Scope::StaticFile(_),
+            Scope::StaticBucket(_),
             Scope::AgentUuid(_) | Scope::KvNamespace(_) | Scope::JsWorker(_),
         ) => false,
     }

@@ -1,8 +1,8 @@
-use crate::rpc::static_file::auth::check_static_permission;
+use crate::rpc::static_bucket_file::auth::check_static_bucket_file_permission;
 use crate::static_file::rename_file;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
-use nodeget_lib::permission::data_structure::StaticFile;
+use nodeget_lib::permission::data_structure::StaticBucketFile;
 use serde_json::value::RawValue;
 use tracing::debug;
 
@@ -13,13 +13,13 @@ pub async fn rename_file_rpc(
     to: String,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        debug!(target: "static", name = %name, from = %from, to = %to, "processing static_rename_file request");
+        debug!(target: "static_bucket_file", name = %name, from = %from, to = %to, "processing static-bucket-file_rename request");
 
         // rename 语义同时等价于"新建 to" + "删除 from"，因此必须同时具备
         // Write 和 Delete 权限，避免仅持有 Write 的 token 绕过 Delete
-        check_static_permission(&token, &name, StaticFile::Write).await?;
-        check_static_permission(&token, &name, StaticFile::Delete).await?;
-        debug!(target: "static", name = %name, "static_rename_file permission check passed");
+        check_static_bucket_file_permission(&token, &name, StaticBucketFile::Write).await?;
+        check_static_bucket_file_permission(&token, &name, StaticBucketFile::Delete).await?;
+        debug!(target: "static_bucket_file", name = %name, "static-bucket-file_rename permission check passed");
 
         rename_file(&name, &from, &to).await?;
 

@@ -1,8 +1,8 @@
-use crate::rpc::static_file::auth::check_static_permission;
+use crate::rpc::static_bucket::auth::check_static_bucket_permission;
 use crate::static_file::create_static;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
-use nodeget_lib::permission::data_structure::StaticFile;
+use nodeget_lib::permission::data_structure::StaticBucket;
 use serde_json::value::RawValue;
 use tracing::debug;
 
@@ -14,10 +14,10 @@ pub async fn create(
     cors: bool,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        debug!(target: "static", name = %name, "processing static_create request");
+        debug!(target: "static_bucket", name = %name, "processing static-bucket_create request");
 
-        check_static_permission(&token, &name, StaticFile::Write).await?;
-        debug!(target: "static", name = %name, "static_create permission check passed");
+        check_static_bucket_permission(&token, &name, StaticBucket::Write).await?;
+        debug!(target: "static_bucket", name = %name, "static-bucket_create permission check passed");
 
         let model = create_static(name, path, is_http_root, cors).await?;
 

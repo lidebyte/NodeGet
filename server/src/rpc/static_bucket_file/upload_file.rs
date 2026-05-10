@@ -1,23 +1,25 @@
-use crate::rpc::static_file::auth::check_static_permission;
-use crate::static_file::delete_file;
+use crate::rpc::static_bucket_file::auth::check_static_bucket_file_permission;
+use crate::static_file::upload_file;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
-use nodeget_lib::permission::data_structure::StaticFile;
+use nodeget_lib::permission::data_structure::StaticBucketFile;
 use serde_json::value::RawValue;
 use tracing::debug;
 
-pub async fn delete_file_rpc(
+pub async fn upload_file_rpc(
     token: String,
     name: String,
     path: String,
+    body: Option<Vec<u8>>,
+    base64: Option<String>,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        debug!(target: "static", name = %name, path = %path, "processing static_delete_file request");
+        debug!(target: "static_bucket_file", name = %name, path = %path, "processing static-bucket-file_upload request");
 
-        check_static_permission(&token, &name, StaticFile::Delete).await?;
-        debug!(target: "static", name = %name, "static_delete_file permission check passed");
+        check_static_bucket_file_permission(&token, &name, StaticBucketFile::Write).await?;
+        debug!(target: "static_bucket_file", name = %name, "static-bucket-file_upload permission check passed");
 
-        delete_file(&name, &path).await?;
+        upload_file(&name, &path, body, base64).await?;
 
         let json_str = r#"{"success":true}"#.to_string();
 

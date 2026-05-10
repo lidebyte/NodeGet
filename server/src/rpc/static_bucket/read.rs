@@ -1,17 +1,17 @@
-use crate::rpc::static_file::auth::check_static_permission;
+use crate::rpc::static_bucket::auth::check_static_bucket_permission;
 use crate::static_file::read_static;
 use jsonrpsee::core::RpcResult;
 use nodeget_lib::error::NodegetError;
-use nodeget_lib::permission::data_structure::StaticFile;
+use nodeget_lib::permission::data_structure::StaticBucket;
 use serde_json::value::RawValue;
 use tracing::debug;
 
 pub async fn read(token: String, name: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        debug!(target: "static", name = %name, "processing static_read request");
+        debug!(target: "static_bucket", name = %name, "processing static-bucket_read request");
 
-        check_static_permission(&token, &name, StaticFile::Read).await?;
-        debug!(target: "static", name = %name, "static_read permission check passed");
+        check_static_bucket_permission(&token, &name, StaticBucket::Read).await?;
+        debug!(target: "static_bucket", name = %name, "static-bucket_read permission check passed");
 
         let model = read_static(&name)
             .await?
