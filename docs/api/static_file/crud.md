@@ -413,11 +413,66 @@
 
 ## List
 
-列出某个静态目录下的所有相对文件路径。
+列出所有已创建的静态服务名称。
 
 ### 方法
 
 调用方法名为 `static_list`，需要提供以下参数：
+
+```json
+{
+  "token": "demo_super_token" // SuperToken
+}
+```
+
+### 权限要求
+
+只有 **SuperToken** 可以调用该方法。
+
+普通 Token 会返回权限错误。
+
+数据来源为内存缓存，不会访问数据库或磁盘。
+
+### 返回值
+
+返回所有静态服务 `name` 字段组成的数组，**按字典序排序**：
+
+```json
+["api-docs", "blog", "my-site"]
+```
+
+### 完整示例
+
+请求:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "static_list",
+  "params": {
+    "token": "demo_super_token"
+  },
+  "id": 1
+}
+```
+
+响应:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": ["api-docs", "blog", "my-site"]
+}
+```
+
+## List File
+
+列出某个静态目录下的所有相对文件路径。
+
+### 方法
+
+调用方法名为 `static_list_file`，需要提供以下参数:
 
 ```json
 {
@@ -453,7 +508,7 @@
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "static_list",
+  "method": "static_list_file",
   "params": {
     "token": "demo_token",
     "name": "my-site"

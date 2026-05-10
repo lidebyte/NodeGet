@@ -443,6 +443,21 @@ pub async fn list_file(name: &str) -> anyhow::Result<Vec<String>> {
     Ok(files)
 }
 
+/// 列出缓存中所有静态服务配置的 `name` 字段，结果按字典序排序。
+///
+/// 数据源是 [`cache::StaticCache`]，不访问数据库、不涉及磁盘 I/O。
+pub async fn list_all_names() -> Vec<String> {
+    let mut names: Vec<String> = cache::StaticCache::global()
+        .get_all()
+        .await
+        .iter()
+        .map(|m| m.name.clone())
+        .collect();
+    names.sort();
+    debug!(target: "static", count = names.len(), "static name list produced");
+    names
+}
+
 /// 同步递归收集 `base` 下所有普通文件，返回相对 `base` 的路径字符串。
 ///
 /// 使用显式栈而非递归调用，避免极深目录栈溢出。
