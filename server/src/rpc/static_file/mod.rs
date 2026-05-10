@@ -14,6 +14,7 @@ mod list;
 mod list_file;
 mod read;
 mod read_file;
+mod rename_file;
 mod update;
 mod upload_file;
 
@@ -76,6 +77,15 @@ pub trait Rpc {
 
     #[method(name = "list_file")]
     async fn list_file(&self, token: String, name: String) -> RpcResult<Box<RawValue>>;
+
+    #[method(name = "rename_file")]
+    async fn rename_file(
+        &self,
+        token: String,
+        name: String,
+        from: String,
+        to: String,
+    ) -> RpcResult<Box<RawValue>>;
 }
 
 pub struct StaticFileRpcImpl;
@@ -183,6 +193,20 @@ impl RpcServer for StaticFileRpcImpl {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "static", "static::list_file", token_key = tk, username = un, name = %name);
         async { rpc_exec!(list_file::list_file_rpc(token, name).await) }
+            .instrument(span)
+            .await
+    }
+
+    async fn rename_file(
+        &self,
+        token: String,
+        name: String,
+        from: String,
+        to: String,
+    ) -> RpcResult<Box<RawValue>> {
+        let (tk, un) = token_identity(&token);
+        let span = tracing::info_span!(target: "static", "static::rename_file", token_key = tk, username = un, name = %name, from = %from, to = %to);
+        async { rpc_exec!(rename_file::rename_file_rpc(token, name, from, to).await) }
             .instrument(span)
             .await
     }

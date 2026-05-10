@@ -411,6 +411,81 @@
 }
 ```
 
+## Rename File
+
+在同一静态目录内移动/重命名文件。
+
+### 方法
+
+调用方法名为 `static_rename_file`，需要提供以下参数：
+
+```json
+{
+  "token": "demo_token",
+  "name": "my-site",
+  "from": "/index.html",
+  "to": "/docs/index.html"
+}
+```
+
+- `from`：源文件路径，相对 `{static_path}/{path}/`
+- `to`：目标文件路径，相对 `{static_path}/{path}/`
+
+### 权限要求
+
+- Permission: 同时需要 `StaticFile::Write` 和 `StaticFile::Delete`
+  （rename 语义上等价于"新建 `to`"+"删除 `from`"）
+- Scope: `StaticFile(name)` 或 `Global`
+
+### 行为说明
+
+- 不能跨 static 移动：`from` 和 `to` 都在同一 `name` 的磁盘根目录内。
+- 源文件不存在 → 返回 `NotFound` 错误。
+- 目标路径已存在（含目录、符号链接）→ 返回 `InvalidInput` 错误，**不会静默覆盖**。
+  - Linux / macOS：使用 `renameat2(RENAME_NOREPLACE)` / `renamex_np(RENAME_EXCL)`
+    在内核层面原子校验，不存在 TOCTOU 竞争窗口。
+  - 其他平台（Windows / *BSD 等）：退化为 `stat` + `rename`，并发场景下有极小的竞争窗口。
+- **大小写重命名**（如 `A.txt` → `a.txt`）：在 macOS APFS、Windows NTFS 等
+  case-insensitive 文件系统上，`from` 与 `to` 指向同一 inode 时自动降级为普通 rename，
+  允许变更大小写。
+- 自动创建 `to` 缺失的父目录。
+- `from == to` 视作 no-op，直接返回成功。
+- 与 `static_upload_file` / `static_delete_file` 一样，路径经 `resolve_safe_file_path` 校验，拒绝 `..` 穿透、绝对路径、反斜杠、Windows 盘符等。
+
+### 返回值
+
+成功返回 `{"success": true}`。
+
+### 完整示例
+
+请求:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "static_rename_file",
+  "params": {
+    "token": "demo_token",
+    "name": "my-site",
+    "from": "/old-name.html",
+    "to": "/pages/new-name.html"
+  },
+  "id": 1
+}
+```
+
+响应:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "success": true
+  }
+}
+```
+
 ## List
 
 列出所有已创建的静态服务名称。
@@ -468,7 +543,7 @@
 
 ## List File
 
-列出某个静态目录下的所有相对文件路径。
+列出某个静态目录下的所有文件，含体积和修改时间。
 
 ### 方法
 
@@ -488,11 +563,21 @@
 
 ### 返回值
 
-返回该静态目录下所有文件的相对路径数组，**按字典序排序**，统一使用 `/` 作为分隔符（跨平台一致）：
+返回该静态目录下所有文件的元信息数组，**按 `path` 字典序排序**，路径统一使用 `/` 作为分隔符（跨平台一致）：
 
 ```json
-["404.html", "docs/1.md", "docs/guide/intro.md", "index.html"]
+[
+  { "path": "404.html", "size": 1024, "mtime": 1715000000000 },
+  { "path": "docs/1.md", "size": 3, "mtime": 1715000123456 },
+  { "path": "index.html", "size": 7, "mtime": 1715001000789 }
+]
 ```
+
+字段说明：
+
+- `path`：相对 `{static_path}/{path}/` 的路径，`/` 分隔
+- `size`：文件大小，单位**字节**（`u64`）
+- `mtime`：最后修改时间，**Unix 毫秒时间戳**（`i64`）；若底层文件系统不支持或读取失败，返回 `0`
 
 注意事项：
 
@@ -523,7 +608,11 @@
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "result": ["404.html", "docs/1.md", "index.html"]
+  "result": [
+    { "path": "404.html", "size": 1024, "mtime": 1715000000000 },
+    { "path": "docs/1.md", "size": 3, "mtime": 1715000123456 },
+    { "path": "index.html", "size": 7, "mtime": 1715001000789 }
+  ]
 }
 ```
 
