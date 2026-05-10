@@ -2779,7 +2779,7 @@ dependencies = [
 
 [[package]]
 name = "nodeget-lib"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "libc",
@@ -2798,7 +2798,7 @@ dependencies = [
 
 [[package]]
 name = "nodeget-server"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "axum",
