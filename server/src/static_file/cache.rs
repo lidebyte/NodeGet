@@ -120,7 +120,7 @@ impl StaticCache {
                     warn!(
                         target: "static",
                         name = %model.name,
-                        existing = %http_root_name.as_ref().unwrap(),
+                        existing = %http_root_name.as_ref().unwrap_or(&"unknown".to_owned()),
                         "duplicate is_http_root detected, ignoring"
                     );
                 }

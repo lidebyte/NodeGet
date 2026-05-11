@@ -1,7 +1,10 @@
 use crate::entity::js_worker;
+use axum::response::IntoResponse;
 use axum::routing::any;
 use axum::{extract::Path, http::StatusCode};
+use dav_server::{fakels::FakeLs, localfs::LocalFs, DavHandler};
 use nodeget_lib::js_runtime::RunType;
+use base64::Engine as _;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -166,6 +169,8 @@ pub async fn run(config: &nodeget_lib::config::server::ServerConfig) {
                     },
                 ),
             )
+            // WebDAV routes for static bucket file management
+            .route("/nodeget/static-webdav/{*path}", any(static_webdav_handler))
             .route(
                 "/worker-route/{route_name}",
                 any(
@@ -704,6 +709,162 @@ async fn serve_static_file(
     builder
         .body(body)
         .unwrap_or_else(|e| build_http_error(StatusCode::INTERNAL_SERVER_ERROR, format!("{e}")))
+}
+
+/// WebDAV handler for static buckets.
+///
+/// Route: `/nodeget/static-webdav/{name}[/{*path}]`
+/// Auth: HTTP Basic Auth (username=tokenkey/username, password=tokensecret/password).
+/// Permission: requires **all** `StaticBucketFile` permissions (Read/Write/Delete/List)
+///             on the requested bucket scope.
+async fn static_webdav_handler(req: axum::extract::Request) -> axum::response::Response {
+    let method = req.method().clone();
+    let uri_path = req.uri().path().to_owned();
+
+    // 从 URI path 解析 bucket name，避免 Axum 多段路由 Path 提取器数量不匹配
+    let relative = uri_path
+        .strip_prefix("/nodeget/static-webdav/")
+        .unwrap_or_else(|| uri_path.trim_start_matches('/'));
+    let (name, _rest) = relative.split_once('/').unwrap_or((relative, ""));
+    let name = name.trim_end_matches('/');
+
+    if name.is_empty() {
+        warn!(target: "webdav", method = %method, uri = %uri_path, "missing bucket name in webdav url");
+        return build_webdav_error(StatusCode::NOT_FOUND, "Missing bucket name in WebDAV URL");
+    }
+
+    debug!(target: "webdav", method = %method, uri = %uri_path, bucket = %name, "webdav request received");
+
+    // 1. Look up bucket
+    let cache = crate::static_file::cache::StaticCache::global();
+    let Some(model) = cache.get_by_name(name).await else {
+        warn!(target: "webdav", method = %method, uri = %uri_path, bucket = %name, "bucket not found");
+        return build_webdav_error(StatusCode::NOT_FOUND, "Static bucket not found");
+    };
+    debug!(target: "webdav", bucket = %name, path = %model.path, cors = model.cors, "bucket resolved");
+
+    // 2. Extract Basic Auth
+    let Some(auth_header) = req.headers().get(axum::http::header::AUTHORIZATION) else {
+        warn!(target: "webdav", bucket = %name, method = %method, "missing authorization header");
+        return build_webdav_auth_required();
+    };
+    let auth_str = match auth_header.to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            warn!(target: "webdav", bucket = %name, "invalid authorization header encoding");
+            return build_webdav_auth_required();
+        }
+    };
+    if !auth_str.starts_with("Basic ") {
+        warn!(target: "webdav", bucket = %name, "authorization header not basic");
+        return build_webdav_auth_required();
+    }
+    let credentials = match base64::engine::general_purpose::STANDARD.decode(&auth_str[6..]) {
+        Ok(bytes) => match String::from_utf8(bytes) {
+            Ok(s) => s,
+            Err(_) => {
+                warn!(target: "webdav", bucket = %name, "invalid base64 or non-utf8 credentials");
+                return build_webdav_auth_required();
+            }
+        },
+        Err(_) => {
+            warn!(target: "webdav", bucket = %name, "invalid base64 in authorization header");
+            return build_webdav_auth_required();
+        }
+    };
+    let (username, password) = credentials.split_once(':').unwrap_or((&credentials, ""));
+
+    // 3. Validate token
+    let full_token = format!("{username}:{password}");
+    let token_or_auth = match nodeget_lib::permission::token_auth::TokenOrAuth::from_full_token(&full_token) {
+        Ok(t) => t,
+        Err(_) => {
+            let full_auth = format!("{username}|{password}");
+            match nodeget_lib::permission::token_auth::TokenOrAuth::from_full_token(&full_auth) {
+                Ok(t) => t,
+                Err(_) => {
+                    warn!(target: "webdav", bucket = %name, username = %username, "token/auth parse failed");
+                    return build_webdav_auth_required();
+                }
+            }
+        }
+    };
+    debug!(target: "webdav", bucket = %name, username = %username, "token parsed successfully");
+
+    // 4. Check all StaticBucketFile permissions
+    let permissions = vec![
+        nodeget_lib::permission::data_structure::Permission::StaticBucketFile(
+            nodeget_lib::permission::data_structure::StaticBucketFile::Read,
+        ),
+        nodeget_lib::permission::data_structure::Permission::StaticBucketFile(
+            nodeget_lib::permission::data_structure::StaticBucketFile::Write,
+        ),
+        nodeget_lib::permission::data_structure::Permission::StaticBucketFile(
+            nodeget_lib::permission::data_structure::StaticBucketFile::Delete,
+        ),
+        nodeget_lib::permission::data_structure::Permission::StaticBucketFile(
+            nodeget_lib::permission::data_structure::StaticBucketFile::List,
+        ),
+    ];
+    let is_allowed = match crate::token::get::check_token_limit(
+        &token_or_auth,
+        vec![nodeget_lib::permission::data_structure::Scope::StaticBucket(name.to_string())],
+        permissions,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            error!(target: "webdav", bucket = %name, username = %username, error = %e, "permission check failed internally");
+            false
+        }
+    };
+
+    if !is_allowed {
+        warn!(target: "webdav", bucket = %name, username = %username, "insufficient permissions");
+        return build_webdav_error(StatusCode::FORBIDDEN, "Forbidden: insufficient StaticBucketFile permissions");
+    }
+    debug!(target: "webdav", bucket = %name, username = %username, "all permissions granted");
+
+    // 5. Serve via WebDAV
+    let static_path = crate::static_file::get_static_path();
+    let disk_path = std::path::PathBuf::from(&static_path).join(&model.path);
+
+    info!(target: "webdav", bucket = %name, username = %username, disk_path = %disk_path.display(), method = %method, "serving webdav request");
+
+    let dav = DavHandler::builder()
+        .filesystem(LocalFs::new(&disk_path, false, false, false))
+        .locksystem(FakeLs::new())
+        .strip_prefix(format!("/nodeget/static-webdav/{}", name))
+        .build_handler();
+
+    let resp = dav.handle(req).await.into_response();
+    let status = resp.status();
+    if status.is_success() || status.is_redirection() || status == StatusCode::NOT_MODIFIED {
+        debug!(target: "webdav", bucket = %name, username = %username, status = %status, "webdav request completed");
+    } else {
+        warn!(target: "webdav", bucket = %name, username = %username, status = %status, "webdav request returned non-success status");
+    }
+    resp
+}
+
+fn build_webdav_auth_required() -> axum::response::Response {
+    axum::http::Response::builder()
+        .status(StatusCode::UNAUTHORIZED)
+        .header(
+            axum::http::header::WWW_AUTHENTICATE,
+            "Basic realm=\"NodeGet Static WebDAV\"",
+        )
+        .body(axum::body::Body::from("Authentication required"))
+        .expect("Failed to build response")
+}
+
+fn build_webdav_error(status: StatusCode, message: impl Into<String>) -> axum::response::Response {
+    axum::http::Response::builder()
+        .status(status)
+        .header(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .body(axum::body::Body::from(message.into()))
+        .expect("Failed to build response")
 }
 
 fn build_http_error(
