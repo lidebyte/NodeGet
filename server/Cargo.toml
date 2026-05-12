@@ -1,6 +1,6 @@
 [package]
 name = "nodeget-server"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
 description = "Next-generation server monitoring and management tools"
 license = "AGPL-3"
@@ -44,6 +44,9 @@ toml = { version = "1.1.2", default-features = false, features = ["std", "serde"
 # HTTP Client
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 
+# WebDAV
+dav-server = { version = "0.11.0", default-features = false, features = ["localfs"] }
+
 # 日志
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt", "chrono", "tracing-log"] }
@@ -59,9 +62,6 @@ llrt_util = { git = "https://github.com/awslabs/llrt.git", default-features = fa
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 rquickjs = { version = "0.11", git = "https://github.com/delskayn/rquickjs.git", default-features = false, features = ["futures", "bindgen"] }
-
-[target.'cfg(unix)'.dependencies]
-libc = { version = "0.2.175", default-features = false }
 
 [features]
 default = []

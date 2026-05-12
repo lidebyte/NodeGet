@@ -33,6 +33,10 @@ server_uuid = "auto_gen"
 # tls_cert = "/path/to/fullchain.pem"
 # tls_key = "/path/to/privkey.pem"
 
+# 静态文件服务根目录，默认 `./static/`
+# 所有 Bucket 的磁盘路径都基于此目录拼接
+# static_path = "./static/"
+
 # 日志配置（可选，整个 [logging] 段不填则使用默认值）
 [logging]
 

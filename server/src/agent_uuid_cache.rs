@@ -109,6 +109,7 @@ impl AgentUuidCache {
     pub async fn list_all(&self) -> Vec<Uuid> {
         let guard = self.inner.read().await;
         let mut result: Vec<Uuid> = guard.uuids.iter().copied().collect();
+        drop(guard); // 提前释放读锁，排序无需持有锁
         result.sort_unstable();
         result
     }

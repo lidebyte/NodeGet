@@ -68,6 +68,89 @@ curl http://localhost:3000/index.html
 # 实际返回磁盘上 {static_path}/{path}/index.html 的内容（path 为该 bucket 记录里的 path 字段）
 ```
 
+## WebDAV 访问
+
+除了 JSON-RPC，`static-bucket-file` 还支持标准的 **WebDAV 协议**，可直接挂载为本地网络盘（Windows / macOS / Linux 均支持）。
+
+### 路由
+
+```
+/nodeget/static-webdav/{name}/**
+```
+
+### 鉴权
+
+- **HTTP Basic Auth**
+- **Username**：Token key（如 `0SbSt9j9NM8Tp1iu`）或 username
+- **Password**：Token secret（如 `KXLOGPNgfDMtFHGLAaIyIGtbyHYVa53V`）或 password
+- **权限要求**：必须同时拥有 `StaticBucketFile::Read` + `Write` + `Delete` + `List`
+
+### 客户端挂载示例
+
+**macOS**（Finder）：
+```
+Cmd + K → http://服务器IP:端口/nodeget/static-webdav/hugo
+```
+
+**Windows**（资源管理器）：
+```
+映射网络驱动器 → \\服务器IP@端口\nodeget\static-webdav\hugo
+# 或使用 Explorer 地址栏：
+http://服务器IP:端口/nodeget/static-webdav/hugo
+```
+
+**Linux**（命令行）：
+```bash
+# 使用 davfs2
+sudo mount -t davfs http://服务器IP:端口/nodeget/static-webdav/hugo /mnt/hugo
+# 或 GNOME Files (Nautilus)：Ctrl + L → dav://服务器IP:端口/nodeget/static-webdav/hugo
+```
+
+**命令行 curl 示例**：
+```bash
+# PROPFIND（列出目录）
+curl -X PROPFIND http://localhost:3000/nodeget/static-webdav/hugo/ \
+  -H "Authorization: Basic $(echo -n 'key:secret' | base64)" \
+  -H "Content-Type: text/xml"
+
+# PUT（上传文件）
+curl -X PUT http://localhost:3000/nodeget/static-webdav/hugo/test.txt \
+  -H "Authorization: Basic $(echo -n 'key:secret' | base64)" \
+  -d "hello webdav"
+
+# DELETE（删除文件）
+curl -X DELETE http://localhost:3000/nodeget/static-webdav/hugo/test.txt \
+  -H "Authorization: Basic $(echo -n 'key:secret' | base64)"
+```
+
+### 创建 WebDAV Token
+
+任何拥有 `token_create` 权限的用户（包括 SuperToken）都可以创建：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "token_create",
+  "params": [
+    "t2DsqekSlWgR490E:mgD3tXOqkEGreGOZkweuwBaEEsGGbkmY",
+    {
+      "token_limit": [
+        {
+          "scopes": [{ "static_bucket": "hugo" }],
+          "permissions": [
+            { "static_bucket_file": "read" },
+            { "static_bucket_file": "write" },
+            { "static_bucket_file": "delete" },
+            { "static_bucket_file": "list" }
+          ]
+        }
+      ]
+    }
+  ],
+  "id": 1
+}
+```
+
 ## 注意事项
 
 - 文件 `path` 参数严格禁止目录遍历（`..` 和绝对路径会被拒绝）
