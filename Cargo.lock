@@ -2914,7 +2914,6 @@ dependencies = [
  "futures-util",
  "hex",
  "jsonrpsee",
- "libc",
  "llrt_buffer",
  "llrt_fetch",
  "llrt_stream_web",
