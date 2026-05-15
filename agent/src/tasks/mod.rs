@@ -57,6 +57,7 @@ async fn execute_task(
     task_type: &TaskEventType,
     task_id: u64,
     task_token: &str,
+    ignore_cert: bool,
 ) -> Result<TaskEventResult> {
     match task_type {
         TaskEventType::Ping(target) => ping::icmp::ping_target(target.clone())
@@ -93,7 +94,7 @@ async fn execute_task(
         TaskEventType::WebShell(web_shell) => {
             let terminal_id = web_shell.terminal_id.to_string();
             let url = pty::parse_url(web_shell.url.clone(), task_id, task_token, &terminal_id);
-            pty::handle_pty_url(url, terminal_id)
+            pty::handle_pty_url(url, terminal_id, ignore_cert)
                 .await
                 .map(|()| TaskEventResult::WebShell(true))
                 .map_err(|e| NodegetError::Other(format!("{e}")).into())
@@ -251,6 +252,7 @@ pub async fn handle_task() {
                                 task_type,
                                 json_rpc.params.result.task_id,
                                 &json_rpc.params.result.task_token,
+                                server_config.ignore_cert.unwrap_or(false),
                             );
                             if matches!(task_type, TaskEventType::WebShell(_)) {
                                 fut.await

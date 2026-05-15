@@ -90,6 +90,8 @@ pub struct Server {
     pub allow_version: Option<bool>,
     // 是否允许自更新
     pub allow_self_update: Option<bool>,
+    // 是否忽略服务端 TLS 证书校验（默认关闭）
+    pub ignore_cert: Option<bool>,
 }
 
 // IP 地址获取服务提供商枚举

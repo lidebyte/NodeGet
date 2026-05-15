@@ -104,6 +104,11 @@ allow_version = true
 # 注意：Windows 平台拉起新进程后自身退出
 allow_self_update = false
 
+# 是否忽略服务端 TLS 证书校验，默认关闭
+# 仅在 Server 使用自签名证书或测试环境时开启
+# 开启后将不再校验服务端证书链和主机名，存在中间人攻击风险，生产环境请谨慎使用
+ignore_cert = false
+
 
 # 第二个 Server
 [[server]]
