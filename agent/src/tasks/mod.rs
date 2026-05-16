@@ -39,6 +39,15 @@ pub mod self_update;
 
 // 检查服务器是否允许执行特定任务
 fn is_task_allowed(server: &nodeget_lib::config::agent::Server, task_type: &TaskEventType) -> bool {
+    // 若指定了 allow_task_type（非空），则以此列表为准，忽略所有单独的 allow_* 开关
+    if let Some(ref allowed) = server.allow_task_type {
+        if !allowed.is_empty() {
+            let task_name = task_type.task_name();
+            return allowed.iter().any(|t| t == task_name);
+        }
+    }
+
+    // 未指定 allow_task_type 或为空时，回退到原有的布尔开关
     match task_type {
         TaskEventType::Ping(_) => server.allow_icmp_ping.unwrap_or(false),
         TaskEventType::TcpPing(_) => server.allow_tcp_ping.unwrap_or(false),

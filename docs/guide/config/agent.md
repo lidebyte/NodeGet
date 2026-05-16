@@ -110,6 +110,13 @@ allow_version = true
 # 注意：Windows 平台拉起新进程后自身退出
 allow_self_update = false
 
+# 允许执行的任务类型白名单（可选）
+# 若指定此列表且非空，则单独的任务开关（如 allow_ping / allow_execute 等）全部失效
+# 以本列表为准，未列出的任务类型一律拒绝
+# 值为 task_name，可选值包括：ping / tcp_ping / http_ping / dns / execute / http_request
+# / web_shell / read_config / edit_config / ip / version / self_update
+# allow_task_type = ["ping", "dns", "ip"]
+
 # 是否忽略服务端 TLS 证书校验，默认关闭
 # 仅在 Server 使用自签名证书或测试环境时开启
 # 开启后将不再校验服务端证书链和主机名，存在中间人攻击风险，生产环境请谨慎使用

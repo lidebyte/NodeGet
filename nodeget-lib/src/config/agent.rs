@@ -94,6 +94,11 @@ pub struct Server {
     pub allow_self_update: Option<bool>,
     // 是否忽略服务端 TLS 证书校验（默认关闭）
     pub ignore_cert: Option<bool>,
+
+    // 允许的任务类型列表（白名单模式）
+    // 若指定，则以此列表为准，忽略所有单独的 allow_* 开关
+    // 值为 task_name() 的返回值，如 "ping" / "tcp_ping" / "http_ping" / "dns" / "execute" 等
+    pub allow_task_type: Option<Vec<String>>,
 }
 
 // IP 地址获取服务提供商枚举
