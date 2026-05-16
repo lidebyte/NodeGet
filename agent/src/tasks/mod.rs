@@ -29,6 +29,8 @@ mod execute;
 mod ip;
 // HTTP Request 任务模块
 mod http_request;
+// DNS 查询模块
+mod dns;
 // Ping 任务模块
 pub mod ping;
 // PTY（伪终端）模块
@@ -47,6 +49,7 @@ fn is_task_allowed(server: &nodeget_lib::config::agent::Server, task_type: &Task
         TaskEventType::ReadConfig => server.allow_read_config.unwrap_or(false),
         TaskEventType::EditConfig(_) => server.allow_edit_config.unwrap_or(false),
         TaskEventType::Ip => server.allow_ip.unwrap_or(false),
+        TaskEventType::Dns(_) => server.allow_dns.unwrap_or(false),
         TaskEventType::Version => server.allow_version.unwrap_or(false),
         TaskEventType::SelfUpdate(_) => server.allow_self_update.unwrap_or(false),
     }
@@ -137,6 +140,11 @@ async fn execute_task(
             let ip_info = ip::ip().await;
             Ok(TaskEventResult::Ip(ip_info.ipv4, ip_info.ipv6))
         }
+
+        TaskEventType::Dns(dns_task) => dns::query_dns(dns_task)
+            .await
+            .map(TaskEventResult::Dns)
+            .map_err(|e| NodegetError::Other(format!("{e}")).into()),
 
         TaskEventType::Version => {
             let version = nodeget_lib::utils::version::NodeGetVersion::get();

@@ -94,6 +94,12 @@ allow_edit_config = true
 # 是否允许获取 IP 地址
 allow_ip = true
 
+# 是否允许 DNS 查询
+# 支持 A / AAAA / CNAME / MX / TXT / NS / SRV / PTR / SOA / CAA 记录类型
+# Agent 使用 hickory-resolver 库执行 DNS 查询，支持自定义 DNS 服务器（格式 "IP:port"）或系统默认
+# 建议按需开启
+allow_dns = true
+
 # 是否允许获取 Agent 版本信息
 allow_version = true
 
