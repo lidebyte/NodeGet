@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StaticMonitoringData {
     // 设备 UUID
-    pub uuid: String,
+    pub uuid: uuid::Uuid,
     // 时间戳（毫秒）
     pub time: u64,
     // 数据内容的 SHA-256 哈希（前 16 字节原始二进制），用于去重
@@ -36,7 +36,7 @@ impl StaticMonitoringData {
     /// 根据 cpu / system / gpu 三个字段的内容计算确定性 SHA-256 哈希。
     ///
     /// 内部将三个字段各自序列化为 `serde_json::Value`，再递归排序所有 object key，
-    /// 拼接为一个确定性字符串后取 SHA-256。
+    /// 以确定性顺序直接写入 SHA-256 hasher，零中间分配。
     /// 同一组数据无论 JSON 序列化时 key 顺序如何，都会得到相同的哈希值。
     ///
     /// # Errors
@@ -47,41 +47,92 @@ impl StaticMonitoringData {
         cpu: &StaticCPUData,
         system: &StaticSystemData,
         gpu: &[StaticGpuData],
-    ) -> Result<Vec<u8>, serde_json::Error> {
-        fn canonicalize(v: &serde_json::Value) -> serde_json::Value {
-            match v {
-                serde_json::Value::Object(map) => {
-                    let mut sorted: Vec<(&String, serde_json::Value)> =
-                        map.iter().map(|(k, v)| (k, canonicalize(v))).collect();
-                    sorted.sort_by(|a, b| a.0.cmp(b.0));
-                    serde_json::Value::Object(
-                        sorted.into_iter().map(|(k, v)| (k.clone(), v)).collect(),
-                    )
-                }
-                serde_json::Value::Array(arr) => {
-                    serde_json::Value::Array(arr.iter().map(canonicalize).collect())
-                }
-                other => other.clone(),
-            }
-        }
+    ) -> Result<Vec<u8>, crate::error::NodegetError> {
+        use std::io::Write;
 
-        let cpu_val = canonicalize(&serde_json::to_value(cpu)?);
-        let sys_val = canonicalize(&serde_json::to_value(system)?);
-        let gpu_val = canonicalize(&serde_json::to_value(gpu)?);
+        let cpu_val = serde_json::to_value(cpu).map_err(crate::error::NodegetError::from)?;
+        let sys_val = serde_json::to_value(system).map_err(crate::error::NodegetError::from)?;
+        let gpu_val = serde_json::to_value(gpu).map_err(crate::error::NodegetError::from)?;
 
-        let canonical = format!("{cpu_val}\n{sys_val}\n{gpu_val}");
+        let mut hasher = Sha256::new();
+        let mut writer = WriteToDigest(&mut hasher);
+        write_canonical_json(&cpu_val, &mut writer)
+            .map_err(|e| crate::error::NodegetError::Other(format!("canonical write failed: {e}")))?;
+        writer.write_all(b"\n")
+            .map_err(|e| crate::error::NodegetError::Other(format!("canonical write failed: {e}")))?;
+        write_canonical_json(&sys_val, &mut writer)
+            .map_err(|e| crate::error::NodegetError::Other(format!("canonical write failed: {e}")))?;
+        writer.write_all(b"\n")
+            .map_err(|e| crate::error::NodegetError::Other(format!("canonical write failed: {e}")))?;
+        write_canonical_json(&gpu_val, &mut writer)
+            .map_err(|e| crate::error::NodegetError::Other(format!("canonical write failed: {e}")))?;
 
-        let hash = Sha256::digest(canonical.as_bytes());
+        let hash = hasher.finalize();
         // 取前 16 字节 (128 bit) 足够去重
         Ok(hash[..16].to_vec())
     }
+}
+
+// 将 `std::io::Write` 调用桥接到 `Sha256::update`，实现零分配流式哈希
+struct WriteToDigest<'a>(&'a mut Sha256);
+
+impl<'a> std::io::Write for WriteToDigest<'a> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        sha2::Digest::update(self.0, buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// 将 `serde_json::Value` 以确定性顺序直接写入 Writer，零 clone。
+///
+/// 对于 Object，按 key 的字典序排序后递归写入；
+/// 对于 Array，按原有顺序递归写入；
+/// 对于标量，通过 `serde_json::to_writer` 序列化。
+fn write_canonical_json<W: std::io::Write>(
+    v: &serde_json::Value,
+    w: &mut W,
+) -> std::io::Result<()> {
+    match v {
+        serde_json::Value::Object(map) => {
+            let mut keys: Vec<&str> = map.keys().map(|k| k.as_str()).collect();
+            keys.sort();
+            w.write_all(b"{")?;
+            for (i, k) in keys.iter().enumerate() {
+                if i > 0 {
+                    w.write_all(b",")?;
+                }
+                serde_json::to_writer(&mut *w, k)?;
+                w.write_all(b":" )?;
+                write_canonical_json(map.get(*k).unwrap(), w)?;
+            }
+            w.write_all(b"}")?;
+        }
+        serde_json::Value::Array(arr) => {
+            w.write_all(b"[")?;
+            for (i, v) in arr.iter().enumerate() {
+                if i > 0 {
+                    w.write_all(b",")?;
+                }
+                write_canonical_json(v, w)?;
+            }
+            w.write_all(b"]")?;
+        }
+        other => {
+            serde_json::to_writer(w, other)?;
+        }
+    }
+    Ok(())
 }
 
 // 动态监控数据结构体，包含随时间变化的系统状态信息
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicMonitoringData {
     // 设备 UUID
-    pub uuid: String,
+    pub uuid: uuid::Uuid,
     // 时间戳（毫秒）
     pub time: u64,
 
@@ -105,7 +156,7 @@ pub struct DynamicMonitoringData {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicMonitoringSummaryData {
     // 设备 UUID
-    pub uuid: String,
+    pub uuid: uuid::Uuid,
     // 时间戳（毫秒）
     pub time: u64,
 
@@ -243,7 +294,7 @@ impl From<&DynamicMonitoringData> for DynamicMonitoringSummaryData {
         let transmit_speed: u64 = ifaces.iter().map(|i| i.transmit_speed).sum();
 
         Self {
-            uuid: data.uuid.clone(),
+            uuid: data.uuid,
             time: data.time,
             cpu_usage: scale_cpu_percent_to_i16(data.cpu.total_cpu_usage),
             gpu_usage: data.gpu.first().map(|g| i16::from(g.utilization_gpu)),
