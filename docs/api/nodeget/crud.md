@@ -58,19 +58,32 @@
 
 ```json
 {
-  "binary_type": "Server",                    // 二进制类型
-  "build_time": "2026-02-08T10:44:02.848471700Z", // 构建时间
-  "cargo_target_triple": "x86_64-pc-windows-msvc", // 编译目标
-  "cargo_version": "0.0.1",                   // Cargo 版本号
-  "git_branch": "main",                       // Git 分支
-  "git_commit_date": "2026-02-08T07:25:09.000000000Z", // 提交日期
-  "git_commit_message": "Feat: ...",           // 提交信息
-  "git_commit_sha": "73d9589",                // 提交 SHA
-  "rustc_channel": "nightly",                 // Rust 编译器通道
-  "rustc_commit_date": "2025-12-30",          // Rust 编译器提交日期
-  "rustc_commit_hash": "0e8999942552691afc20495af6227eca8ab0af05", // Rust 编译器提交 Hash
-  "rustc_llvm_version": "21.1",               // LLVM 版本
-  "rustc_version": "1.94.0-nightly"           // Rust 版本
+  "binary_type": "Server",
+  // 二进制类型
+  "build_time": "2026-02-08T10:44:02.848471700Z",
+  // 构建时间
+  "cargo_target_triple": "x86_64-pc-windows-msvc",
+  // 编译目标
+  "cargo_version": "0.0.1",
+  // Cargo 版本号
+  "git_branch": "main",
+  // Git 分支
+  "git_commit_date": "2026-02-08T07:25:09.000000000Z",
+  // 提交日期
+  "git_commit_message": "Feat: ...",
+  // 提交信息
+  "git_commit_sha": "73d9589",
+  // 提交 SHA
+  "rustc_channel": "nightly",
+  // Rust 编译器通道
+  "rustc_commit_date": "2025-12-30",
+  // Rust 编译器提交日期
+  "rustc_commit_hash": "0e8999942552691afc20495af6227eca8ab0af05",
+  // Rust 编译器提交 Hash
+  "rustc_llvm_version": "21.1",
+  // LLVM 版本
+  "rustc_version": "1.94.0-nightly"
+  // Rust 版本
 }
 ```
 
@@ -82,7 +95,8 @@
 {
   "jsonrpc": "2.0",
   "method": "nodeget-server_version",
-  "params": [], // 无参数
+  "params": [],
+  // 无参数
   "id": 1
 }
 ```
@@ -135,7 +149,8 @@
 {
   "jsonrpc": "2.0",
   "method": "nodeget-server_uuid",
-  "params": [], // 无参数
+  "params": [],
+  // 无参数
   "id": 1
 }
 ```
@@ -145,7 +160,8 @@
 ```json
 {
   "jsonrpc": "2.0",
-  "result": "e8583352-39e8-5a5b-b66c-e450689088fd", // Server UUID
+  "result": "e8583352-39e8-5a5b-b66c-e450689088fd",
+  // Server UUID
   "id": 1
 }
 ```
@@ -162,7 +178,8 @@
 
 ```json
 {
-  "token": "demo_token" // Token 字符串
+  "token": "demo_token"
+  // Token 字符串
 }
 ```
 
@@ -228,7 +245,8 @@
 
 ```json
 {
-  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET" // SuperToken 字符串
+  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET"
+  // SuperToken 字符串
 }
 ```
 
@@ -265,7 +283,8 @@
 ```json
 {
   "jsonrpc": "2.0",
-  "result": "ws_listener = \"0.0.0.0:2211\"\\nserver_uuid = \"auto_gen\"\\n\\n[logging]\\nlog_filter = \"info\"\\n\\n[database]\\ndatabase_url = \"sqlite://nodeget.db?mode=rwc\"\\n...", // 配置文件原始文本
+  "result": "ws_listener = \"0.0.0.0:2211\"\\nserver_uuid = \"auto_gen\"\\n\\n[logging]\\nlog_filter = \"info\"\\n\\n[database]\\ndatabase_url = \"sqlite://nodeget.db?mode=rwc\"\\n...",
+  // 配置文件原始文本
   "id": 1
 }
 ```
@@ -280,8 +299,10 @@
 
 ```json
 {
-  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET", // SuperToken 字符串
-  "config_string": "ws_listener = \"0.0.0.0:2211\"\\n..."   // 完整的 TOML 配置文本
+  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET",
+  // SuperToken 字符串
+  "config_string": "ws_listener = \"0.0.0.0:2211\"\\n..."
+  // 完整的 TOML 配置文本
 }
 ```
 
@@ -325,7 +346,8 @@
 ```json
 {
   "jsonrpc": "2.0",
-  "result": true, // 写入成功
+  "result": true,
+  // 写入成功
   "id": 1
 }
 ```
@@ -340,7 +362,8 @@
 
 ```json
 {
-  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET" // SuperToken 字符串
+  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET"
+  // SuperToken 字符串
 }
 ```
 
@@ -511,8 +534,10 @@
 
 ```json
 {
-  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET", // SuperToken 字符串
-  "log_filter": "info,rpc=debug,db=trace"        // 日志过滤规则，语法同 RUST_LOG
+  "token": "SUPER_TOKEN_KEY:SUPER_TOKEN_SECRET",
+  // SuperToken 字符串
+  "log_filter": "info,rpc=debug,db=trace"
+  // 日志过滤规则，语法同 RUST_LOG
 }
 ```
 
@@ -722,7 +747,9 @@ curl -X POST http://127.0.0.1:2211/jsonrpc \
 {
   "token": "demo_token",
   "sql": "SELECT id, name FROM users WHERE age > ?",
-  "params": [18]
+  "params": [
+    18
+  ]
 }
 ```
 

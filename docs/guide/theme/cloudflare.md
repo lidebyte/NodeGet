@@ -19,14 +19,15 @@ cloudflare pages的入口如下图所示
 
 ## 利用文件上传
 
-标准的步骤是，先下载主题作者提供的编译好的静态文件，比如[官方的这个](https://nodeget.pages.dev/NodeGet-StatusShow.zip)，然后修改压缩文件里 config.json 中的配置，最后上传。这对一些未适配 新的 NodeGet 主题规范的历史主题仍然有效。 
+标准的步骤是，先下载主题作者提供的编译好的静态文件，比如[官方的这个](https://nodeget.pages.dev/NodeGet-StatusShow.zip)
+，然后修改压缩文件里 config.json 中的配置，最后上传。这对一些未适配 新的 NodeGet 主题规范的历史主题仍然有效。
 
-但如果你的主题适配了 NodeGet 主题规范，这里有个更加完美的部署方式，先利用[一键部署](./quick-install.md)部署到控制面板，然后利用下图所示的下载压缩包功能直接下载完善的配置好了token的压缩包，将其上传到 pages里面即可，非常简单。
+但如果你的主题适配了 NodeGet 主题规范，这里有个更加完美的部署方式，先利用[一键部署](./quick-install.md)
+部署到控制面板，然后利用下图所示的下载压缩包功能直接下载完善的配置好了token的压缩包，将其上传到 pages里面即可，非常简单。
 
 ![qxkhl06ImkWg0Jz1aRiuU5YhFYYF7J7q.webp](https://cdn.nodeimage.com/i/qxkhl06ImkWg0Jz1aRiuU5YhFYYF7J7q.webp)
 
 补充说明：如果你有定制css/js的需求，可以在控制面板定制完后，再导出压缩包。
-
 
 ## 利用Github上传
 
