@@ -69,28 +69,28 @@ jobs:
         platform:
           - release_for: x86_64-musl
             target: x86_64-unknown-linux-musl
-            packages: [agent, server]
+            packages: [ agent, server ]
           - release_for: x86_64-gnu
             target: x86_64-unknown-linux-gnu
-            packages: [agent, server]
+            packages: [ agent, server ]
           - release_for: aarch64-musl
             target: aarch64-unknown-linux-musl
-            packages: [agent, server]
+            packages: [ agent, server ]
           - release_for: aarch64-gnu
             target: aarch64-unknown-linux-gnu
-            packages: [agent, server]
+            packages: [ agent, server ]
           - release_for: armv7-musleabihf
             target: armv7-unknown-linux-musleabihf
-            packages: [agent]
+            packages: [ agent ]
           - release_for: armv7-gnueabihf
             target: armv7-unknown-linux-gnueabihf
-            packages: [agent]
+            packages: [ agent ]
           - release_for: arm-musleabihf
             target: arm-unknown-linux-musleabihf
-            packages: [agent]
+            packages: [ agent ]
           - release_for: i686-musl
             target: i686-unknown-linux-musl
-            packages: [agent]
+            packages: [ agent ]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -160,10 +160,10 @@ jobs:
         platform:
           - release_for: x86_64
             target: x86_64-pc-windows-msvc
-            packages: [agent, server]
+            packages: [ agent, server ]
           - release_for: aarch64
             target: aarch64-pc-windows-msvc
-            packages: [agent]
+            packages: [ agent ]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -219,10 +219,10 @@ jobs:
         platform:
           - release_for: aarch64
             target: aarch64-apple-darwin
-            packages: [agent, server]
+            packages: [ agent, server ]
           - release_for: x86_64
             target: x86_64-apple-darwin
-            packages: [agent]
+            packages: [ agent ]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
