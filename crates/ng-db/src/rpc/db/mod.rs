@@ -15,17 +15,20 @@ mod read;
 mod update;
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 struct NameParam {
     name: String,
 }
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 struct RenameParam {
     name: String,
     new_name: String,
 }
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 struct ExecSqlParam {
     name: String,
     sql: String,

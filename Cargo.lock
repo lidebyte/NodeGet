@@ -2968,6 +2968,16 @@ version = "0.5.0"
 [[package]]
 name = "ng-kv"
 version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "jsonrpsee",
+ "ng-core",
+ "ng-db",
+ "ng-infra",
+ "sea-orm",
+ "serde_json",
+ "tracing",
+]
 
 [[package]]
 name = "ng-migration"
@@ -2996,6 +3006,20 @@ version = "0.5.0"
 [[package]]
 name = "ng-token"
 version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "jsonrpsee",
+ "ng-core",
+ "ng-db",
+ "ng-infra",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "subtle",
+ "tracing",
+]
 
 [[package]]
 name = "nix"
