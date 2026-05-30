@@ -2928,6 +2928,25 @@ dependencies = [
 [[package]]
 name = "ng-crontab"
 version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "cron",
+ "jsonrpsee",
+ "ng-core",
+ "ng-db",
+ "ng-infra",
+ "ng-js-runtime",
+ "ng-js-worker",
+ "ng-task",
+ "ng-token",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "ng-db"
@@ -2960,10 +2979,45 @@ dependencies = [
 [[package]]
 name = "ng-js-runtime"
 version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "llrt_buffer",
+ "llrt_fetch",
+ "llrt_stream_web",
+ "llrt_timers",
+ "llrt_url",
+ "llrt_util",
+ "ng-core",
+ "ng-db",
+ "ng-infra",
+ "rquickjs",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "ng-js-worker"
 version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "chrono",
+ "jsonrpsee",
+ "ng-core",
+ "ng-db",
+ "ng-infra",
+ "ng-js-runtime",
+ "rquickjs",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "ng-kv"
@@ -3050,6 +3104,22 @@ dependencies = [
 [[package]]
 name = "ng-terminal"
 version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "futures-util",
+ "ng-core",
+ "ng-db",
+ "ng-infra",
+ "ng-task",
+ "ng-token",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "ng-token"
