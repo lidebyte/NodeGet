@@ -2898,6 +2898,19 @@ version = "0.5.0"
 [[package]]
 name = "ng-config"
 version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "jsonrpsee",
+ "ng-core",
+ "ng-token",
+ "palc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml 1.1.2+spec-1.1.0",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "ng-core"
@@ -2919,10 +2932,30 @@ version = "0.5.0"
 [[package]]
 name = "ng-db"
 version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "jsonrpsee",
+ "ng-core",
+ "ng-migration",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "ng-infra"
 version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "jsonrpsee",
+ "ng-core",
+ "sea-orm",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "ng-js-runtime"
@@ -2935,6 +2968,14 @@ version = "0.5.0"
 [[package]]
 name = "ng-kv"
 version = "0.5.0"
+
+[[package]]
+name = "ng-migration"
+version = "0.1.0"
+dependencies = [
+ "sea-orm-migration",
+ "tokio",
+]
 
 [[package]]
 name = "ng-monitoring"

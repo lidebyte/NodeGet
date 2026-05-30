@@ -7,6 +7,22 @@ repository.workspace = true
 
 [features]
 default = []
-server = []
+server = ["dep:jsonrpsee", "dep:ng-token", "ng-core/for-server"]
 
 [dependencies]
+# Internal
+ng-core = { workspace = true }
+
+# Core deps (always needed — agent and server both use config types)
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["fs", "sync"] }
+uuid = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+palc = { workspace = true }
+
+# server feature only
+jsonrpsee = { workspace = true, optional = true }
+ng-token = { workspace = true, optional = true }
