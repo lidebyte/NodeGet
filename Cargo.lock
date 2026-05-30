@@ -3245,29 +3245,27 @@ dependencies = [
  "axum-server",
  "base64",
  "chrono",
- "cron",
- "dav-server",
- "futures-util",
- "hex",
  "jsonrpsee",
- "llrt_buffer",
- "llrt_fetch",
- "llrt_stream_web",
- "llrt_timers",
- "llrt_url",
- "llrt_util",
- "migration",
+ "ng-config",
+ "ng-core",
+ "ng-crontab",
+ "ng-db",
+ "ng-infra",
+ "ng-js-runtime",
+ "ng-js-worker",
+ "ng-kv",
+ "ng-monitoring",
+ "ng-static",
+ "ng-task",
+ "ng-terminal",
+ "ng-token",
  "nodeget-lib",
  "reqwest",
- "rquickjs",
  "rustls",
  "sea-orm",
  "serde",
  "serde_json",
- "sha2 0.11.0",
- "subtle",
  "tokio",
- "toml 1.1.2+spec-1.1.0",
  "tower",
  "tracing",
  "tracing-subscriber",
@@ -3300,15 +3298,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2143d8af2adc66980ae"
 dependencies = [
  "winapi",
-]
-
-[[package]]
-name = "nu-ansi-term"
-version = "0.50.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
-dependencies = [
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4387,7 +4376,6 @@ name = "rquickjs-sys"
 version = "0.11.0"
 source = "git+https://github.com/delskayn/rquickjs.git#5dcebf0e1e4f242de4b98208c328bf69eb4ac1e6"
 dependencies = [
- "bindgen",
  "cc",
 ]
 
@@ -5848,13 +5836,11 @@ checksum = "cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319"
 dependencies = [
  "chrono",
  "matchers",
- "nu-ansi-term",
  "once_cell",
  "regex-automata",
  "serde",
  "serde_json",
  "sharded-slab",
- "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
