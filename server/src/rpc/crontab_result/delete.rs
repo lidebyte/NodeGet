@@ -89,7 +89,8 @@ pub async fn delete(token: String, query: CrontabResultDataQuery) -> RpcResult<B
                     delete_query = delete_query.filter(crontab_result::Column::Success.eq(false));
                 }
                 CrontabResultQueryCondition::Limit(limit) => {
-                    limit_count = Some(limit);
+                    const MAX_LIMIT: u64 = 10_000;
+                    limit_count = Some(std::cmp::min(limit, MAX_LIMIT));
                 }
                 CrontabResultQueryCondition::Last => {
                     is_last = true;

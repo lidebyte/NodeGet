@@ -162,7 +162,8 @@ pub async fn delete(token: String, query: JsResultDataQuery) -> RpcResult<Box<Ra
                     );
                 }
                 JsResultQueryCondition::Limit(limit) => {
-                    limit_count = Some(limit);
+                    const MAX_LIMIT: u64 = 10_000;
+                    limit_count = Some(std::cmp::min(limit, MAX_LIMIT));
                 }
                 JsResultQueryCondition::Last => {
                     is_last = true;
