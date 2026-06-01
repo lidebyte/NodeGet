@@ -74,7 +74,8 @@ pub async fn edit(
             tracing::error!(target: "crontab", error = %e, "failed to reload crontab cache after edit");
         }
 
-        let json_str = format!("{{\"id\":{},\"success\":true}}", updated.id);
+        let json_str = serde_json::to_string(&serde_json::json!({"id": updated.id, "success": true}))
+            .map_err(|e| NodegetError::SerializationError(e.to_string()))?;
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
     };

@@ -84,7 +84,9 @@ pub async fn terminal_ws_handler(
     State(state): State<TerminalState>,
 ) -> impl IntoResponse {
     debug!(target: "terminal", agent_uuid = %params.agent_uuid, "WebSocket upgrade request");
-    ws.on_upgrade(move |socket| handle_socket(socket, params, state))
+    ws.max_frame_size(1024 * 1024)
+        .max_message_size(4 * 1024 * 1024)
+        .on_upgrade(move |socket| handle_socket(socket, params, state))
 }
 
 // 处理 WebSocket 连接

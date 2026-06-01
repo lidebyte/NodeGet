@@ -1,13 +1,20 @@
+use ng_core::error::NodegetError;
 use ng_core::permission::data_structure::Limit;
+use ng_core::permission::token_auth::TokenOrAuth;
 use ng_db::entity::token;
 use ng_infra::make_global_cache;
 use ng_infra::server::{DbBackedCache, load_from_db};
+use subtle::ConstantTimeEq;
+use tracing::{debug, warn};
 
 use crate::get::parse_token_limit_with_compat;
+use crate::hash_to_bytes;
 
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, RwLock};
+
+const AUTH_FAILED_MESSAGE: &str = "Invalid credentials";
 
 pub struct CachedToken {
     pub model: Arc<token::Model>,
@@ -147,6 +154,90 @@ impl TokenCache {
             .values()
             .map(Arc::clone)
             .collect()
+    }
+
+    /// Authenticate in a single lock acquisition.
+    ///
+    /// Checks the super token entry first, then falls back to regular token lookup.
+    /// Returns `(CachedToken, is_super_token)` on success.
+    /// Errors if authentication fails or if the super token entry is missing from cache.
+    pub fn authenticate(&self, token_or_auth: &TokenOrAuth) -> anyhow::Result<(Arc<CachedToken>, bool)> {
+        let inner = recover_read(&self.inner);
+
+        // Ensure super token exists (matches existing check_super_token behavior)
+        let super_entry = inner.super_token.as_ref().ok_or_else(|| {
+            NodegetError::NotFound("Super Token record (ID 1) not found in cache".to_owned())
+        })?;
+
+        match token_or_auth {
+            TokenOrAuth::Token(key, secret) => {
+                // Check super token first
+                let key_match: bool = key
+                    .as_bytes()
+                    .ct_eq(super_entry.model.token_key.as_bytes())
+                    .into();
+                if key_match {
+                    let computed = hash_to_bytes(secret);
+                    let hash_match: bool = computed.ct_eq(&super_entry.token_hash_bytes).into();
+                    debug!(target: "auth", is_super = hash_match, "super token check (token auth)");
+                    if hash_match {
+                        return Ok((Arc::clone(super_entry), true));
+                    }
+                    // Key matched super token but secret didn't — fall through to regular check
+                }
+
+                // Check regular token by key
+                if let Some(cached) = inner.by_key.get(key) {
+                    let computed = hash_to_bytes(secret);
+                    if bool::from(computed.ct_eq(&cached.token_hash_bytes)) {
+                        debug!(target: "auth", token_key = %key, "token secret verified successfully");
+                        return Ok((Arc::clone(cached), false));
+                    }
+                    warn!(target: "auth", token_key = %key, "auth failed: invalid token secret");
+                    return Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into());
+                }
+
+                warn!(target: "auth", token_key = %key, "auth failed: token key not found");
+                Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into())
+            }
+            TokenOrAuth::Auth(username, password) => {
+                // Check super token first
+                let username_match = super_entry
+                    .model
+                    .username
+                    .as_deref()
+                    .is_some_and(|u| u.as_bytes().ct_eq(username.as_bytes()).into());
+                if username_match {
+                    if let Some(stored) = &super_entry.password_hash_bytes {
+                        let computed = hash_to_bytes(password);
+                        if bool::from(computed.ct_eq(stored)) {
+                            debug!(target: "auth", is_super = true, "authenticate: super token (basic auth)");
+                            return Ok((Arc::clone(super_entry), true));
+                        }
+                        debug!(target: "auth", is_super = false, "super token check (basic auth), password mismatch");
+                    }
+                    // Username matched super but password didn't (or no password set) — fall through
+                }
+
+                // Check regular token by username
+                if let Some(cached) = inner.by_username.get(username) {
+                    let computed = hash_to_bytes(password);
+                    let Some(stored) = &cached.password_hash_bytes else {
+                        warn!(target: "auth", username = %username, "auth failed: no password set for this user");
+                        return Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into());
+                    };
+                    if bool::from(computed.ct_eq(stored)) {
+                        debug!(target: "auth", username = %username, "password verified successfully");
+                        return Ok((Arc::clone(cached), false));
+                    }
+                    warn!(target: "auth", username = %username, "auth failed: invalid password");
+                    return Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into());
+                }
+
+                warn!(target: "auth", username = %username, "auth failed: username not found");
+                Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into())
+            }
+        }
     }
 }
 

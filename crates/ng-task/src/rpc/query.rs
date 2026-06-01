@@ -169,7 +169,7 @@ pub async fn query(token: String, task_data_query: TaskDataQuery) -> RpcResult<B
             }
         }
 
-        const DEFAULT_LIMIT: u64 = 10_000;
+        const DEFAULT_LIMIT: u64 = 1000;
 
         if is_last {
             query = query
@@ -193,7 +193,7 @@ pub async fn query(token: String, task_data_query: TaskDataQuery) -> RpcResult<B
             NodegetError::DatabaseError(format!("Database query error: {e}"))
         })?;
 
-        let capacity = limit_count.unwrap_or(100) as usize * 500;
+        let capacity = limit_count.unwrap_or(DEFAULT_LIMIT) as usize * 500;
         let mut output_buffer: Vec<u8> = Vec::with_capacity(capacity);
 
         output_buffer.push(b'[');

@@ -28,7 +28,7 @@ pub async fn read(token: String, name: String) -> RpcResult<Box<RawValue>> {
             model.ok_or_else(|| NodegetError::NotFound(format!("Database '{name}' not found")))?;
 
         let mgr = DbRegistryManager::global();
-        let is_active = mgr.get_conn(&name).await.is_some();
+        let is_active = mgr.has_conn(&name).await;
 
         debug!(target: "db", token_key = tk, username = un, name = %name, "database read");
 

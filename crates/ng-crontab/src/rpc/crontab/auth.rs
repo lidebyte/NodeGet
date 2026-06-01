@@ -6,6 +6,7 @@ use ng_core::permission::data_structure::{
 use ng_core::permission::token_auth::TokenOrAuth;
 use ng_token::check_token_limit;
 use serde_json::Value;
+use std::collections::HashSet;
 use tracing::{trace, warn};
 
 fn scopes_from_cron_type(cron_type: &CronType) -> Vec<Scope> {
@@ -17,14 +18,8 @@ fn scopes_from_cron_type(cron_type: &CronType) -> Vec<Scope> {
         CronType::Server(_) => vec![Scope::Global],
     };
 
-    let mut deduped = Vec::with_capacity(scopes.len());
-    for scope in scopes {
-        if !deduped.contains(&scope) {
-            deduped.push(scope);
-        }
-    }
-
-    deduped
+    let deduped: HashSet<Scope> = scopes.into_iter().collect();
+    deduped.into_iter().collect()
 }
 
 fn write_permissions_from_cron_type(cron_type: &CronType) -> Vec<Permission> {

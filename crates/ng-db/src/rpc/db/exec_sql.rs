@@ -41,13 +41,13 @@ pub(crate) async fn exec_sql_inner(
     let db_backend = db_conn.get_database_backend();
     let stmt = sea_orm::Statement::from_sql_and_values(db_backend, sql, sea_params);
 
-    let rows = db_conn.query_all_raw(stmt).await?;
-    let mut json_rows: Vec<serde_json::Value> = rows.iter().map(row_to_json).collect();
-    let total_count = json_rows.len() as u64;
-    let truncated = json_rows.len() > 10_000;
+    let mut rows = db_conn.query_all_raw(stmt).await?;
+    let total_count = rows.len() as u64;
+    let truncated = rows.len() > 10_000;
     if truncated {
-        json_rows.truncate(10_000);
+        rows.truncate(10_000);
     }
+    let json_rows: Vec<serde_json::Value> = rows.iter().map(row_to_json).collect();
 
     let (tk, un) = token_identity(token);
     debug!(target: "db", token_key = tk, username = un, name = %db_name, sql_len = sql.len(), total_count, truncated, "exec_sql");

@@ -133,11 +133,6 @@ async fn query_postgres(db: &DatabaseConnection) -> anyhow::Result<BTreeMap<Stri
 }
 
 #[derive(FromQueryResult)]
-struct SizeRow {
-    table_size: i64,
-}
-
-#[derive(FromQueryResult)]
 struct TableNameRow {
     table_name: String,
 }
@@ -170,22 +165,42 @@ async fn query_sqlite(db: &DatabaseConnection) -> anyhow::Result<BTreeMap<String
     .collect();
 
     let mut result = BTreeMap::new();
-    for table_name in &table_names {
-        // dbstat 虚拟表在 SQLite 编译时需启用 SQLITE_ENABLE_DBSTAT_VTAB
-        // sqlx 的 bundled SQLite 默认启用此选项
-        let sql = "SELECT COALESCE(SUM(pgsize), 0) AS table_size FROM dbstat WHERE name = ?";
+    if table_names.is_empty() {
+        return Ok(result);
+    }
 
-        let row = SizeRow::find_by_statement(Statement::from_sql_and_values(
-            DatabaseBackend::Sqlite,
-            sql,
-            [table_name.as_str().into()],
-        ))
-        .one(db)
-        .await
-        .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
+    // 单次查询批量获取所有表大小，避免 N+1 round-trip
+    // dbstat 虚拟表在 SQLite 编译时需启用 SQLITE_ENABLE_DBSTAT_VTAB
+    // sqlx 的 bundled SQLite 默认启用此选项
+    let placeholders: Vec<String> = table_names
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect();
+    let sql = format!(
+        "SELECT name AS table_name, COALESCE(SUM(pgsize), 0) AS table_size FROM dbstat WHERE name IN ({}) GROUP BY name",
+        placeholders.join(", ")
+    );
+    let values: Vec<sea_orm::Value> = table_names
+        .iter()
+        .map(|n| n.as_str().into())
+        .collect();
+    let rows = TableSizeRow::find_by_statement(Statement::from_sql_and_values(
+        DatabaseBackend::Sqlite,
+        &sql,
+        values,
+    ))
+    .all(db)
+    .await
+    .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
-        let size = row.map_or(0, |r| r.table_size);
-        result.insert(table_name.clone(), size);
+    for row in rows {
+        result.insert(row.table_name, row.table_size);
+    }
+
+    // dbstat 不包含无页面的空表，补 0
+    for name in &table_names {
+        result.entry(name.clone()).or_insert(0);
     }
     debug!(target: "server", table_count = result.len(), "SQLite table sizes queried");
 

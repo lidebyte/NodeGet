@@ -169,12 +169,6 @@ pub async fn delete_dynamic_summary(
 
         debug!(target: "monitoring", rows_affected = rows_affected, conditions = conditions.len(), "Dynamic monitoring summary delete completed");
 
-        if rows_affected > 0
-            && let Err(e) = crate::monitoring_uuid_cache::MonitoringUuidCache::reload().await
-        {
-            error!(target: "monitoring_uuid_cache", error = %e, "Failed to reload MonitoringUuidCache after delete_dynamic_summary");
-        }
-
         let json_str = format!(
             "{{\"success\":true,\"deleted\":{},\"condition_count\":{}}}",
             rows_affected,

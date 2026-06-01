@@ -60,7 +60,7 @@ pub struct AgentConfig {
 }
 
 // 服务器配置结构体，定义 Agent 连接的服务器信息
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Server {
     // 服务器名称
     pub name: String, // Only For Agent
@@ -107,6 +107,32 @@ pub struct Server {
     // 若指定，则以此列表为准，忽略所有单独的 allow_* 开关
     // 值为 task_name() 的返回值，如 "ping" / "tcp_ping" / "http_ping" / "dns" / "execute" 等
     pub allow_task_type: Option<Vec<String>>,
+}
+
+impl std::fmt::Debug for Server {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Server")
+            .field("name", &self.name)
+            .field("server_uuid", &self.server_uuid)
+            .field("token", &"***REDACTED***")
+            .field("ws_url", &self.ws_url)
+            .field("allow_task", &self.allow_task)
+            .field("allow_icmp_ping", &self.allow_icmp_ping)
+            .field("allow_tcp_ping", &self.allow_tcp_ping)
+            .field("allow_http_ping", &self.allow_http_ping)
+            .field("allow_web_shell", &self.allow_web_shell)
+            .field("allow_read_config", &self.allow_read_config)
+            .field("allow_edit_config", &self.allow_edit_config)
+            .field("allow_execute", &self.allow_execute)
+            .field("allow_http_request", &self.allow_http_request)
+            .field("allow_ip", &self.allow_ip)
+            .field("allow_dns", &self.allow_dns)
+            .field("allow_version", &self.allow_version)
+            .field("allow_self_update", &self.allow_self_update)
+            .field("ignore_cert", &self.ignore_cert)
+            .field("allow_task_type", &self.allow_task_type)
+            .finish()
+    }
 }
 
 // IP 地址获取服务提供商枚举

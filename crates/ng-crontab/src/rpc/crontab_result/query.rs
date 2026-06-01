@@ -5,6 +5,7 @@ use ng_db::entity::crontab_result;
 use ng_db::get_db;
 use sea_orm::{ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde_json::value::RawValue;
+use std::collections::HashSet;
 use tracing::debug;
 
 pub async fn query(token: String, query: CrontabResultDataQuery) -> RpcResult<Box<RawValue>> {
@@ -16,8 +17,8 @@ pub async fn query(token: String, query: CrontabResultDataQuery) -> RpcResult<Bo
         // 构建查询
         let mut select = crontab_result::Entity::find();
 
-        // 标记是否已经检查了权限
-        let mut permission_checked = false;
+        // 收集所有 CronName 条件并检查每个权限
+        let mut cron_names: HashSet<&str> = HashSet::new();
         let mut has_cron_name_filter = false;
 
         // 处理查询条件
@@ -30,12 +31,7 @@ pub async fn query(token: String, query: CrontabResultDataQuery) -> RpcResult<Bo
                     select = select.filter(crontab_result::Column::CronId.eq(*cron_id));
                 }
                 CrontabResultQueryCondition::CronName(cron_name) => {
-                    // 检查读权限
-                    if !permission_checked {
-                        super::auth::check_crontab_result_read_permission(&token, cron_name)
-                            .await?;
-                        permission_checked = true;
-                    }
+                    cron_names.insert(cron_name);
                     has_cron_name_filter = true;
                     select = select.filter(crontab_result::Column::CronName.eq(cron_name.clone()));
                 }
@@ -70,8 +66,13 @@ pub async fn query(token: String, query: CrontabResultDataQuery) -> RpcResult<Bo
             }
         }
 
-        // 如果没有指定 cron_name 过滤，需要检查全局权限
-        if !has_cron_name_filter && !permission_checked {
+        // 检查权限：每个 distinct CronName 都需要权限
+        if has_cron_name_filter {
+            for cron_name in &cron_names {
+                super::auth::check_crontab_result_read_permission(&token, cron_name).await?;
+            }
+        } else {
+            // 没有 cron_name 过滤，需要全局权限
             super::auth::check_crontab_result_read_permission(&token, "*").await?;
         }
 

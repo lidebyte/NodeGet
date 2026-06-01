@@ -60,12 +60,14 @@ pub async fn roll_token_secret(token: String, target_token: String) -> RpcResult
             );
         }
 
-        let response = format!(
-            r#"{{"key":"{}","secret":"{}"}}"#,
-            updated.token_key, new_secret
-        );
-        RawValue::from_string(response)
-            .map_err(|e| NodegetError::SerializationError(format!("{e}")).into())
+        let json_str = serde_json::to_string(&serde_json::json!({
+            "key": updated.token_key,
+            "secret": new_secret
+        }))
+        .map_err(|e| NodegetError::SerializationError(format!("{e}")))?;
+
+        RawValue::from_string(json_str)
+            .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
     };
 
     match process_logic.await {

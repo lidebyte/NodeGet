@@ -47,22 +47,37 @@ pub async fn update(token: String, name: String, new_name: String) -> RpcResult<
 
         // Step 1: Rename files on disk first (atomic operation).
         // If this fails, no database state has changed.
-        if std::path::Path::new(&old_file).exists() {
-            std::fs::rename(&old_file, &new_file)
-                .map_err(|e| NodegetError::IoError(format!("Failed to rename db file: {e}")))?;
-            for ext in &["-wal", "-shm"] {
-                let old_ext = format!("{old_file}{ext}");
-                let new_ext = format!("{new_file}{ext}");
-                if std::path::Path::new(&old_ext).exists() {
-                    // Best effort: if WA file rename fails, the main file is already
-                    // renamed so we continue. SQLite will recover WAL on next open.
-                    if std::fs::rename(&old_ext, &new_ext).is_err() {
-                        warn!(target: "db", old = %old_ext, new = %new_ext,
-                            "Failed to rename WAL/SHM file, SQLite will recover on next open");
+        let old_file_clone = old_file.clone();
+        let new_file_clone = new_file.clone();
+        let (rename_result, wal_warnings) = tokio::task::spawn_blocking(move || -> (Result<(), NodegetError>, Vec<(String, String)>) {
+            let mut warnings = Vec::new();
+            if std::path::Path::new(&old_file_clone).exists() {
+                match std::fs::rename(&old_file_clone, &new_file_clone) {
+                    Ok(()) => {
+                        for ext in &["-wal", "-shm"] {
+                            let old_ext = format!("{old_file_clone}{ext}");
+                            let new_ext = format!("{new_file_clone}{ext}");
+                            if std::path::Path::new(&old_ext).exists() {
+                                if std::fs::rename(&old_ext, &new_ext).is_err() {
+                                    warnings.push((old_ext, new_ext));
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        return (Err(NodegetError::IoError(format!("Failed to rename db file: {e}"))), warnings);
                     }
                 }
             }
+            (Ok(()), warnings)
+        })
+        .await
+        .map_err(|e| NodegetError::Other(format!("spawn_blocking failed: {e}")))?;
+        for (old_ext, new_ext) in wal_warnings {
+            warn!(target: "db", old = %old_ext, new = %new_ext,
+                "Failed to rename WAL/SHM file, SQLite will recover on next open");
         }
+        rename_result?;
 
         // Step 2: Update database registry row.
         // If this fails, rollback the file rename.
@@ -103,16 +118,20 @@ pub async fn update(token: String, name: String, new_name: String) -> RpcResult<
             }
             Err(e) => {
                 // Rollback file rename
-                if std::path::Path::new(&new_file).exists() {
-                    let _ = std::fs::rename(&new_file, &old_file);
-                    for ext in &["-wal", "-shm"] {
-                        let new_ext = format!("{new_file}{ext}");
-                        let old_ext = format!("{old_file}{ext}");
-                        if std::path::Path::new(&new_ext).exists() {
-                            let _ = std::fs::rename(&new_ext, &old_ext);
+                let new_file_rb = new_file.clone();
+                let old_file_rb = old_file.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    if std::path::Path::new(&new_file_rb).exists() {
+                        let _ = std::fs::rename(&new_file_rb, &old_file_rb);
+                        for ext in &["-wal", "-shm"] {
+                            let new_ext = format!("{new_file_rb}{ext}");
+                            let old_ext = format!("{old_file_rb}{ext}");
+                            if std::path::Path::new(&new_ext).exists() {
+                                let _ = std::fs::rename(&new_ext, &old_ext);
+                            }
                         }
                     }
-                }
+                }).await;
                 Err(NodegetError::DatabaseError(format!(
                     "Failed to update registry after rename: {e}"
                 ))

@@ -5,6 +5,7 @@ use ng_db::entity::crontab_result;
 use ng_db::get_db;
 use sea_orm::{ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde_json::value::RawValue;
+use std::collections::HashSet;
 use tracing::debug;
 
 pub async fn delete(token: String, query: CrontabResultDataQuery) -> RpcResult<Box<RawValue>> {
@@ -13,23 +14,25 @@ pub async fn delete(token: String, query: CrontabResultDataQuery) -> RpcResult<B
         let db =
             get_db().ok_or_else(|| NodegetError::DatabaseError("DB not initialized".to_owned()))?;
 
-        // 权限检查 —— 与 query 相同的模式
-        let mut permission_checked = false;
+        // 收集所有 CronName 条件并检查每个权限
+        let mut cron_names: HashSet<&str> = HashSet::new();
         let mut has_cron_name_filter = false;
         let condition_count = query.condition.len();
 
         for condition in &query.condition {
             if let CrontabResultQueryCondition::CronName(cron_name) = condition {
-                if !permission_checked {
-                    super::auth::check_crontab_result_delete_permission(&token, Some(cron_name))
-                        .await?;
-                    permission_checked = true;
-                }
+                cron_names.insert(cron_name);
                 has_cron_name_filter = true;
             }
         }
 
-        if !has_cron_name_filter && !permission_checked {
+        // 检查权限：每个 distinct CronName 都需要权限
+        if has_cron_name_filter {
+            for cron_name in &cron_names {
+                super::auth::check_crontab_result_delete_permission(&token, Some(cron_name))
+                    .await?;
+            }
+        } else {
             super::auth::check_crontab_result_delete_permission(&token, None).await?;
         }
 

@@ -1,4 +1,3 @@
-use crate::monitoring_uuid_cache::MonitoringUuidCache;
 use crate::query::QueryCondition;
 use crate::rpc::agent::AgentRpcImpl;
 use crate::rpc::agent::delete_common::{
@@ -158,12 +157,6 @@ pub async fn delete_static(
         };
 
         debug!(target: "monitoring", rows_affected = rows_affected, conditions = conditions.len(), "Static monitoring delete completed");
-
-        if rows_affected > 0
-            && let Err(e) = MonitoringUuidCache::reload().await
-        {
-            error!(target: "monitoring_uuid_cache", error = %e, "Failed to reload MonitoringUuidCache after delete_static");
-        }
 
         let json_str = format!(
             "{{\"success\":true,\"deleted\":{},\"condition_count\":{}}}",

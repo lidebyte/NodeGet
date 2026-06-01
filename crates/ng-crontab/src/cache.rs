@@ -17,6 +17,9 @@ pub struct CachedCrontab {
 
 struct CrontabCacheInner {
     by_id: HashMap<i64, Arc<CachedCrontab>>,
+    /// Separate tracking of last_run_time to avoid deep-cloning entire CachedCrontab.
+    /// Key = crontab id, Value = last_run_time millis. Checked before model.last_run_time.
+    last_run_times: RwLock<HashMap<i64, i64>>,
 }
 
 pub struct CrontabCache {
@@ -53,7 +56,10 @@ impl DbBackedCache for CrontabCache {
     fn build_cache(models: Vec<Self::Model>) -> Self {
         let by_id = Self::build_maps(models);
         Self {
-            inner: RwLock::new(CrontabCacheInner { by_id }),
+            inner: RwLock::new(CrontabCacheInner {
+                by_id,
+                last_run_times: RwLock::new(HashMap::new()),
+            }),
         }
     }
 
@@ -125,16 +131,35 @@ impl CrontabCache {
             .collect()
     }
 
+    /// Returns all cached crontab entries (including disabled ones).
+    /// For use by the `get` RPC handler to avoid hitting DB.
+    pub fn get_all_entries(&self) -> Vec<Arc<CachedCrontab>> {
+        let guard = recover_read(&self.inner);
+        guard.by_id.values().map(Arc::clone).collect()
+    }
+
+    /// Get the effective last_run_time for a crontab entry.
+    /// Checks the override map first, falls back to model.last_run_time.
+    pub fn get_last_run_time(&self, id: i64, model_last: Option<i64>) -> Option<i64> {
+        let guard = recover_read(&self.inner);
+        guard
+            .last_run_times
+            .read()
+            .unwrap_or_else(|e| {
+                warn!(target: "crontab_cache", "last_run_times lock poisoned during read, recovering");
+                e.into_inner()
+            })
+            .get(&id)
+            .copied()
+            .or(model_last)
+    }
+
     pub fn update_last_run_time(&self, id: i64, timestamp: i64) {
-        let mut guard = recover_write(&self.inner);
-        if let Some(entry) = guard.by_id.get_mut(&id) {
-            let mut updated_model = (*entry.model).clone();
-            updated_model.last_run_time = Some(timestamp);
-            *entry = Arc::new(CachedCrontab {
-                model: Arc::new(updated_model),
-                schedule: entry.schedule.clone(),
-                cron_type: entry.cron_type.clone(),
-            });
-        }
+        let guard = recover_read(&self.inner);
+        let mut lrt_guard = guard.last_run_times.write().unwrap_or_else(|e| {
+            warn!(target: "crontab_cache", "last_run_times lock poisoned during write, recovering");
+            e.into_inner()
+        });
+        lrt_guard.insert(id, timestamp);
     }
 }

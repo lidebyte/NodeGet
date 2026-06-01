@@ -73,7 +73,8 @@ pub async fn create(
             tracing::error!(target: "crontab", error = %e, "failed to reload crontab cache after create");
         }
 
-        let json_str = format!("{{\"id\":{res_id}}}");
+        let json_str = serde_json::to_string(&serde_json::json!({"id": res_id}))
+            .map_err(|e| NodegetError::SerializationError(e.to_string()))?;
         RawValue::from_string(json_str)
             .map_err(|e| NodegetError::SerializationError(format!("{e}")).into())
     };

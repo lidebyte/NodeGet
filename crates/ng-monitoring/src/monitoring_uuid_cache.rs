@@ -66,10 +66,14 @@ impl DbBackedCache for MonitoringUuidCache {
             by_uuid.insert(model.uuid, (id, model.soft_delete));
             by_id.insert(id, (model.uuid, model.soft_delete));
         }
-        let mut guard = recover_write(&self.inner);
-        guard.by_uuid = by_uuid;
-        guard.by_id = by_id;
-        drop(guard);
+        let old_maps = {
+            let mut guard = recover_write(&self.inner);
+            let old_by_uuid = std::mem::replace(&mut guard.by_uuid, by_uuid);
+            let old_by_id = std::mem::replace(&mut guard.by_id, by_id);
+            drop(guard);
+            (old_by_uuid, old_by_id)
+        };
+        drop(old_maps);
     }
 
     fn load_all() -> impl Future<Output = anyhow::Result<Vec<Self::Model>>> + Send {

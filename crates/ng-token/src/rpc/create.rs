@@ -29,10 +29,14 @@ pub async fn create(
 
         debug!(target: "token", token_key = %key, "Token created successfully");
 
-        let json_str = format!("{{\"key\":\"{key}\",\"secret\":\"{secret}\"}}");
+        let json_str = serde_json::to_string(&serde_json::json!({
+            "key": key,
+            "secret": secret
+        }))
+        .map_err(|e| NodegetError::SerializationError(format!("{e}")))?;
 
         RawValue::from_string(json_str)
-            .map_err(|e| NodegetError::SerializationError(format!("{e}")).into())
+            .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
     };
 
     match process_logic.await {

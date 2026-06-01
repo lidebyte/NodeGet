@@ -56,13 +56,13 @@ pub async fn exec_sql(
 
         let stmt = Statement::from_sql_and_values(db_backend, &sql, sea_values);
 
-        let rows = db.query_all_raw(stmt).await?;
-        let mut json_rows: Vec<Value> = rows.iter().map(row_to_json).collect();
-        let total_count = json_rows.len() as u64;
-        let truncated = json_rows.len() > 10_000;
+        let mut rows = db.query_all_raw(stmt).await?;
+        let total_count = rows.len() as u64;
+        let truncated = rows.len() > 10_000;
         if truncated {
-            json_rows.truncate(10_000);
+            rows.truncate(10_000);
         }
+        let json_rows: Vec<Value> = rows.iter().map(row_to_json).collect();
 
         let response = serde_json::json!({
             "success": true,

@@ -11,19 +11,20 @@ use tracing::{debug, trace};
 
 pub async fn delete(token: String, name: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        if name.trim().is_empty() {
+        let name = name.trim().to_owned();
+        if name.is_empty() {
             return Err(NodegetError::InvalidInput("name cannot be empty".to_owned()).into());
         }
         debug!(target: "js_worker", name = %name, "processing js_worker delete request");
 
-        check_js_worker_permission(&token, name.as_str(), JsWorkerPermission::Delete).await?;
+        check_js_worker_permission(&token, &name, JsWorkerPermission::Delete).await?;
 
         debug!(target: "js_worker", name = %name, "js_worker delete permission check passed");
 
         let db =
             get_db().ok_or_else(|| NodegetError::DatabaseError("DB not initialized".to_owned()))?;
         let delete_result = js_worker::Entity::delete_many()
-            .filter(js_worker::Column::Name.eq(name.as_str()))
+            .filter(js_worker::Column::Name.eq(&name))
             .exec(db)
             .await
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
@@ -31,7 +32,7 @@ pub async fn delete(token: String, name: String) -> RpcResult<Box<RawValue>> {
         if delete_result.rows_affected == 0 {
             return Err(NodegetError::NotFound(format!("js_worker not found: {name}")).into());
         }
-        runtime_pool::global_pool().evict_worker(name.as_str());
+        runtime_pool::global_pool().evict_worker(&name);
         trace!(target: "js_worker", name = %name, "evicted worker from runtime pool after delete");
 
         debug!(target: "js_worker", name = %name, rows_affected = delete_result.rows_affected, "js_worker deleted successfully");

@@ -14,10 +14,10 @@ pub fn to_raw_json<T: Serialize>(val: T) -> Result<Box<RawValue>> {
 pub fn to_raw_json_with_fallback<T: Serialize>(val: T) -> Result<Box<RawValue>> {
     serde_json::value::to_raw_value(&val).or_else(|e| {
         error!("Serialization error: {e}");
-        let fallback = serde_json::json!({
-            "error_id": 101,
-            "error_message": format!("Serialization error: {e}")
-        });
+        let fallback = crate::utils::JsonError {
+            error_id: 101,
+            error_message: format!("Serialization error: {e}"),
+        };
         serde_json::value::to_raw_value(&fallback)
             .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
     })

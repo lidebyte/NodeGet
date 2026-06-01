@@ -12,19 +12,20 @@ use tracing::debug;
 
 pub async fn read(token: String, name: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
-        if name.trim().is_empty() {
+        let name = name.trim().to_owned();
+        if name.is_empty() {
             return Err(NodegetError::InvalidInput("name cannot be empty".to_owned()).into());
         }
         debug!(target: "js_worker", name = %name, "processing js_worker read request");
 
-        check_js_worker_permission(&token, name.as_str(), JsWorkerPermission::Read).await?;
+        check_js_worker_permission(&token, &name, JsWorkerPermission::Read).await?;
 
         debug!(target: "js_worker", name = %name, "js_worker read permission check passed");
 
         let db =
             get_db().ok_or_else(|| NodegetError::DatabaseError("DB not initialized".to_owned()))?;
         let model = js_worker::Entity::find()
-            .filter(js_worker::Column::Name.eq(name.as_str()))
+            .filter(js_worker::Column::Name.eq(&name))
             .one(db)
             .await
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?

@@ -145,19 +145,18 @@ pub async fn edit_config(token: String, config_string: String) -> jsonrpsee::cor
         debug!(target: "server", path = %config_path, "Config path validated");
 
         // 使用临时文件+原子重命名，确保写入完整性
-        let temp_path = format!("{config_path}.tmp");
+        // 附加随机后缀防止并发 edit_config 覆盖彼此的临时文件
+        let temp_path = format!("{config_path}.tmp.{}", uuid::Uuid::new_v4());
         tokio::fs::write(&temp_path, config_string)
             .await
             .map_err(|e| NodegetError::Other(format!("Failed to write temp config file: {e}")))?;
         debug!(target: "server", temp_path = %temp_path, "Temp config file written");
 
-        tokio::fs::rename(&temp_path, config_path)
-            .await
-            .map_err(|e| {
-                // 清理临时文件
-                drop(tokio::fs::remove_file(&temp_path));
-                NodegetError::Other(format!("Failed to rename config file: {e}"))
-            })?;
+        if let Err(e) = tokio::fs::rename(&temp_path, config_path).await {
+            // 清理临时文件（await 确保实际执行删除）
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            return Err(NodegetError::Other(format!("Failed to rename config file: {e}")).into());
+        }
         debug!(target: "server", "Config file renamed from temp to target");
 
         if let Some(notify) = get_reload_notify() {

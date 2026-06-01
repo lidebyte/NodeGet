@@ -161,3 +161,7 @@ Every RPC method authenticates via `TokenOrAuth` (key:secret token OR username|p
 - **Config format** — TOML; agent config uses `[[server]]` array-of-tables for multi-server; server config uses `[database]`, `[logging]`, `[monitoring_buffer]` sections
 - **Soft delete** — `monitoring_uuid` table uses `soft_delete` flag instead of actual deletion; UUID cache auto-resurrects soft-deleted entries on `get_or_insert`
 - **Path safety** — static file operations use `validate_name`, `validate_sub_path`, `resolve_safe_file_path` to prevent traversal attacks; same discipline required for any new path-handling code
+- **Task query default limit** — `task.query` RPC returns at most 1000 rows by default (DEFAULT_LIMIT); clients needing more must specify an explicit `Limit` condition
+- **WebSocket size limits** — terminal WebSocket: max frame 1MB, max message 4MB; oversized frames/messages are rejected
+- **DbRegistryManager.has_conn** — lightweight existence check (`has_conn(name) -> bool`) that avoids cloning `DatabaseConnection`; prefer over `get_conn().is_some()`
+- **DavHandler caching** — WebDAV handlers are cached per bucket name in `ng-static` router; no per-request allocation

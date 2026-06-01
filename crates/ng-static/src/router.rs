@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::{OnceLock, RwLock};
+
 use axum::response::IntoResponse;
 use axum::routing::any;
 use axum::{extract::Path, http::StatusCode};
@@ -12,6 +15,37 @@ use tracing::{debug, error, info, warn};
 use crate::auth::get_token_checker;
 use crate::cache::StaticCache;
 use crate::ops::{get_static_path, resolve_safe_file_path};
+
+/// Global cache of DavHandler instances keyed by bucket name.
+/// Avoids re-allocating LocalFs, FakeLs, and DavHandler config on every WebDAV request.
+static DAV_HANDLER_CACHE: OnceLock<RwLock<HashMap<String, DavHandler>>> = OnceLock::new();
+
+fn dav_handler_cache() -> &'static RwLock<HashMap<String, DavHandler>> {
+    DAV_HANDLER_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+/// Retrieve a cached DavHandler for the given bucket, or build and cache one.
+fn get_or_create_dav_handler(bucket_name: &str, disk_path: &std::path::Path) -> DavHandler {
+    // Fast path: read lock
+    if let Ok(cache) = dav_handler_cache().read() {
+        if let Some(handler) = cache.get(bucket_name) {
+            return handler.clone();
+        }
+    }
+    // Slow path: write lock
+    let mut cache = dav_handler_cache().write().expect("DAV handler cache lock poisoned");
+    // Double-check after acquiring write lock
+    if let Some(handler) = cache.get(bucket_name) {
+        return handler.clone();
+    }
+    let handler = DavHandler::builder()
+        .filesystem(LocalFs::new(disk_path, false, false, false))
+        .locksystem(FakeLs::new())
+        .strip_prefix(format!("/nodeget/static-webdav/{bucket_name}"))
+        .build_handler();
+    cache.insert(bucket_name.to_owned(), handler.clone());
+    handler
+}
 
 /// Build and return an axum Router for static file serving and WebDAV.
 ///
@@ -292,11 +326,7 @@ async fn static_webdav_handler(req: axum::extract::Request) -> axum::response::R
 
     info!(target: "webdav", bucket = %name, username = %username, disk_path = %disk_path.display(), method = %method, "serving webdav request");
 
-    let dav = DavHandler::builder()
-        .filesystem(LocalFs::new(&disk_path, false, false, false))
-        .locksystem(FakeLs::new())
-        .strip_prefix(format!("/nodeget/static-webdav/{}", name))
-        .build_handler();
+    let dav = get_or_create_dav_handler(name, &disk_path);
 
     let resp = dav.handle(req).await.into_response();
     let status = resp.status();

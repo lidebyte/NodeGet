@@ -79,11 +79,11 @@ pub fn init_crontab_worker() {
         info!(target: "crontab", "scheduler started");
         loop {
             let now = Utc::now();
-            let secs = now.timestamp() % 60;
+            let secs = now.timestamp().rem_euclid(60);
             let wait = if secs == 0 { 60 } else { 60 - secs as u64 };
             sleep(Duration::from_secs(wait)).await;
             process_crontab().await;
-            let remaining = 60 - (Utc::now().timestamp() % 60) as u64;
+            let remaining = 60 - Utc::now().timestamp().rem_euclid(60) as u64;
             if remaining > 0 && remaining < 60 {
                 sleep(Duration::from_secs(remaining)).await;
             }
@@ -106,9 +106,15 @@ async fn process_crontab() {
     let mut set = JoinSet::new();
 
     for entry in &jobs {
-        let last_run = entry.model.last_run_time.map_or_else(
+        let effective_last = cache.get_last_run_time(entry.model.id, entry.model.last_run_time);
+        let last_run = effective_last.map_or_else(
             || now - chrono::Duration::seconds(1),
-            |t| Utc.timestamp_millis_opt(t).unwrap(),
+            |t| {
+                Utc.timestamp_millis_opt(t).single().unwrap_or_else(|| {
+                    warn!(target: "crontab", t, "Invalid last_run_time, treating as never run");
+                    Utc.timestamp_millis_opt(0).single().unwrap_or_else(Utc::now)
+                })
+            },
         );
 
         let should_run = entry
@@ -138,11 +144,10 @@ async fn process_crontab() {
             enable: entry.model.enable,
             cron_expression: entry.model.cron_expression.clone(),
             cron_type: entry.cron_type.clone(),
-            last_run_time: entry.model.last_run_time,
+            last_run_time: effective_last,
         };
 
         let now_millis = now.timestamp_millis();
-        cache.update_last_run_time(entry.model.id, now_millis);
 
         let active_model = crontab::ActiveModel {
             id: Set(entry.model.id),
@@ -157,6 +162,8 @@ async fn process_crontab() {
                 error = %e,
                 "failed to update last_run_time in DB"
             );
+        } else {
+            cache.update_last_run_time(entry.model.id, now_millis);
         }
 
         let span = info_span!(

@@ -131,32 +131,38 @@ impl DbRegistryManager {
 
     async fn cleanup_expired(&self) -> anyhow::Result<()> {
         let main_db = get_main_db()?;
-        let to_remove = {
+        // Collect candidates under read lock, then drop the lock before DB queries
+        let candidates: Vec<(String, u64)> = {
             let pools = self.pools.read().await;
-            let mut expired = Vec::new();
-            for (name, tracked) in pools.iter() {
-                match dbreg_entity::Entity::find()
-                    .filter(dbreg_entity::Column::Name.eq(name))
-                    .one(main_db)
-                    .await
-                {
-                    Ok(Some(m)) => {
-                        if let Some(lifetime_ms) = m.max_lifetime_ms {
-                            let last_used = tracked.last_used_ms.load(Ordering::Relaxed);
-                            let elapsed_ms = now_ms_u64().saturating_sub(last_used) as i64;
-                            if elapsed_ms >= lifetime_ms {
-                                expired.push(name.clone());
-                            }
+            pools
+                .iter()
+                .map(|(name, tracked)| {
+                    (name.clone(), tracked.last_used_ms.load(Ordering::Relaxed))
+                })
+                .collect()
+        };
+        // Query DB and check expiry without holding the lock
+        let mut to_remove = Vec::new();
+        for (name, last_used) in candidates {
+            match dbreg_entity::Entity::find()
+                .filter(dbreg_entity::Column::Name.eq(&name))
+                .one(main_db)
+                .await
+            {
+                Ok(Some(m)) => {
+                    if let Some(lifetime_ms) = m.max_lifetime_ms {
+                        let elapsed_ms = now_ms_u64().saturating_sub(last_used) as i64;
+                        if elapsed_ms >= lifetime_ms {
+                            to_remove.push(name);
                         }
                     }
-                    Ok(None) => {}
-                    Err(e) => {
-                        warn!(target: "db", name = %name, error = %e, "Failed to query db_registry entry, skipping");
-                    }
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    warn!(target: "db", name = %name, error = %e, "Failed to query db_registry entry, skipping");
                 }
             }
-            expired
-        };
+        }
         for name in to_remove {
             if let Err(e) = self.remove_conn(&name).await {
                 warn!(target: "db", name = %name, error = %e, "Failed to remove expired connection");
@@ -169,6 +175,11 @@ impl DbRegistryManager {
 
     pub fn get_db_path(&self, name: &str) -> String {
         format!("{}/{}.db", self.db_path.trim_end_matches('/'), name)
+    }
+
+    pub async fn has_conn(&self, name: &str) -> bool {
+        let pools = self.pools.read().await;
+        pools.contains_key(name)
     }
 
     pub async fn get_conn(&self, name: &str) -> Option<DatabaseConnection> {
