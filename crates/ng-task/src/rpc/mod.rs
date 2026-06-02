@@ -111,7 +111,8 @@ pub fn monitoring_uuid_provider() -> Option<&'static Arc<dyn MonitoringUuidProvi
 #[rpc(server, namespace = "task")]
 pub trait Rpc {
     /// 订阅任务事件流，Agent 通过此方法接收待执行的任务
-    #[subscription(name = "register_task", item = crate::types::TaskEvent, unsubscribe = "unregister_task")]
+    #[subscription(name = "register_task", item = crate::types::TaskEvent, unsubscribe = "unregister_task"
+    )]
     async fn register_task(&self, token: String, uuid: Uuid) -> SubscriptionResult;
 
     /// 创建任务并立即返回任务 ID

@@ -17,7 +17,7 @@
     - `db.remove(token, name)` — 删除数据库实例，调用 `db_delete`
     - `db.list(token)` — 列出所有数据库实例，调用 `db_list`
     - `db.execSql(token, name, sql, params?)` — 在指定实例上执行 SQL，调用 `db_exec_sql`，占位符使用 `$1, $2` 格式
-    所有方法内部通过 `nodeget()` 发起 JSON-RPC 调用，返回 `result`；遇 `error` 时抛出异常
+      所有方法内部通过 `nodeget()` 发起 JSON-RPC 调用，返回 `result`；遇 `error` 时抛出异常
 - `globalThis.inlineCall(js_worker_name, params, timeout_sec?)` — 调用其他 JS Worker。`timeout_sec`
   为可选的软超时（秒，正有限数），最终生效超时取 `timeout_sec` 与目标 Worker `max_run_time` 中较小者；不传时仅受目标 Worker
   `max_run_time` 约束。

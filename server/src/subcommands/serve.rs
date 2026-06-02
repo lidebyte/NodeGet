@@ -649,11 +649,11 @@ async fn handle_js_worker_route(
     let body_base64 = tokio::task::spawn_blocking(move || {
         base64::engine::general_purpose::STANDARD.encode(&body_bytes)
     })
-    .await
-    .unwrap_or_else(|e| {
-        error!(target: "js_worker", route_name = %route_name, error = %e, "base64 encoding task panicked");
-        String::new()
-    });
+        .await
+        .unwrap_or_else(|e| {
+            error!(target: "js_worker", route_name = %route_name, error = %e, "base64 encoding task panicked");
+            String::new()
+        });
     let js_input = JsRouteInput {
         method,
         url,

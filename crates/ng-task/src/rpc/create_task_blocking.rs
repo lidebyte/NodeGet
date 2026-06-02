@@ -73,7 +73,7 @@ pub async fn create_task_blocking(
             return Err(NodegetError::PermissionDenied(format!(
                 "Permission Denied: Missing Task Create or Read ({task_name}) permission for this Agent"
             ))
-            .into());
+                .into());
         }
 
         let db = crate::rpc::TaskRpcImpl::get_db()?;

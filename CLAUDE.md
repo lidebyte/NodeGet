@@ -61,13 +61,17 @@ NodeGet/
 
 ## Architecture
 
-**Communication**: WebSocket + JSON-RPC 2.0. Server exposes HTTP at `/` and `/nodeget/rpc`. Agent connects as WebSocket client. Custom jsonrpsee fork (`infinitefield/jsonrpsee`) uses `_` as namespace separator (not `.`).
+**Communication**: WebSocket + JSON-RPC 2.0. Server exposes HTTP at `/` and `/nodeget/rpc`. Agent connects as WebSocket
+client. Custom jsonrpsee fork (`infinitefield/jsonrpsee`) uses `_` as namespace separator (not `.`).
 
-**Database**: PostgreSQL or SQLite via SeaORM. Global singleton via `ng_db::get_db() -> Option<&'static DatabaseConnection>`. SQLite auto-enables WAL mode.
+**Database**: PostgreSQL or SQLite via SeaORM. Global singleton via
+`ng_db::get_db() -> Option<&'static DatabaseConnection>`. SQLite auto-enables WAL mode.
 
-**Config hot-reload**: Both server and agent watch for `RELOAD_NOTIFY` signal (via `ng_config`). Server re-reads config file; agent receives `EditConfig` task then restarts runtime tasks.
+**Config hot-reload**: Both server and agent watch for `RELOAD_NOTIFY` signal (via `ng_config`). Server re-reads config
+file; agent receives `EditConfig` task then restarts runtime tasks.
 
-**Agent multi-server**: One agent connects to N servers simultaneously. Each server gets an independent `connection_manager` coroutine with exponential-backoff reconnect.
+**Agent multi-server**: One agent connects to N servers simultaneously. Each server gets an independent
+`connection_manager` coroutine with exponential-backoff reconnect.
 
 ### Data Flow
 
@@ -78,50 +82,56 @@ NodeGet/
 
 ### RPC Namespace Composition
 
-Server binary assembles all RPC namespaces via `build_modules()` in `server/src/rpc_nodeget.rs`, merging `RpcModule`s from 8 crates:
+Server binary assembles all RPC namespaces via `build_modules()` in `server/src/rpc_nodeget.rs`, merging `RpcModule`s
+from 8 crates:
 
-| Namespace | Provider Crate | RPC Methods |
-|-----------|---------------|-------------|
-| `nodeget-server` | server + ng-monitoring | hello, version, uuid, read_config, edit_config, database_storage, exec_sql, get_database_type, log, stream_log, self_update, list_all_agent_uuid |
-| `agent` | ng-monitoring | Agent monitoring queries |
-| `agent-uuid` | ng-monitoring | Agent UUID management |
-| `task` | ng-task | Task dispatch and results |
-| `token` | ng-token | Token CRUD and verification |
-| `kv` | ng-kv | KV store operations |
-| `db` | ng-db | Database registry |
-| `js-worker` | ng-js-worker | JS worker CRUD and execution |
-| `js-result` | ng-js-worker | JS execution results |
-| `crontab` | ng-crontab | Cron job management |
-| `crontab-result` | ng-crontab | Cron execution results |
-| `static-bucket` | ng-static | Static bucket CRUD |
-| `static-bucket-file` | ng-static | Static file operations |
+| Namespace            | Provider Crate         | RPC Methods                                                                                                                                      |
+|----------------------|------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `nodeget-server`     | server + ng-monitoring | hello, version, uuid, read_config, edit_config, database_storage, exec_sql, get_database_type, log, stream_log, self_update, list_all_agent_uuid |
+| `agent`              | ng-monitoring          | Agent monitoring queries                                                                                                                         |
+| `agent-uuid`         | ng-monitoring          | Agent UUID management                                                                                                                            |
+| `task`               | ng-task                | Task dispatch and results                                                                                                                        |
+| `token`              | ng-token               | Token CRUD and verification                                                                                                                      |
+| `kv`                 | ng-kv                  | KV store operations                                                                                                                              |
+| `db`                 | ng-db                  | Database registry                                                                                                                                |
+| `js-worker`          | ng-js-worker           | JS worker CRUD and execution                                                                                                                     |
+| `js-result`          | ng-js-worker           | JS execution results                                                                                                                             |
+| `crontab`            | ng-crontab             | Cron job management                                                                                                                              |
+| `crontab-result`     | ng-crontab             | Cron execution results                                                                                                                           |
+| `static-bucket`      | ng-static              | Static bucket CRUD                                                                                                                               |
+| `static-bucket-file` | ng-static              | Static file operations                                                                                                                           |
 
 All RPC methods return `RpcResult<Box<RawValue>>` via the `rpc_exec!` macro for uniform logging.
 
 ### Caching Pattern
 
-All "load-all-from-DB" caches use `ng_infra::server::DbBackedCache` trait + `ng_infra::server::make_global_cache!` macro (ng-infra's `server` feature). Generates a `OnceLock` global singleton with `init()` / `global()` / `reload()` methods. Used by: TokenCache, CrontabCache, StaticCache, MonitoringUuidCache, MonitoringLastCache, StaticHashCache.
+All "load-all-from-DB" caches use `ng_infra::server::DbBackedCache` trait + `ng_infra::server::make_global_cache!`
+macro (ng-infra's `server` feature). Generates a `OnceLock` global singleton with `init()` / `global()` / `reload()`
+methods. Used by: TokenCache, CrontabCache, StaticCache, MonitoringUuidCache, MonitoringLastCache, StaticHashCache.
 
 ### Trait Injection Pattern
 
-Business crates use OnceLock-based trait injection to break circular dependencies. Server binary registers concrete implementations at startup in `serve.rs`:
+Business crates use OnceLock-based trait injection to break circular dependencies. Server binary registers concrete
+implementations at startup in `serve.rs`:
 
-| Injected Trait | Defining Crate | Methods | Server Implementation |
-|---------------|---------------|---------|----------------------|
-| `AuthChecker` | ng-infra | `check(raw_token) → Token` | `TokenAuthChecker` (ng-token) |
-| `AuthProvider` | ng-db | `check_token_limit`, `check_super_token` | `ServerAuthProvider` |
-| `TokenPermissionChecker` | ng-kv, ng-static, ng-js-worker, ng-terminal | `check_token_limit`, `check_super_token`, (optional) `get_token` | Per-crate checker structs |
-| `TaskAuthProvider` | ng-task | `check_token_limit`, `check_super_token`, `get_token` | `TaskAuthProvider` |
-| `CheckSuperTokenFn` | ng-config | `check_super_token` (fn pointer) | Closure → `ng_token::check_super_token` |
-| `JsWorkerService` | ng-js-runtime | `run_inline_call_and_record_result`, `get_rpc_module` | `JsWorkerServiceImpl` |
-| `JsWorkerScheduler` | ng-crontab | `enqueue_run` | `CronJsWorkerScheduler` |
-| `MonitoringUuidProvider` | ng-task | `get_or_insert`, `reload` | `TaskMonitoringUuidProvider` |
+| Injected Trait           | Defining Crate                              | Methods                                                          | Server Implementation                   |
+|--------------------------|---------------------------------------------|------------------------------------------------------------------|-----------------------------------------|
+| `AuthChecker`            | ng-infra                                    | `check(raw_token) → Token`                                       | `TokenAuthChecker` (ng-token)           |
+| `AuthProvider`           | ng-db                                       | `check_token_limit`, `check_super_token`                         | `ServerAuthProvider`                    |
+| `TokenPermissionChecker` | ng-kv, ng-static, ng-js-worker, ng-terminal | `check_token_limit`, `check_super_token`, (optional) `get_token` | Per-crate checker structs               |
+| `TaskAuthProvider`       | ng-task                                     | `check_token_limit`, `check_super_token`, `get_token`            | `TaskAuthProvider`                      |
+| `CheckSuperTokenFn`      | ng-config                                   | `check_super_token` (fn pointer)                                 | Closure → `ng_token::check_super_token` |
+| `JsWorkerService`        | ng-js-runtime                               | `run_inline_call_and_record_result`, `get_rpc_module`            | `JsWorkerServiceImpl`                   |
+| `JsWorkerScheduler`      | ng-crontab                                  | `enqueue_run`                                                    | `CronJsWorkerScheduler`                 |
+| `MonitoringUuidProvider` | ng-task                                     | `get_or_insert`, `reload`                                        | `TaskMonitoringUuidProvider`            |
 
 All implementations ultimately delegate to `ng_token` functions.
 
 ### JS Worker System
 
-QuickJS runtime pool (ng-js-runtime): each registered script gets its own OS thread + QuickJS instance. Communication via channels (`Execute`/`Shutdown`). Bytecode caching avoids recompilation. OS thread watchdog enforces hard timeout (kills CPU-bound loops). Built-in APIs: `nodeget()` for internal RPC, `execSql()`, `db.*`, `fetch`, `randomUUID()`.
+QuickJS runtime pool (ng-js-runtime): each registered script gets its own OS thread + QuickJS instance. Communication
+via channels (`Execute`/`Shutdown`). Bytecode caching avoids recompilation. OS thread watchdog enforces hard timeout (
+kills CPU-bound loops). Built-in APIs: `nodeget()` for internal RPC, `execSql()`, `db.*`, `fetch`, `randomUUID()`.
 
 ng-js-worker provides CRUD, execution service, and auth-gated RPC on top of the runtime pool.
 
@@ -138,30 +148,40 @@ Agent depends on `ng-core/for-agent`, `ng-config`, `ng-task`, `ng-monitoring` �
 
 ### HTTP Routes (non-RPC)
 
-| Path | Handler | Source |
-|------|---------|--------|
-| `/`, `/nodeget/rpc` | JSON-RPC + WebSocket + landing | server binary |
-| `/nodeget/static/*` + WebDAV | Static file service | `ng_static::router::router()` |
-| `/worker-route/{name}/*` | JS worker HTTP routes | server binary inline |
-| `/terminal` | Terminal WebSocket | `ng_terminal::router()` |
-| `.fallback()` | WS upgrade / static root / JSON-RPC | server binary |
+| Path                         | Handler                             | Source                        |
+|------------------------------|-------------------------------------|-------------------------------|
+| `/`, `/nodeget/rpc`          | JSON-RPC + WebSocket + landing      | server binary                 |
+| `/nodeget/static/*` + WebDAV | Static file service                 | `ng_static::router::router()` |
+| `/worker-route/{name}/*`     | JS worker HTTP routes               | server binary inline          |
+| `/terminal`                  | Terminal WebSocket                  | `ng_terminal::router()`       |
+| `.fallback()`                | WS upgrade / static root / JSON-RPC | server binary                 |
 
 ### RBAC Permission Model
 
-Every RPC method authenticates via `TokenOrAuth` (key:secret token OR username|password). Tokens carry a `Vec<Limit>` specifying scope+permission constraints. Super-token (id=1, constant-time comparison) bypasses all limits. Token auth uses SHA256 with "NODEGET" salt.
+Every RPC method authenticates via `TokenOrAuth` (key:secret token OR username|password). Tokens carry a `Vec<Limit>`
+specifying scope+permission constraints. Super-token (id=1, constant-time comparison) bypasses all limits. Token auth
+uses SHA256 with "NODEGET" salt.
 
 ## Key Conventions
 
 - **Edition 2024** — uses Rust 2024 edition features
-- **Clippy strict** — workspace compiled with `clippy::all`, `clippy::pedantic`, `clippy::nursery`; cast lints suppressed globally
+- **Clippy strict** — workspace compiled with `clippy::all`, `clippy::pedantic`, `clippy::nursery`; cast lints
+  suppressed globally
 - **Chinese comments** — inline comments and config examples are in Chinese; keep consistent
 - **Custom jsonrpsee fork** — `infinitefield/jsonrpsee`, namespace separator is `_` not `.`
-- **`#[rpc]` proc macro only** — never use manual `register_method`/`register_async_method`; always use `#[rpc(server, namespace = "...")]` + `#[method(name = "...")]`
-- **Entity generation** — run `server/generate_entity.sh` after migration changes (NOTE: output path `-o` should point to `../crates/ng-db/src/entity`)
-- **Config format** — TOML; agent config uses `[[server]]` array-of-tables for multi-server; server config uses `[database]`, `[logging]`, `[monitoring_buffer]` sections
-- **Soft delete** — `monitoring_uuid` table uses `soft_delete` flag instead of actual deletion; UUID cache auto-resurrects soft-deleted entries on `get_or_insert`
-- **Path safety** — static file operations use `validate_name`, `validate_sub_path`, `resolve_safe_file_path` to prevent traversal attacks; same discipline required for any new path-handling code
-- **Task query default limit** — `task.query` RPC returns at most 1000 rows by default (DEFAULT_LIMIT); clients needing more must specify an explicit `Limit` condition
+- **`#[rpc]` proc macro only** — never use manual `register_method`/`register_async_method`; always use
+  `#[rpc(server, namespace = "...")]` + `#[method(name = "...")]`
+- **Entity generation** — run `server/generate_entity.sh` after migration changes (NOTE: output path `-o` should point
+  to `../crates/ng-db/src/entity`)
+- **Config format** — TOML; agent config uses `[[server]]` array-of-tables for multi-server; server config uses
+  `[database]`, `[logging]`, `[monitoring_buffer]` sections
+- **Soft delete** — `monitoring_uuid` table uses `soft_delete` flag instead of actual deletion; UUID cache
+  auto-resurrects soft-deleted entries on `get_or_insert`
+- **Path safety** — static file operations use `validate_name`, `validate_sub_path`, `resolve_safe_file_path` to prevent
+  traversal attacks; same discipline required for any new path-handling code
+- **Task query default limit** — `task.query` RPC returns at most 1000 rows by default (DEFAULT_LIMIT); clients needing
+  more must specify an explicit `Limit` condition
 - **WebSocket size limits** — terminal WebSocket: max frame 1MB, max message 4MB; oversized frames/messages are rejected
-- **DbRegistryManager.has_conn** — lightweight existence check (`has_conn(name) -> bool`) that avoids cloning `DatabaseConnection`; prefer over `get_conn().is_some()`
+- **DbRegistryManager.has_conn** — lightweight existence check (`has_conn(name) -> bool`) that avoids cloning
+  `DatabaseConnection`; prefer over `get_conn().is_some()`
 - **DavHandler caching** — WebDAV handlers are cached per bucket name in `ng-static` router; no per-request allocation

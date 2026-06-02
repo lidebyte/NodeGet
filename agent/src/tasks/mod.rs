@@ -31,14 +31,14 @@ pub type Result<T> = anyhow::Result<T>;
 /// 会让真正卡住的任务在 agent 进程里无限堆积。
 const TASK_MAX_TIMEOUT: Duration = Duration::from_mins(10);
 
-/// 命令执行模块
-mod execute;
-/// IP 获取模块
-mod ip;
-/// HTTP Request 任务模块
-mod http_request;
 /// DNS 查询模块
 mod dns;
+/// 命令执行模块
+mod execute;
+/// HTTP Request 任务模块
+mod http_request;
+/// IP 获取模块
+mod ip;
 /// Ping 任务模块
 pub mod ping;
 /// PTY（伪终端）模块

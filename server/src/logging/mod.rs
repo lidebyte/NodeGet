@@ -503,11 +503,11 @@ where
 const fn level_ansi(level: tracing::Level) -> (&'static str, &'static str) {
     const RESET: &str = "\x1b[0m";
     match level {
-        tracing::Level::ERROR => ("\x1b[31m", RESET),  // 红色
-        tracing::Level::WARN => ("\x1b[33m", RESET),   // 黄色
-        tracing::Level::INFO => ("\x1b[32m", RESET),   // 绿色
-        tracing::Level::DEBUG => ("\x1b[34m", RESET),  // 蓝色
-        tracing::Level::TRACE => ("\x1b[35m", RESET),  // 紫色
+        tracing::Level::ERROR => ("\x1b[31m", RESET), // 红色
+        tracing::Level::WARN => ("\x1b[33m", RESET),  // 黄色
+        tracing::Level::INFO => ("\x1b[32m", RESET),  // 绿色
+        tracing::Level::DEBUG => ("\x1b[34m", RESET), // 蓝色
+        tracing::Level::TRACE => ("\x1b[35m", RESET), // 紫色
     }
 }
 

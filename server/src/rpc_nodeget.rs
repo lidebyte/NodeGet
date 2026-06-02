@@ -374,7 +374,7 @@ impl RpcServer for NodegetServerRpcImpl {
                     return Err(ng_core::error::NodegetError::PermissionDenied(
                         "Permission Denied: Super token required".to_owned(),
                     )
-                    .into());
+                        .into());
                 }
                 tracing::debug!(target: "server", "Super token verified for self_update");
 
@@ -421,7 +421,7 @@ impl RpcServer for NodegetServerRpcImpl {
                         "Download failed with status: {}",
                         response.status()
                     ))
-                    .into());
+                        .into());
                 }
 
                 let bytes = response
@@ -434,7 +434,7 @@ impl RpcServer for NodegetServerRpcImpl {
                         "Downloaded file too small ({} bytes), aborting",
                         bytes.len()
                     ))
-                    .into());
+                        .into());
                 }
 
                 tracing::info!(target: "server", size = bytes.len(), "Update downloaded");
@@ -475,15 +475,15 @@ impl RpcServer for NodegetServerRpcImpl {
 
                 Ok(())
             }
-            .await;
+                .await;
 
             match process_logic {
                 Ok(()) => Ok(()),
                 Err(e) => Err(ng_db::rpc::to_rpc_error(&e)),
             }
         }
-        .instrument(span)
-        .await
+            .instrument(span)
+            .await
     }
 
     /// 执行原始 SQL，委托至 `ng_db::rpc::nodeget::exec_sql`
