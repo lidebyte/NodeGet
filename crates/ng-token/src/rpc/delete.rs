@@ -1,3 +1,7 @@
+//! `token_delete` RPC 方法实现。
+//!
+//! 删除指定令牌，仅超级令牌可调用。超级令牌自身不可被删除。
+
 use jsonrpsee::core::RpcResult;
 use ng_core::error::NodegetError;
 use ng_core::permission::token_auth::TokenOrAuth;
@@ -9,7 +13,10 @@ use tracing::{debug, warn};
 use crate::cache::TokenCache;
 use crate::super_token::check_super_token;
 
-// 删除令牌的方法
+/// 按 token_key 从数据库删除令牌（排除 ID=1 的超级令牌）。
+///
+/// - `token_key`：待删除的 token_key
+/// - 返回：删除结果（受影响行数）
 async fn delete_token_by_key(token_key: String) -> Result<DeleteResult, sea_orm::DbErr> {
     debug!(target: "token", %token_key, "Deleting token by key");
     let Some(db) = ng_db::get_db() else {
@@ -36,7 +43,10 @@ async fn delete_token_by_key(token_key: String) -> Result<DeleteResult, sea_orm:
     Ok(delete_result)
 }
 
-// 根据用户名删除令牌的方法
+/// 按 username 从数据库删除令牌（排除 ID=1 的超级令牌）。
+///
+/// - `username`：待删除令牌关联的用户名
+/// - 返回：删除结果（受影响行数）
 async fn delete_token_by_username(username: String) -> Result<DeleteResult, sea_orm::DbErr> {
     debug!(target: "token", %username, "Deleting token by username");
     let Some(db) = ng_db::get_db() else {
@@ -63,6 +73,19 @@ async fn delete_token_by_username(username: String) -> Result<DeleteResult, sea_
     Ok(delete_result)
 }
 
+/// 删除指定令牌（仅超级令牌可调用）。
+///
+/// - `token`：超级令牌凭据（用于鉴权）
+/// - `target_token`：待删除令牌的 token_key 或 username
+/// - 返回：成功时为 `{"message":"...","rows_affected":N,"matched_by":"token_key|username"}`
+/// - 错误：鉴权失败、目标为超级令牌、目标不存在
+///
+/// 内部步骤：
+/// 1. 验证调用者为超级令牌
+/// 2. 校验 target_token 非空
+/// 3. 检查目标不是超级令牌自身（防止误删）
+/// 4. 优先按 token_key 删除，若未命中则按 username 删除
+/// 5. 刷新 TokenCache
 pub async fn delete(token: String, target_token: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
         debug!(target: "token", target_token = %target_token, "processing token delete request");
@@ -103,6 +126,7 @@ pub async fn delete(token: String, target_token: String) -> RpcResult<Box<RawVal
 
         debug!(target: "token", target = %target_token_to_delete, "Super record found, checking if target is super token");
 
+        // 超级令牌不可被删除，通过 key 和 username 两个维度检查
         let target_is_super_by_key = target_token_to_delete == super_record.token_key;
         let target_is_super_by_username =
             super_record.username.as_deref() == Some(target_token_to_delete.as_str());
@@ -152,6 +176,7 @@ pub async fn delete(token: String, target_token: String) -> RpcResult<Box<RawVal
             .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
     };
 
+    // 统一错误转换：anyhow → NodegetError → JSON-RPC ErrorObject
     match process_logic.await {
         Ok(result) => Ok(result),
         Err(e) => {

@@ -107,7 +107,9 @@ impl MigrationTrait for Migration {
 
                 manager
                     .get_connection()
-                    .execute_unprepared(r#"DROP INDEX IF EXISTS "idx-static-file-is-http-root-unique""#)
+                    .execute_unprepared(
+                        r#"DROP INDEX IF EXISTS "idx-static-file-is-http-root-unique""#,
+                    )
                     .await?;
                 manager
                     .get_connection()

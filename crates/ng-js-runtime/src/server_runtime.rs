@@ -1,3 +1,15 @@
+//! 服务器端 `QuickJS` 运行时核心 —— JS 执行引擎、资源限制、字节码编译。
+//!
+//! 提供：
+//! - `RuntimeLimits` —— 运行时资源限制（执行时长、栈大小、堆大小）
+//! - `js_runner` / `js_runner_source_mode` —— 一次性 JS 执行（用完即弃 Runtime）
+//! - `compile_js_module_to_bytecode` —— JS 模块编译为 `QuickJS` 字节码
+//! - `init_js_runtime_globals` —— 注入 `nodeget()`、`fetch`、`execSql` 等全局 API
+//! - `spawn_kill_watchdog` —— OS 线程看门狗，打断 CPU 密集的 JS 无限循环
+//!
+//! 与 `runtime_pool` 模块的区别：此模块的执行器创建临时 Runtime，执行完毕后销毁；
+//! `runtime_pool` 维护持久化的 Worker 池，字节码缓存避免重复加载。
+
 use crate::{JsCodeInput, RunType};
 use rquickjs::prelude::{Async, Func};
 use rquickjs::{
@@ -10,6 +22,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{debug, error, trace};
 use uuid::Uuid;
 
+/// `QuickJS` 运行时默认内存上限（8 MiB）。
 pub(crate) const JS_RT_MEMORY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
 /// `max_run_time` 的应用层默认值（ms）。见 `js_worker.max_run_time`，NULL 时兜底。
@@ -143,6 +156,7 @@ pub(crate) fn spawn_kill_watchdog(
     (cancel_tx, handle)
 }
 
+/// 构造一个带有阶段标识的 `rquickjs::Error`，用于统一错误来源标记。
 pub fn js_error(stage: &'static str, message: impl Into<String>) -> Error {
     Error::new_from_js_message(stage, "String", message.into())
 }
@@ -166,6 +180,19 @@ pub fn format_js_error(err: &Error) -> String {
     }
 }
 
+/// 初始化 JS 运行时全局 API。
+///
+/// 注入的 API 包括：
+/// 1. `llrt_fetch` / `llrt_buffer` / `llrt_stream_web` / `llrt_url` / `llrt_util` / `llrt_timers`
+/// 2. `__nodeget_rpc_raw` —— 原始 JSON-RPC 调用（返回 JSON 字符串）
+/// 3. `__nodeget_inline_call_raw` —— 原始内联调用（返回 JSON 字符串）
+/// 4. `randomUUID` —— UUID 生成
+/// 5. `nodeget()` —— 封装后的 JSON-RPC 调用（返回解析后的 JS 对象）
+/// 6. `__nodeget_inline_call()` —— 封装后的内联调用
+/// 7. `execSql()` —— 数据库 SQL 执行
+/// 8. `getDatabaseType()` —— 获取数据库类型
+/// 9. 定时器追踪 —— 包装 setTimeout/setInterval/setImmediate，支持 `__nodeget_clear_all_timers`
+/// 10. `db.*` —— 数据库 CRUD 操作快捷方式
 pub(crate) fn init_js_runtime_globals(ctx: &Ctx<'_>) -> Result<(), Error> {
     debug!(target: "js_runtime", "initializing JS runtime globals");
     llrt_fetch::init(ctx)?;
@@ -291,6 +318,9 @@ pub(crate) fn init_js_runtime_globals(ctx: &Ctx<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// 从 JS 上下文提取异常信息，组装包含名称、消息和堆栈的可读字符串。
+///
+/// `QuickJS` 的 `.stack` 只包含调用帧不含错误消息，需要手动拼接。
 fn format_js_exception(ctx: &Ctx<'_>) -> String {
     let exception = ctx.catch();
 
@@ -335,6 +365,10 @@ fn format_js_exception(ctx: &Ctx<'_>) -> String {
     format!("{exception:?}")
 }
 
+/// 将 JS 异常类型的 `rquickjs::Error` 替换为包含详细堆栈信息的错误。
+///
+/// 若 `result` 是 `Error::Exception`，从上下文提取异常信息；
+/// 否则原样返回。
 pub(crate) fn enrich_exception<T>(
     ctx: &Ctx<'_>,
     stage: &'static str,
@@ -347,6 +381,12 @@ pub(crate) fn enrich_exception<T>(
     }
 }
 
+/// 将 JS 源码编译为 `QuickJS` 模块字节码，不执行模块。
+///
+/// 内部步骤：
+/// 1. 检查脚本和文件名不含 NUL 字节
+/// 2. 声明 ES 模块
+/// 3. 序列化为字节码（`Module::write`）
 fn compile_module_bytecode_no_eval(ctx: &Ctx<'_>, script: &str) -> Result<Vec<u8>, Error> {
     trace!(target: "js_runtime", "compiling module bytecode");
     let _ = CString::new(script.as_bytes())
@@ -363,8 +403,13 @@ fn compile_module_bytecode_no_eval(ctx: &Ctx<'_>, script: &str) -> Result<Vec<u8
     enrich_exception(ctx, "js_compile", module.write(WriteOptions::default()))
 }
 
+/// 将 JS 模块编译为 `QuickJS` 字节码。
+///
+/// 创建临时 current-thread Tokio Runtime 和 `QuickJS` Runtime/Context，
+/// 在上下文中初始化全局 API（与运行时保持一致），然后编译模块。
+///
 /// # Errors
-/// Returns an error if the JS module cannot be compiled.
+/// 若 JS 模块编译失败，返回错误。
 pub fn compile_js_module_to_bytecode(js_code: impl AsRef<str>) -> Result<Vec<u8>, Error> {
     debug!(target: "js_runtime", "compiling JS module to bytecode");
     let js_code = js_code.as_ref().to_owned();
@@ -381,7 +426,7 @@ pub fn compile_js_module_to_bytecode(js_code: impl AsRef<str>) -> Result<Vec<u8>
 
         let compile_result: Result<Vec<u8>, Error> = ctx
             .async_with(async |ctx| {
-                // Keep compile context aligned with runtime context.
+                // 编译上下文与运行时上下文保持一致，确保全局 API 可用
                 init_js_runtime_globals(&ctx)?;
 
                 compile_module_bytecode_no_eval(&ctx, &js_code)
@@ -393,10 +438,10 @@ pub fn compile_js_module_to_bytecode(js_code: impl AsRef<str>) -> Result<Vec<u8>
     })
 }
 
-/// Invoke script IIFE: reads `__nodeget_*` globals, calls the handler, returns the result.
+/// 执行脚本的 IIFE 模板：读取 `__nodeget_*` 全局变量，调用 handler，返回结果。
 ///
-/// This is the shared JS snippet that runs after globals are set via [`prepare_invoke_globals`]
-/// and `__nodeget_entry` is set from the module namespace.
+/// 此为共享的 JS 代码片段，在通过 [`prepare_invoke_globals`] 设置全局变量、
+/// `__nodeget_entry` 从模块命名空间设置后运行。
 pub const INVOKE_SCRIPT_JS: &str = r#"
 (async () => {
     // Reset timer tracking for this execution
@@ -503,16 +548,16 @@ pub const INVOKE_SCRIPT_JS: &str = r#"
 })()
 "#;
 
-/// Set the five `__nodeget_*` global variables on the JS context before invoking the script.
+/// 在 JS 上下文中设置五个 `__nodeget_*` 全局变量，供脚本执行模板使用。
 ///
-/// - `__nodeget_run_handler` — handler name string (e.g. `"onInterval"`)
-/// - `__nodeget_run_params` — input parameters as a JS object (via `json_parse`)
-/// - `__nodeget_env` — environment variables as a JS object (via `json_parse`)
-/// - `__nodeget_current_script_name` — script name string or `null`
-/// - `__nodeget_inline_caller` — inline caller name string or `null`
+/// - `__nodeget_run_handler` —— handler 函数名字符串（如 `"onCall"`）
+/// - `__nodeget_run_params` —— 调用参数（通过 `json_parse` 转为 JS 对象）
+/// - `__nodeget_env` —— 环境变量（通过 `json_parse` 转为 JS 对象）
+/// - `__nodeget_current_script_name` —— 脚本名称字符串或 `null`
+/// - `__nodeget_inline_caller` —— 内联调用方名称字符串或 `null`
 ///
 /// # Errors
-/// Returns an error if any global variable cannot be set (serialization or JS engine failure).
+/// 若任何全局变量设置失败（序列化或 JS 引擎错误），返回错误。
 pub fn prepare_invoke_globals(
     ctx: &Ctx<'_>,
     run_type: &str,
@@ -525,11 +570,18 @@ pub fn prepare_invoke_globals(
 
     global.set("__nodeget_run_handler", run_type.to_owned())?;
 
-    let params_json = serde_json::to_string(params)
-        .map_err(|e| js_error("js_runner", format!("Failed to serialize input params: {e}")))?;
-    let params_js = ctx
-        .json_parse(params_json)
-        .map_err(|e| js_error("js_runner", format!("Failed to build input params in JS: {e}")))?;
+    let params_json = serde_json::to_string(params).map_err(|e| {
+        js_error(
+            "js_runner",
+            format!("Failed to serialize input params: {e}"),
+        )
+    })?;
+    let params_js = ctx.json_parse(params_json).map_err(|e| {
+        js_error(
+            "js_runner",
+            format!("Failed to build input params in JS: {e}"),
+        )
+    })?;
     global.set("__nodeget_run_params", params_js)?;
 
     let env_json = serde_json::to_string(env)
@@ -565,18 +617,16 @@ pub fn prepare_invoke_globals(
     Ok(())
 }
 
-/// Convert a JS return value into a [`Value`] (serde_json).
+/// 将 JS 返回值转换为 `serde_json::Value`。
 ///
-/// Handles `undefined` (error), JS string (direct parse), and other types
-/// (via `json_stringify` then `serde_json::from_str`).
+/// 处理三种情况：
+/// - `undefined` —— 视为错误（脚本必须返回 JSON 可序列化值）
+/// - JS 字符串 —— 直接解析为 JSON
+/// - 其他类型 —— 通过 `json_stringify` 序列化后再解析
 ///
 /// # Errors
-/// Returns an error if the value is `undefined`, not JSON-serializable, or the
-/// serialized string is not valid JSON.
-pub fn resolve_invoke_result<'js>(
-    ctx: &Ctx<'js>,
-    js_value: JsValue<'js>,
-) -> Result<Value, Error> {
+/// 若值为 `undefined`、不可 JSON 序列化或序列化结果非合法 JSON，返回错误。
+pub fn resolve_invoke_result<'js>(ctx: &Ctx<'js>, js_value: JsValue<'js>) -> Result<Value, Error> {
     if js_value.is_undefined() {
         return Err(js_error(
             "json_parse",
@@ -604,12 +654,23 @@ pub fn resolve_invoke_result<'js>(
     })
 }
 
-/// # Errors
-/// Returns an error if building the host runtime or JS execution fails.
+/// 一次性 JS 执行器（字节码或源码模式），执行完毕后销毁 Runtime。
+///
+/// - `js_code` —— JS 代码输入（源码或字节码）
+/// - `run_type` —— 运行模式
+/// - `input_params` —— 调用参数
+/// - `env_value` —— 环境变量
+/// - `current_script_name` —— 当前脚本名称（用于日志和错误追踪）
+/// - `inline_caller` —— 内联调用方名称
+/// - `caller_soft_timeout` —— 调用方软超时（`inline_call` 的 timeoutSec）
+/// - `limits` —— 运行时资源限制
 ///
 /// `limits` 来自 `js_worker` 表，控制 heap / stack / 执行时长硬上限。
 /// `caller_soft_timeout` 是 `inline_call` / 调用方传入的软超时；与 `limits.max_run_time_ms`
 /// 取较严的一个作为最终 `tokio::time::timeout` 时长。
+///
+/// # Errors
+/// 若构建宿主 Runtime 或 JS 执行失败，返回错误。
 pub fn js_runner(
     js_code: JsCodeInput,
     run_type: RunType,
@@ -641,57 +702,62 @@ pub fn js_runner(
 
         let ctx = AsyncContext::full(&rt).await?;
         let execute = async {
-            let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
-                init_js_runtime_globals(&ctx)?;
-                prepare_invoke_globals(
-                    &ctx,
-                    run_type.handler_name(),
-                    &input_params,
-                    &env_value,
-                    current_script_name.as_deref(),
-                    inline_caller.as_deref(),
-                )?;
-
-                let declared_module = match &js_code {
-                    JsCodeInput::Source(source) => enrich_exception(
+            let js_result: Result<Value, Error> = ctx
+                .async_with(async |ctx| {
+                    init_js_runtime_globals(&ctx)?;
+                    prepare_invoke_globals(
                         &ctx,
-                        "js_load",
-                        Module::declare(ctx.clone(), "js_worker.js", source.as_bytes().to_vec()),
-                    )?,
-                    JsCodeInput::Bytecode(bytecode) => enrich_exception(
+                        run_type.handler_name(),
+                        &input_params,
+                        &env_value,
+                        current_script_name.as_deref(),
+                        inline_caller.as_deref(),
+                    )?;
+
+                    let declared_module = match &js_code {
+                        JsCodeInput::Source(source) => enrich_exception(
+                            &ctx,
+                            "js_load",
+                            Module::declare(
+                                ctx.clone(),
+                                "js_worker.js",
+                                source.as_bytes().to_vec(),
+                            ),
+                        )?,
+                        JsCodeInput::Bytecode(bytecode) => {
+                            enrich_exception(&ctx, "js_load", unsafe {
+                                Module::load(ctx.clone(), bytecode)
+                            })?
+                        }
+                    };
+
+                    let (module, module_eval_promise) =
+                        enrich_exception(&ctx, "js_eval", declared_module.eval())?;
+                    let _eval_result = enrich_exception(
                         &ctx,
-                        "js_load",
-                        unsafe { Module::load(ctx.clone(), bytecode) },
-                    )?,
-                };
+                        "js_eval",
+                        module_eval_promise.into_future::<JsValue<'_>>().await,
+                    )?;
 
-                let (module, module_eval_promise) =
-                    enrich_exception(&ctx, "js_eval", declared_module.eval())?;
-                let _eval_result = enrich_exception(
-                    &ctx,
-                    "js_eval",
-                    module_eval_promise.into_future::<JsValue<'_>>().await,
-                )?;
+                    let namespace = enrich_exception(&ctx, "js_namespace", module.namespace())?;
+                    let entry_value: JsValue<'_> =
+                        enrich_exception(&ctx, "js_namespace", namespace.get("default"))?;
+                    ctx.globals().set("__nodeget_entry", entry_value)?;
 
-                let namespace = enrich_exception(&ctx, "js_namespace", module.namespace())?;
-                let entry_value: JsValue<'_> =
-                    enrich_exception(&ctx, "js_namespace", namespace.get("default"))?;
-                ctx.globals().set("__nodeget_entry", entry_value)?;
+                    let invoke_promise: Promise<'_> =
+                        enrich_exception(&ctx, "js_invoke", ctx.eval(INVOKE_SCRIPT_JS))?;
+                    let js_value: JsValue<'_> = enrich_exception(
+                        &ctx,
+                        "js_invoke",
+                        invoke_promise.into_future::<JsValue<'_>>().await,
+                    )?;
 
-                let invoke_promise: Promise<'_> =
-                    enrich_exception(&ctx, "js_invoke", ctx.eval(INVOKE_SCRIPT_JS))?;
-                let js_value: JsValue<'_> = enrich_exception(
-                    &ctx,
-                    "js_invoke",
-                    invoke_promise.into_future::<JsValue<'_>>().await,
-                )?;
-
-                resolve_invoke_result(&ctx, js_value)
-            })
+                    resolve_invoke_result(&ctx, js_value)
+                })
                 .await;
 
-            // Bounded idle: one-shot runtime is dropped after this, but uncleared
-            // setInterval can still hang idle() forever. 200ms is generous for GC.
+            // 有界 idle：一次性 Runtime 执行后即销毁，但未清理的 setInterval
+            // 仍可能让 idle() 永远挂起。200ms 足够 GC 完成。
             let _ = tokio::time::timeout(std::time::Duration::from_millis(200), rt.idle()).await;
             js_result
         };
@@ -705,7 +771,7 @@ pub fn js_runner(
             Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
         };
 
-        // 执行完/超时都 cancel 看门狗并回收线程
+        // 执行完成或超时后，取消看门狗并回收线程
         let _ = cancel_tx.send(());
         let _ = watchdog.join();
 
@@ -733,10 +799,14 @@ pub fn js_runner(
     })
 }
 
-/// # Errors
-/// Returns an error if building the host runtime or JS execution fails.
+/// 源码模式一次性 JS 执行器，语义与 [`js_runner`] 一致。
 ///
-/// 见 `js_runner` 的 `limits` 说明，语义一致。
+/// 与 `js_runner` 的区别：
+/// - 始终使用源码模式声明模块（`Module::declare`），模块名使用 `{script_name}.js` 以改善堆栈追踪
+/// - 无字节码缓存路径
+///
+/// # Errors
+/// 若构建宿主 Runtime 或 JS 执行失败，返回错误。
 pub fn js_runner_source_mode(
     source_code: &str,
     script_name: &str,
@@ -762,48 +832,49 @@ pub fn js_runner_source_mode(
 
         let ctx = AsyncContext::full(&rt).await?;
         let execute = async {
-            let js_result: Result<Value, Error> = ctx.async_with(async |ctx| {
-                init_js_runtime_globals(&ctx)?;
-                prepare_invoke_globals(
-                    &ctx,
-                    run_type.handler_name(),
-                    &input_params,
-                    &env_value,
-                    Some(script_name),
-                    None,
-                )?;
+            let js_result: Result<Value, Error> = ctx
+                .async_with(async |ctx| {
+                    init_js_runtime_globals(&ctx)?;
+                    prepare_invoke_globals(
+                        &ctx,
+                        run_type.handler_name(),
+                        &input_params,
+                        &env_value,
+                        Some(script_name),
+                        None,
+                    )?;
 
-                // Use actual script name for better error stack traces
-                let module_name = format!("{script_name}.js");
-                let declared_module = enrich_exception(
-                    &ctx,
-                    "js_load",
-                    Module::declare(ctx.clone(), module_name, source_code.as_bytes().to_vec()),
-                )?;
+                    // 使用实际脚本名作为模块名，改善错误堆栈追踪
+                    let module_name = format!("{script_name}.js");
+                    let declared_module = enrich_exception(
+                        &ctx,
+                        "js_load",
+                        Module::declare(ctx.clone(), module_name, source_code.as_bytes().to_vec()),
+                    )?;
 
-                let (module, module_eval_promise) =
-                    enrich_exception(&ctx, "js_eval", declared_module.eval())?;
-                let _eval_result = enrich_exception(
-                    &ctx,
-                    "js_eval",
-                    module_eval_promise.into_future::<JsValue<'_>>().await,
-                )?;
+                    let (module, module_eval_promise) =
+                        enrich_exception(&ctx, "js_eval", declared_module.eval())?;
+                    let _eval_result = enrich_exception(
+                        &ctx,
+                        "js_eval",
+                        module_eval_promise.into_future::<JsValue<'_>>().await,
+                    )?;
 
-                let namespace = enrich_exception(&ctx, "js_namespace", module.namespace())?;
-                let entry_value: JsValue<'_> =
-                    enrich_exception(&ctx, "js_namespace", namespace.get("default"))?;
-                ctx.globals().set("__nodeget_entry", entry_value)?;
+                    let namespace = enrich_exception(&ctx, "js_namespace", module.namespace())?;
+                    let entry_value: JsValue<'_> =
+                        enrich_exception(&ctx, "js_namespace", namespace.get("default"))?;
+                    ctx.globals().set("__nodeget_entry", entry_value)?;
 
-                let invoke_promise: Promise<'_> =
-                    enrich_exception(&ctx, "js_invoke", ctx.eval(INVOKE_SCRIPT_JS))?;
-                let js_value: JsValue<'_> = enrich_exception(
-                    &ctx,
-                    "js_invoke",
-                    invoke_promise.into_future::<JsValue<'_>>().await,
-                )?;
+                    let invoke_promise: Promise<'_> =
+                        enrich_exception(&ctx, "js_invoke", ctx.eval(INVOKE_SCRIPT_JS))?;
+                    let js_value: JsValue<'_> = enrich_exception(
+                        &ctx,
+                        "js_invoke",
+                        invoke_promise.into_future::<JsValue<'_>>().await,
+                    )?;
 
-                resolve_invoke_result(&ctx, js_value)
-            })
+                    resolve_invoke_result(&ctx, js_value)
+                })
                 .await;
 
             let _ = tokio::time::timeout(std::time::Duration::from_millis(200), rt.idle()).await;

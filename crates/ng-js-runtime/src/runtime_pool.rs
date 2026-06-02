@@ -1,3 +1,15 @@
+//! `QuickJS` 运行时池 —— 每个注册脚本对应一个 OS 线程 + `QuickJS` 实例。
+//!
+//! 核心架构：
+//! - 每个 `RuntimeWorkerHandle` 持有一个独立 OS 线程，内部运行 current-thread Tokio Runtime
+//! - 通过 `std::sync::mpsc` channel 发送 `WorkerCommand`（Execute / Shutdown）
+//! - 字节码缓存：`loaded_bytecode_hash` 避免相同字节码重复加载
+//! - 空闲清理：`cleanup_idle_workers` 定期扫描超过 `runtime_clean_time` 且无活跃请求的 Worker
+//! - 硬超时：`kill_flag` + interrupt handler 机制打断 CPU 密集循环
+//!
+//! 与 `server_runtime` 模块的区别：此模块维护持久化的 Worker 池，而 `js_runner`/`js_runner_source_mode`
+//! 是一次性执行（用完即弃）。
+
 use crate::server_runtime::{
     INVOKE_SCRIPT_JS, RuntimeLimits, apply_runtime_limits, enrich_exception, format_js_error,
     init_js_runtime_globals, install_kill_handler, js_error, prepare_invoke_globals,
@@ -15,55 +27,91 @@ use std::sync::{Arc, OnceLock, RwLock};
 use tokio::sync::oneshot;
 use tracing::{debug, info, trace, warn};
 
+/// `runtime_clean_time` 为 None 时的哨兵值。
 const RUNTIME_CLEAN_TIME_NONE: i64 = -1;
+/// 空闲清理扫描间隔（ms）。
 const CLEANUP_INTERVAL_MS: u64 = 1_000;
 
+/// 单个 Worker 线程内的运行时状态，持有 `QuickJS` `AsyncRuntime` 和 `AsyncContext`。
 struct RuntimeState {
+    /// `QuickJS` `AsyncRuntime` 实例
     rt: AsyncRuntime,
+    /// `QuickJS` `AsyncContext` 实例
     ctx: AsyncContext,
+    /// 当前已加载字节码的哈希值，用于判断是否需要重新加载
     loaded_bytecode_hash: Option<u64>,
-    /// 本 worker 的 heap/stack 是在首次创建时固定的；记录下来以便后续 stats 或日志使用。
+    /// 本 Worker 的 heap/stack 是在首次创建时固定的；记录下来以便后续 stats 或日志使用。
     limits: RuntimeLimits,
-    /// interrupt handler 在 worker `创建时安装，kill_flag` 被共享；每次 execute 前
+    /// interrupt handler 在 Worker 创建时安装，`kill_flag` 被共享；每次 execute 前
     /// `store(false)`，完成后一并处理。
     kill_flag: Arc<AtomicBool>,
 }
 
+/// Worker 线程接收的命令枚举。
 enum WorkerCommand {
+    /// 执行脚本命令
     Execute {
+        /// `QuickJS` 字节码
         bytecode: Vec<u8>,
+        /// 字节码哈希值，用于判断是否需要重新加载
         bytecode_hash: u64,
+        /// 运行模式
         run_type: RunType,
+        /// 调用参数
         params: Value,
+        /// 环境变量
         env: Value,
-        /// 本次执行的 `max_run_time（ms）。heap/stack` 已在 worker 创建时固定，
+        /// 本次执行的 `max_run_time`（ms）。heap/stack 已在 Worker 创建时固定，
         /// 这里只用于 per-call 硬超时看门狗。
         max_run_time_ms: u64,
+        /// 执行结果的一次性发送通道
         response_tx: oneshot::Sender<Result<Value, String>>,
     },
+    /// 关闭 Worker 线程
     Shutdown,
 }
 
+/// Worker 线程的句柄，由池持有以发送命令和查询状态。
 #[derive(Debug)]
 struct RuntimeWorkerHandle {
+    /// Worker 对应的脚本名称
     script_name: String,
+    /// 命令发送通道
     sender: std::sync::mpsc::Sender<WorkerCommand>,
+    /// 当前活跃请求数（原子计数）
     active_requests: AtomicUsize,
+    /// 上次使用时间（ms，unix epoch）
     last_used_ms: AtomicI64,
+    /// 运行时清理时间阈值（ms），负值表示永不清理
     runtime_clean_time_ms: AtomicI64,
 }
 
 impl RuntimeWorkerHandle {
+    /// 设置运行时清理时间阈值。
     fn set_runtime_clean_time(&self, runtime_clean_time: Option<i64>) {
         let value = runtime_clean_time.unwrap_or(RUNTIME_CLEAN_TIME_NONE);
         self.runtime_clean_time_ms.store(value, Ordering::Relaxed);
     }
 
+    /// 获取运行时清理时间阈值，None 表示永不清理。
     fn runtime_clean_time(&self) -> Option<i64> {
         let value = self.runtime_clean_time_ms.load(Ordering::Relaxed);
         if value < 0 { None } else { Some(value) }
     }
 
+    /// 向 Worker 发送执行命令并等待结果。
+    ///
+    /// - `bytecode` —— `QuickJS` 字节码
+    /// - `run_type` —— 运行模式
+    /// - `params` —— 调用参数
+    /// - `env` —— 环境变量
+    /// - `max_run_time_ms` —— 本次硬超时（ms）
+    ///
+    /// 内部步骤：
+    /// 1. 原子递增 `active_requests`，RAII guard 保证退出时递减
+    /// 2. 计算字节码哈希，构造 `WorkerCommand::Execute` 发送到 Worker 线程
+    /// 3. 等待 oneshot 通道返回结果
+    /// 4. 更新 `last_used_ms` 时间戳
     async fn execute(
         &self,
         bytecode: Vec<u8>,
@@ -117,6 +165,7 @@ impl RuntimeWorkerHandle {
     }
 }
 
+/// RAII guard，Drop 时自动递减 `active_requests` 计数。
 struct ActiveRequestGuard<'a>(&'a AtomicUsize);
 
 impl Drop for ActiveRequestGuard<'_> {
@@ -125,12 +174,15 @@ impl Drop for ActiveRequestGuard<'_> {
     }
 }
 
+/// `QuickJS` 运行时池，管理所有持久化的 Worker 线程。
 #[derive(Default)]
 pub struct JsRuntimePool {
+    /// Worker 名称 → 句柄的映射表，RwLock 保护并发读写
     workers: RwLock<HashMap<String, Arc<RuntimeWorkerHandle>>>,
 }
 
 impl JsRuntimePool {
+    /// 创建空的运行时池。
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -138,12 +190,22 @@ impl JsRuntimePool {
         }
     }
 
-    /// # Errors
-    /// Returns an error if the worker channel is closed or script execution fails.
+    /// 在池中执行脚本，若 Worker 不存在则自动创建。
+    ///
+    /// - `script_name` —— 脚本名称，同时作为 Worker 的唯一标识
+    /// - `bytecode` —— `QuickJS` 字节码
+    /// - `run_type` —— 运行模式
+    /// - `params` —— 调用参数
+    /// - `env` —— 环境变量
+    /// - `runtime_clean_time_ms` —— 空闲清理时间阈值（ms），None 表示永不清理
+    /// - `limits` —— 运行时资源限制
     ///
     /// `limits` 来自 `js_worker` 表的 `max_run_time` / `max_stack_size` / `max_heap_size`。
-    /// heap/stack 在 worker 首次创建时固定，update.rs 调用 `evict_worker` 强制下次
+    /// heap/stack 在 Worker 首次创建时固定，`update.rs` 调用 `evict_worker` 强制下次
     /// 重建时采用新值；`max_run_time_ms` 每次调用生效。
+    ///
+    /// # Errors
+    /// 若 Worker 通道已关闭或脚本执行失败，返回错误。
     pub async fn execute_script(
         &self,
         script_name: &str,
@@ -162,6 +224,7 @@ impl JsRuntimePool {
             .await
     }
 
+    /// 获取或初始化 Worker，使用 double-check locking 避免重复创建。
     #[allow(clippy::significant_drop_tightening)]
     fn get_or_init_worker(
         &self,
@@ -176,6 +239,7 @@ impl JsRuntimePool {
             }
         }
 
+        // 先创建 Worker（不持锁），再 double-check
         let worker = spawn_worker(script_name, limits)?;
 
         {
@@ -190,6 +254,7 @@ impl JsRuntimePool {
             Err(e) => return Err(anyhow::anyhow!("{e}")),
         };
 
+        // 写锁内最终检查，防止并发创建
         if let Some(existing) = workers.get(script_name).cloned() {
             return Ok(existing);
         }
@@ -198,6 +263,10 @@ impl JsRuntimePool {
         Ok(worker)
     }
 
+    /// 清理空闲超时的 Worker。
+    ///
+    /// 条件：`runtime_clean_time > 0`、无活跃请求、无外部 Arc 引用、
+    /// 空闲时长超过清理阈值。
     pub fn cleanup_idle_workers(&self) {
         let now = get_local_timestamp_ms_i64().unwrap_or_else(|e| {
             warn!(target: "js_runtime", error = %e, "Failed to read local timestamp during runtime cleanup");
@@ -281,6 +350,9 @@ impl JsRuntimePool {
         }
     }
 
+    /// 强制驱逐指定 Worker，发送 Shutdown 命令并从池中移除。
+    ///
+    /// update 操作后调用此方法，确保下次执行时使用新配置重建 Worker。
     pub fn evict_worker(&self, script_name: &str) -> bool {
         let removed = match self.workers.write() {
             Ok(mut workers) => workers.remove(script_name),
@@ -297,6 +369,7 @@ impl JsRuntimePool {
         })
     }
 
+    /// 获取运行时池状态快照，用于 `get_rt_pool` RPC。
     #[must_use]
     pub fn snapshot(&self) -> RuntimePoolInfo {
         let now = get_local_timestamp_ms_i64().unwrap_or_else(|e| {
@@ -330,9 +403,12 @@ impl JsRuntimePool {
     }
 }
 
+/// 全局运行时池单例。
 static GLOBAL_RUNTIME_POOL: OnceLock<Arc<JsRuntimePool>> = OnceLock::new();
+/// 标记清理循环是否已启动，防止重复 spawn。
 static CLEANUP_LOOP_STARTED: AtomicBool = AtomicBool::new(false);
 
+/// 获取全局运行时池单例，懒初始化。
 #[must_use]
 pub fn global_pool() -> &'static Arc<JsRuntimePool> {
     GLOBAL_RUNTIME_POOL.get_or_init(|| {
@@ -341,6 +417,9 @@ pub fn global_pool() -> &'static Arc<JsRuntimePool> {
     })
 }
 
+/// 初始化全局运行时池并启动周期性清理循环。
+///
+/// 必须在服务器启动时调用一次。清理循环每隔 1 秒扫描空闲 Worker。
 pub fn init_global_pool() -> &'static Arc<JsRuntimePool> {
     let pool = global_pool();
 
@@ -357,6 +436,9 @@ pub fn init_global_pool() -> &'static Arc<JsRuntimePool> {
     pool
 }
 
+/// 创建新的 Worker 线程，返回其句柄。
+///
+/// Worker 线程命名为 `js-rt-{script_name}`，内部运行 `worker_loop` 接收命令。
 fn spawn_worker(
     script_name: &str,
     limits: RuntimeLimits,
@@ -384,6 +466,11 @@ fn spawn_worker(
     Ok(handle)
 }
 
+/// Worker 线程主循环。
+///
+/// 创建 current-thread Tokio Runtime，循环接收 `WorkerCommand`：
+/// - `Execute`：在 Runtime 上执行脚本，通过 oneshot 通道返回结果
+/// - `Shutdown`：退出循环，线程结束
 fn worker_loop(
     script_name: &str,
     receiver: std::sync::mpsc::Receiver<WorkerCommand>,
@@ -442,6 +529,19 @@ fn worker_loop(
     }
 }
 
+/// 在 Worker 线程内执行一次脚本。
+///
+/// 内部步骤：
+/// 1. 若 `RuntimeState` 不存在，创建新的（含 `QuickJS` Runtime/Context、资源限制、kill handler）
+/// 2. 清除上次执行残留的 `kill_flag`
+/// 3. 若字节码哈希变化，重新加载字节码模块并设置 `__nodeget_entry` 全局变量
+/// 4. 启动硬超时看门狗（OS 线程 + interrupt handler）
+/// 5. 设置调用参数全局变量，执行 `INVOKE_SCRIPT_JS` IIFE
+/// 6. 等待结果或超时
+/// 7. 清除所有定时器，检查是否被硬超时打断
+/// 8. 若被硬超时打断：丢弃整个 RuntimeState（残留未清理的 promise 会影响后续执行）
+/// 9. 等待 `rt.idle()` 确保 `QuickJS` GC 完成（100ms 超时兜底）
+/// 10. drain I/O 清理窗口（10ms），让 hyper 连接 task 处理关闭信号
 #[allow(clippy::future_not_send)]
 async fn execute_on_worker(
     runtime_state: &mut Option<RuntimeState>,
@@ -466,6 +566,7 @@ async fn execute_on_worker(
     // 每次执行前清 flag（上一轮超时留下的 true 会立刻打断新执行）
     state.kill_flag.store(false, Ordering::Relaxed);
 
+    // 字节码哈希不同时需要重新加载模块
     if state.loaded_bytecode_hash != Some(bytecode_hash) {
         let load_result: Result<(), Error> = state
             .ctx
@@ -537,15 +638,15 @@ async fn execute_on_worker(
     // `create_runtime_state` 重建一个干净的 runtime。
     let killed_by_timeout = state.kill_flag.load(Ordering::Relaxed) && run_outcome.is_err();
 
-    // Reset kill flag so interrupt handler won't abort the timer-clear eval below.
-    // killed status is already stored in `killed_by_timeout`.
+    // 重置 kill_flag，避免 interrupt handler 打断后续的定时器清理操作。
+    // killed 状态已保存在 `killed_by_timeout` 变量中。
     if killed_by_timeout {
         state.kill_flag.store(false, Ordering::Relaxed);
     }
 
-    // Clear all timers to prevent idle() from hanging on persistent setInterval
-    // and to clean RT_TIMER_STATE entries before potential runtime destruction.
-    // kill_flag is now false, so the interrupt handler won't interfere.
+    // 清除所有定时器，防止 idle() 因未清理的 setInterval 挂起，
+    // 同时清理 RT_TIMER_STATE 条目以避免潜在的 Runtime 销毁问题。
+    // 此时 kill_flag 已为 false，interrupt handler 不会干扰。
     let _ = state.ctx.async_with(async |ctx| {
         let _ = ctx.eval::<(), _>(
             "if(typeof globalThis.__nodeget_clear_all_timers==='function')globalThis.__nodeget_clear_all_timers()"
@@ -568,18 +669,20 @@ async fn execute_on_worker(
         ));
     }
 
-    // Bounded idle — safety net: if cleanup missed persistent async work,
-    // 100ms timeout triggers and we discard the runtime state.
-    let idle_ok = tokio::time::timeout(
-        std::time::Duration::from_millis(100),
-        state.rt.idle()
-    ).await.is_ok();
+    // 有界 idle —— 安全兜底：若清理遗漏了持久异步工作，
+    // 100ms 超时触发并丢弃运行时状态。
+    let idle_ok = tokio::time::timeout(std::time::Duration::from_millis(100), state.rt.idle())
+        .await
+        .is_ok();
 
     if !idle_ok {
-        // idle() timed out — runtime has unkillable persistent work, discard it
+        // idle() 超时 —— 运行时存在无法终止的持久工作，丢弃状态
         *runtime_state = None;
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        return Err(js_error("js_runner", "Runtime cleanup timed out — state discarded"));
+        return Err(js_error(
+            "js_runner",
+            "Runtime cleanup timed out — state discarded",
+        ));
     }
 
     // 给 tokio runtime 一个短窗口来处理挂起的 I/O 清理。
@@ -598,6 +701,13 @@ async fn execute_on_worker(
     run_outcome
 }
 
+/// 创建新的 `RuntimeState`，包含 `QuickJS` Runtime/Context 及全局初始化。
+///
+/// 内部步骤：
+/// 1. 创建 `AsyncRuntime` 并应用 heap/stack 限制
+/// 2. 安装 interrupt handler（共享 `kill_flag`）
+/// 3. 创建 `AsyncContext` 并初始化全局 API（nodeget、fetch、execSql 等）
+/// 4. 等待 `rt.idle()` 确保初始化完成
 #[allow(clippy::future_not_send)]
 async fn create_runtime_state(limits: RuntimeLimits) -> Result<RuntimeState, Error> {
     trace!(target: "js_runtime", max_run_time_ms = limits.max_run_time_ms, max_stack_size_bytes = limits.max_stack_size_bytes, max_heap_size_bytes = limits.max_heap_size_bytes, "creating new runtime state");
@@ -623,6 +733,7 @@ async fn create_runtime_state(limits: RuntimeLimits) -> Result<RuntimeState, Err
     })
 }
 
+/// 计算字节切片的哈希值，用于判断字节码是否变化。
 fn hash_bytes(bytes: &[u8]) -> u64 {
     let mut hasher = DefaultHasher::new();
     bytes.hash(&mut hasher);

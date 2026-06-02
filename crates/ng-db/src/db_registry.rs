@@ -1,3 +1,16 @@
+//! 用户数据库注册表与连接池管理
+//!
+//! 核心职责：
+//! - 管理用户通过 `db.create` RPC 创建的 `SQLite` 数据库连接池
+//! - 后台定时清理过期连接（基于 `max_lifetime_ms`）
+//! - 启动时从 `db_registry` 表种子恢复已有连接
+//! - 提供 SQL 执行结果转换工具（`row_to_json`、`json_to_sea_value`、`is_read_query`）
+//!
+//! 协作关系：
+//! - `db` 命名空间 RPC 通过 `DbRegistryManager::global()` 访问连接池
+//! - 服务端启动时调用 `DbRegistryManager::init`，关闭时调用 `shutdown`
+//! - 主库全局单例 `get_db()` 用于读写 `db_registry` 表
+
 use crate::entity::db_registry as dbreg_entity;
 use crate::get_db;
 use anyhow::Context;
@@ -15,21 +28,35 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 
+/// 全局 `DbRegistryManager` 单例，服务端启动时通过 `init` 写入
 static MGR: std::sync::OnceLock<Arc<DbRegistryManager>> = std::sync::OnceLock::new();
 
+/// 带最后使用时间追踪的数据库连接，用于过期清理判定
 struct TrackedConnection {
+    /// `SeaORM` 数据库连接实例
     conn: DatabaseConnection,
+    /// 最后一次被访问的 UNIX 时间戳（毫秒），由 `get_conn` / `create_conn` 更新
     last_used_ms: AtomicU64,
 }
 
+/// 用户数据库连接池管理器
+///
+/// 维护所有用户通过 RPC 创建的 `SQLite` 数据库连接，提供 CRUD 和过期清理。
+/// 全局唯一实例，通过 `init` / `global` 访问。
 pub struct DbRegistryManager {
+    /// `SQLite` 数据库文件存放目录路径
     db_path: String,
+    /// 数据库名称 → 连接的映射，RwLock 保护并发读写
     pools: RwLock<HashMap<String, Arc<TrackedConnection>>>,
+    /// 清理循环取消标志，`shutdown` 时设为 true
     cancelled: AtomicBool,
+    /// 通知清理循环立即退出的信号
     cancel_notify: Notify,
+    /// 清理循环的 `JoinHandle`，`shutdown` 时用于等待退出
     cleanup_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
+/// 获取当前 UNIX 时间戳（毫秒），用于 `last_used_ms` 追踪
 fn now_ms_u64() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -38,6 +65,21 @@ fn now_ms_u64() -> u64 {
 }
 
 impl DbRegistryManager {
+    /// 初始化全局 `DbRegistryManager` 单例并启动后台清理循环
+    ///
+    /// - `db_path` — `SQLite` 数据库文件存放目录
+    /// - 返回值：全局单例的 Arc 引用
+    ///
+    /// 内部步骤：
+    /// 1. `call_once` 保证仅初始化一次
+    /// 2. 创建 Manager 实例
+    /// 3. 在 spawn 的异步任务中从 `db_registry` 表种子恢复已有连接
+    /// 4. 启动定时清理循环
+    ///
+    /// # Panics
+    ///
+    /// 若 `Mutex` 被 poison（仅当其他持有者在持锁期间 panic 时可能发生），或
+    /// `OnceLock` 内部 `expect` 失败时会 panic
     pub async fn init(db_path: String) -> Arc<Self> {
         static INIT: std::sync::Once = std::sync::Once::new();
         INIT.call_once(|| {
@@ -61,10 +103,21 @@ impl DbRegistryManager {
         Arc::clone(MGR.get().expect("DbRegistryManager not initialized"))
     }
 
+    /// 获取全局单例引用，初始化前调用会 panic
+    ///
+    /// # Panics
+    ///
+    /// 若 `DbRegistryManager` 尚未初始化（即 `init` 未被调用）时会 panic
     pub fn global() -> &'static Arc<Self> {
         MGR.get().expect("DbRegistryManager not initialized")
     }
 
+    /// 从主库 `db_registry` 表恢复已有连接到内存池
+    ///
+    /// - 读取所有 `db_registry` 条目
+    /// - 校验数据库名称合法性（与 `validate_db_name` 规则一致）
+    /// - 为每个合法条目创建 `SQLite` 连接并启用 WAL 等优化
+    /// - 跳过名称非法的条目并输出警告
     async fn seed_from_dbreg(&self) -> anyhow::Result<()> {
         let main_db = get_main_db()?;
         let entries = dbreg_entity::Entity::find().all(main_db).await?;
@@ -109,6 +162,9 @@ impl DbRegistryManager {
         Ok(())
     }
 
+    /// 后台定时清理循环，每分钟检查一次过期连接
+    ///
+    /// 退出条件：`cancelled` 标志设为 true 或收到 `cancel_notify` 信号
     async fn start_cleanup_loop(&self) {
         loop {
             if self.cancelled.load(Ordering::SeqCst) {
@@ -129,19 +185,23 @@ impl DbRegistryManager {
         }
     }
 
+    /// 清理所有超过 `max_lifetime_ms` 的过期连接
+    ///
+    /// 内部步骤：
+    /// 1. 在读锁下收集所有连接的名称和最后使用时间
+    /// 2. 释放锁后逐一查询 `db_registry` 表获取 `max_lifetime_ms`
+    /// 3. 判定过期后调用 `remove_conn` 移除连接、删除文件
     async fn cleanup_expired(&self) -> anyhow::Result<()> {
         let main_db = get_main_db()?;
-        // Collect candidates under read lock, then drop the lock before DB queries
+        // 先在读锁下收集候选条目，释放锁后再做 DB 查询和过期判定，避免长时间持锁
         let candidates: Vec<(String, u64)> = {
             let pools = self.pools.read().await;
             pools
                 .iter()
-                .map(|(name, tracked)| {
-                    (name.clone(), tracked.last_used_ms.load(Ordering::Relaxed))
-                })
+                .map(|(name, tracked)| (name.clone(), tracked.last_used_ms.load(Ordering::Relaxed)))
                 .collect()
         };
-        // Query DB and check expiry without holding the lock
+        // 不持锁进行 DB 查询和过期判定
         let mut to_remove = Vec::new();
         for (name, last_used) in candidates {
             match dbreg_entity::Entity::find()
@@ -173,15 +233,27 @@ impl DbRegistryManager {
         Ok(())
     }
 
+    /// 根据数据库名称获取其 `SQLite` 文件路径
+    ///
+    /// - `name` — 数据库名称
+    /// - 返回值：格式为 `{db_path}/{name}.db` 的绝对路径字符串
     pub fn get_db_path(&self, name: &str) -> String {
         format!("{}/{}.db", self.db_path.trim_end_matches('/'), name)
     }
 
+    /// 轻量级连接存在性检查，避免克隆 `DatabaseConnection`
+    ///
+    /// - `name` — 数据库名称
+    /// - 返回值：连接池中是否存在该名称的连接
     pub async fn has_conn(&self, name: &str) -> bool {
         let pools = self.pools.read().await;
         pools.contains_key(name)
     }
 
+    /// 获取指定数据库的连接并刷新最后使用时间
+    ///
+    /// - `name` — 数据库名称
+    /// - 返回值：连接存在返回 `Some(DatabaseConnection)`，否则 `None`
     pub async fn get_conn(&self, name: &str) -> Option<DatabaseConnection> {
         let pools = self.pools.read().await;
         pools.get(name).map(|tracked| {
@@ -190,6 +262,24 @@ impl DbRegistryManager {
         })
     }
 
+    /// 创建新的数据库连接并注册到连接池和 `db_registry` 表
+    ///
+    /// - `name` — 数据库名称
+    /// - `max_lifetime_ms` — 连接最大生命周期（毫秒），`None` 表示永不过期
+    /// - 返回值：新创建的 `DatabaseConnection`
+    ///
+    /// 内部步骤：
+    /// 1. 构造 `SQLite` URL 并连接（自动启用 WAL 等优化）
+    /// 2. 若 `db_registry` 中无记录则插入新行，否则递增 `db_connections` 计数
+    /// 3. 将连接加入内存池并记录最后使用时间
+    ///
+    /// # Errors
+    ///
+    /// 当 `SQLite` 连接失败或 `db_registry` 表操作失败时返回错误
+    ///
+    /// # Panics
+    ///
+    /// 若 `existing` 在 `else` 分支中为 `None`（逻辑上不应发生）时会 panic
     pub async fn create_conn(
         &self,
         name: &str,
@@ -248,6 +338,19 @@ impl DbRegistryManager {
         Ok(conn)
     }
 
+    /// 移除数据库连接并清理磁盘文件
+    ///
+    /// - `name` — 数据库名称
+    /// - 返回值：成功返回 `Ok(())`
+    ///
+    /// 内部步骤：
+    /// 1. 从内存池中移除连接
+    /// 2. 从 `db_registry` 表删除对应行
+    /// 3. 删除 .db 文件及关联的 -wal、-shm 文件
+    ///
+    /// # Errors
+    ///
+    /// 当 `db_registry` 表查询或删除失败时返回错误
     pub async fn remove_conn(&self, name: &str) -> anyhow::Result<()> {
         {
             let mut pools = self.pools.write().await;
@@ -284,6 +387,13 @@ impl DbRegistryManager {
         Ok(())
     }
 
+    /// 列出所有已注册数据库的详细信息
+    ///
+    /// - 返回值：按名称升序排列的 `DbInfo` 列表，含活跃状态
+    ///
+    /// # Errors
+    ///
+    /// 当 `db_registry` 表查询失败时返回错误
     pub async fn list_all(&self) -> anyhow::Result<Vec<DbInfo>> {
         let main_db = get_main_db()?;
         let entries = dbreg_entity::Entity::find()
@@ -305,11 +415,14 @@ impl DbRegistryManager {
             .collect())
     }
 
-    /// Signal the cleanup loop to stop and await its exit (with a 5-second timeout).
+    /// 通知清理循环停止并等待其退出（5 秒超时）
+    ///
+    /// - 设置 `cancelled` 标志并通过 `cancel_notify` 唤醒清理循环
+    /// - 最多等待 5 秒，超时则输出警告
     ///
     /// # Panics
     ///
-    /// Panics if the internal `Mutex` is poisoned (only possible if another holder panicked while locked).
+    /// 若内部 Mutex 被 poison（仅当其他持有者在持锁期间 panic 时可能发生）则会 panic
     pub async fn shutdown(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
         self.cancel_notify.notify_one();
@@ -317,35 +430,61 @@ impl DbRegistryManager {
         if let Some(handle) = handle {
             match tokio::time::timeout(std::time::Duration::from_secs(5), handle).await {
                 Ok(Ok(())) => info!(target: "db", "DbRegistry cleanup loop exited cleanly"),
-                Ok(Err(e)) => warn!(target: "db", error = %e, "DbRegistry cleanup loop task panicked"),
-                Err(_) => warn!(target: "db", "DbRegistry cleanup loop did not exit within 5s timeout"),
+                Ok(Err(e)) => {
+                    warn!(target: "db", error = %e, "DbRegistry cleanup loop task panicked")
+                }
+                Err(_) => {
+                    warn!(target: "db", "DbRegistry cleanup loop did not exit within 5s timeout")
+                }
             }
         }
     }
 }
 
+/// 数据库信息摘要，用于 `db.list` RPC 返回
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbInfo {
+    /// `db_registry` 表主键 `ID`
     pub id: i64,
+    /// 数据库名称（同时也是文件名前缀）
     pub name: String,
+    /// `SQLite` 数据库文件绝对路径
     pub file_path: String,
+    /// 当前连接数引用计数，`None` 表示未跟踪
     pub db_connections: Option<i32>,
+    /// 连接最大生命周期（毫秒），`None` 表示永不过期
     pub max_lifetime_ms: Option<i64>,
+    /// 创建时间，UNIX 时间戳（毫秒）
     pub created_at: i64,
+    /// 连接是否在内存池中活跃
     pub is_active: bool,
 }
 
+/// SQL 执行结果，用于 RPC 响应序列化
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbExecResult {
+    /// 执行是否成功
     pub success: bool,
+    /// 查询返回的行数据，每行为 JSON 对象
     pub data: Vec<serde_json::Value>,
+    /// 匹配/影响的总行数
     pub row_count: u64,
 }
 
+/// 获取主库连接，未初始化时返回错误
 fn get_main_db() -> anyhow::Result<&'static sea_orm::DatabaseConnection> {
     get_db().context("Main DB not initialized")
 }
 
+/// 将 `SeaORM` 原始查询行转换为 JSON 对象
+///
+/// - `r` — `SeaORM` `QueryResult` 行
+/// - 返回值：`{"col1": val1, "col2": val2, ...}` 形式的 JSON Object
+///
+/// 内部步骤：
+/// 1. 获取所有列名
+/// 2. 逐列尝试按类型解析（String → i64 → u32 → f64 → bool → Vec<u8> → JSON）
+/// 3. 无法解析的列置为 Null
 pub fn row_to_json(r: &sea_orm::QueryResult) -> serde_json::Value {
     let cols = r.column_names();
     let mut map = serde_json::Map::with_capacity(cols.len());
@@ -356,6 +495,9 @@ pub fn row_to_json(r: &sea_orm::QueryResult) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
+/// 逐类型尝试将单列值转换为 JSON，按常见类型优先级依次尝试
+///
+/// 尝试顺序：`String` → `i64` → `u32` → `f64` → `bool` → `Vec<u8>`（hex 或嵌套 JSON）→ `serde_json::Value` → Null
 fn try_column_as_json(r: &sea_orm::QueryResult, col: &str) -> serde_json::Value {
     if let Ok(v) = r.try_get::<Option<String>>("", col) {
         return v.map_or(serde_json::Value::Null, serde_json::Value::String);
@@ -397,8 +539,12 @@ fn try_column_as_json(r: &sea_orm::QueryResult, col: &str) -> serde_json::Value 
     serde_json::Value::Null
 }
 
-/// Convert a JSON value to a `SeaORM` `Value` for use as a SQL parameter.
-/// This is shared between the db namespace RPC handlers.
+/// 将 JSON 值转换为 `SeaORM` `Value`，用于 SQL 参数绑定
+///
+/// - `json` — 输入的 JSON 值
+/// - 返回值：对应的 `SeaORM` `Value` 枚举变体
+///
+/// 类型映射：Null→Json(None)、Bool→Bool、Number→BigInt/BigUnsigned/Double、String→String、Array/Object→Json
 #[must_use]
 pub fn json_to_sea_value(json: &serde_json::Value) -> sea_orm::Value {
     match json {
@@ -422,6 +568,12 @@ pub fn json_to_sea_value(json: &serde_json::Value) -> sea_orm::Value {
     }
 }
 
+/// 判断 SQL 语句是否为只读查询
+///
+/// - `sql` — 待判定的 SQL 语句
+/// - 返回值：若为 SELECT / PRAGMA / EXPLAIN / WITH 开头则返回 true
+///
+/// 注意：仅检查语句开头，CTE 后接 DML 的情况仍返回 true（保守策略）
 #[must_use]
 pub fn is_read_query(sql: &str) -> bool {
     let s = sql.trim_start_matches(|c: char| c.is_whitespace() || c == '(' || c == ';');
@@ -431,6 +583,7 @@ pub fn is_read_query(sql: &str) -> bool {
         || starts_with_ascii_ci(s, "WITH")
 }
 
+/// ASCII 大小写不敏感的前缀匹配
 fn starts_with_ascii_ci(s: &str, prefix: &str) -> bool {
     s.as_bytes()
         .iter()

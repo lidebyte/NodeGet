@@ -1,3 +1,5 @@
+//! `db.read` RPC 实现 — 查询单个用户数据库信息
+
 use crate::entity::db_registry;
 use crate::rpc::db::auth::check_db_permission;
 use crate::rpc::{to_rpc_error, token_identity};
@@ -9,6 +11,16 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::value::RawValue;
 use tracing::debug;
 
+/// 查询指定数据库的详细信息
+///
+/// - `token` — 认证 Token
+/// - `name` — 数据库名称
+/// - 返回值：包含 `id`、`name`、`created_at`、`active` 的响应
+///
+/// 内部步骤：
+/// 1. 检查 `Db::Read` 权限
+/// 2. 从 `db_registry` 表查询条目
+/// 3. 检查连接池中该数据库是否活跃
 pub async fn read(token: String, name: String) -> RpcResult<Box<RawValue>> {
     let (tk, un) = token_identity(&token);
 

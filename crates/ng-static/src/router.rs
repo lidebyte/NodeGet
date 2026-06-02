@@ -1,3 +1,15 @@
+//! 静态文件 HTTP 路由与 WebDAV 处理模块。
+//!
+//! 职责：构建 axum Router，提供静态文件 HTTP 服务和 WebDAV 协议支持。
+//!
+//! 路由：
+//! - `/nodeget/static/{name}` — 桶根路径（默认返回 index.html）
+//! - `/nodeget/static/{name}/{*path}` — 桶内具体文件
+//! - `/nodeget/static-webdav/{*path}` — WebDAV 访问（需 Basic Auth，要求全部四种权限）
+//!
+//! 协作关系：从 [`StaticCache`] 查询桶配置，通过 [`resolve_safe_file_path`]
+//! 确保磁盘路径安全；DavHandler 按 bucket 名称缓存以避免每次请求重建。
+
 use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
 
@@ -33,7 +45,9 @@ fn get_or_create_dav_handler(bucket_name: &str, disk_path: &std::path::Path) -> 
         }
     }
     // Slow path: write lock
-    let mut cache = dav_handler_cache().write().expect("DAV handler cache lock poisoned");
+    let mut cache = dav_handler_cache()
+        .write()
+        .expect("DAV handler cache lock poisoned");
     // Double-check after acquiring write lock
     if let Some(handler) = cache.get(bucket_name) {
         return handler.clone();
@@ -116,6 +130,9 @@ pub fn router() -> axum::Router {
         .route("/nodeget/static-webdav/{*path}", any(static_webdav_handler))
 }
 
+/// 根据文件扩展名推断 MIME 类型，覆盖常见 Web 静态资源类型。
+///
+/// 未匹配时回退到 `application/octet-stream`。
 fn guess_mime_type(path: &std::path::Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()) {
         Some("html" | "htm") => "text/html; charset=utf-8",
@@ -137,6 +154,21 @@ fn guess_mime_type(path: &std::path::Path) -> &'static str {
     }
 }
 
+/// 处理静态文件的 HTTP 请求（GET / HEAD / OPTIONS）。
+///
+/// - `sub_path` - 桶的磁盘子目录（对应数据库 `path` 字段）
+/// - `path` - 请求的文件相对路径
+/// - `cors` - 是否添加 CORS 响应头
+/// - `method` - HTTP 方法
+///
+/// 返回：包含文件内容的 HTTP 响应，或对应的错误响应。
+///
+/// 内部步骤：
+/// 1. 仅允许 GET / HEAD，其它方法返回 405
+/// 2. 通过 [`resolve_safe_file_path`] 解析安全磁盘路径
+/// 3. 读取文件，若路径对应目录则自动返回该目录下的 index.html
+/// 4. 推断 MIME 类型，按需附加 CORS 头
+/// 5. HEAD 请求不返回 body
 async fn serve_static_file(
     sub_path: &str,
     path: &str,
@@ -338,6 +370,9 @@ async fn static_webdav_handler(req: axum::extract::Request) -> axum::response::R
     resp
 }
 
+/// 构建 401 Unauthorized 响应，附带 Basic Auth 质询头。
+///
+/// 用于 WebDAV 请求缺少或校验失败 Authorization 头时。
 fn build_webdav_auth_required() -> axum::response::Response {
     axum::http::Response::builder()
         .status(StatusCode::UNAUTHORIZED)
@@ -349,6 +384,7 @@ fn build_webdav_auth_required() -> axum::response::Response {
         .expect("Failed to build response")
 }
 
+/// 构建 WebDAV 错误响应（纯文本 body，不附带 CORS 头）。
 fn build_webdav_error(status: StatusCode, message: impl Into<String>) -> axum::response::Response {
     axum::http::Response::builder()
         .status(status)
@@ -360,6 +396,7 @@ fn build_webdav_error(status: StatusCode, message: impl Into<String>) -> axum::r
         .expect("Failed to build response")
 }
 
+/// 构建 HTTP 错误响应（纯文本 body，不附带 CORS 头）。
 fn build_http_error(
     status: StatusCode,
     message: impl Into<String>,

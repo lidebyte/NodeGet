@@ -1,26 +1,49 @@
+//! 版本信息结构体
+//!
+//! 通过 `vergen` 在编译期注入 Git、Rustc、构建时间等元信息，
+//! 供 `version` RPC 方法和自更新逻辑使用。
+
 use std::fmt::{Display, Formatter};
 
+/// 编译期收集的完整版本信息
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct NodeGetVersion {
+    /// 二进制类型：Server / Agent / Unknown
     pub binary_type: String,
+    /// Cargo 包版本（语义化版本号）
     pub cargo_version: String,
 
+    /// Git 分支名
     pub git_branch: String,
+    /// Git 提交 SHA（完整）
     pub git_commit_sha: String,
+    /// Git 提交时间戳
     pub git_commit_date: String,
+    /// Git 提交消息（首行）
     pub git_commit_message: String,
 
+    /// 构建时间戳
     pub build_time: String,
+    /// 目标平台三元组（如 x86_64-unknown-linux-musl）
     pub cargo_target_triple: String,
 
+    /// Rustc 发布通道（stable / nightly / beta）
     pub rustc_channel: String,
+    /// Rustc 语义化版本号
     pub rustc_version: String,
+    /// Rustc 提交日期
     pub rustc_commit_date: String,
+    /// Rustc 提交哈希
     pub rustc_commit_hash: String,
+    /// Rustc 使用的 LLVM 版本
     pub rustc_llvm_version: String,
 }
 
 impl NodeGetVersion {
+    /// 获取编译期注入的版本信息实例。
+    ///
+    /// 1. 根据 feature gate 判断二进制类型
+    /// 2. 读取所有 `env!` 宏注入的 vergen 环境变量
     #[must_use]
     pub fn get() -> Self {
         Self {

@@ -1,3 +1,12 @@
+//! JS Worker 执行服务 —— 入队执行、内联调用、结果记录。
+//!
+//! 三个核心入口：
+//! - `enqueue_defined_js_worker_run` —— 字节码模式入队执行（使用运行时池）
+//! - `enqueue_source_js_worker_run` —— 源码模式入队执行（使用一次性 Runtime）
+//! - `run_inline_call_and_record_result` —— 内联调用执行（同步等待结果）
+//!
+//! 所有入口都遵循相同流程：查询 Worker 记录 → 插入 js_result 行 → 异步/同步执行 → 更新结果
+
 use ng_core::error::NodegetError;
 use ng_core::utils::get_local_timestamp_ms_i64;
 use ng_db::entity::{js_result, js_worker};
@@ -11,6 +20,23 @@ use serde_json::Value;
 use std::time::Duration;
 use tracing::{debug, error, trace};
 
+/// 入队执行已编译的 JS Worker（字节码模式）。
+///
+/// 使用运行时池中的持久化 Worker 执行脚本，字节码缓存避免重复加载。
+///
+/// - `js_script_name` —— Worker 名称
+/// - `run_type` —— 运行模式（Call/Cron/Route/InlineCall）
+/// - `params` —— 调用参数
+/// - `env_override` —— 环境变量覆盖，None 则使用数据库中的值
+///
+/// 内部步骤：
+/// 1. 查询 `js_worker` 表获取字节码、限制配置等
+/// 2. 插入 `js_result` 行（记录开始时间、参数等）
+/// 3. 通过 `tokio::spawn` 异步执行脚本
+/// 4. 执行完成后更新 `js_result` 行（记录结果或错误）
+///
+/// # Returns
+/// 返回 `js_result` 行的 ID。
 pub async fn enqueue_defined_js_worker_run(
     js_script_name: String,
     run_type: RunType,
@@ -120,6 +146,22 @@ pub async fn enqueue_defined_js_worker_run(
     Ok(js_result_id)
 }
 
+/// 执行内联调用并记录结果，同步等待执行完成。
+///
+/// 从另一个 JS Worker 内部调用目标 Worker，使用一次性 Runtime（`js_runner`）执行。
+///
+/// - `js_script_name` —— 目标 Worker 名称
+/// - `params` —— 调用参数
+/// - `timeout_sec` —— 调用方指定的软超时（秒），None 则不限
+/// - `inline_caller` —— 发起调用的源 Worker 名称
+///
+/// 内部步骤：
+/// 1. 解析 timeout_sec 为 Duration
+/// 2. 查询 `js_worker` 表获取字节码、限制配置等
+/// 3. 插入 `js_result` 行
+/// 4. 通过 `spawn_blocking` 在阻塞线程池中执行 `js_runner`
+/// 5. 等待执行完成，更新 `js_result` 行
+/// 6. 返回执行结果（同时记录到数据库）
 pub async fn run_inline_call_and_record_result(
     js_script_name: String,
     params: Value,
@@ -249,6 +291,23 @@ pub async fn run_inline_call_and_record_result(
     return_value
 }
 
+/// 入队执行源码模式的 JS Worker。
+///
+/// 使用一次性 Runtime（`js_runner_source_mode`）执行脚本，每次重新解析编译。
+///
+/// - `js_script_name` —— Worker 名称
+/// - `run_type` —— 运行模式
+/// - `params` —— 调用参数
+/// - `env_override` —— 环境变量覆盖，None 则使用数据库中的值
+///
+/// 内部步骤：
+/// 1. 查询 `js_worker` 表获取源码、限制配置等
+/// 2. 插入 `js_result` 行
+/// 3. 通过 `tokio::spawn` + `spawn_blocking` 异步执行
+/// 4. 执行完成后更新 `js_result` 行
+///
+/// # Returns
+/// 返回 `js_result` 行的 ID。
 pub async fn enqueue_source_js_worker_run(
     js_script_name: String,
     run_type: RunType,

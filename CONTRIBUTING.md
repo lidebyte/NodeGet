@@ -410,3 +410,105 @@ src/rpc/
 10. **Router**（如需）：实现 `pub fn router() -> axum::Router`，在 `serve.rs` 中 `.merge()`
 11. **Doc**：在 `docs/api/` 添加对应的 VitePress 文档
 12. **Config**（如需）：在 `ng-config` 添加配置字段 + 更新 `docs/guide/config/`
+
+# NodeGet 代码注释规范
+
+本文件定义了项目统一的注释风格，所有模块注释必须遵循此规范。
+
+## 1. 模块级注释 (`//!`)
+
+每个 `.rs` 文件顶部必须有模块级注释，说明：
+- 模块用途（一句话概括）
+- 核心职责
+- 与其他模块的协作关系（如适用）
+
+```rust
+//! 监控数据缓冲区
+//!
+//! 负责收集 Agent 上报的监控数据，批量写入数据库。
+//! 与 MonitoringLastCache / MonitoringUuidCache 协作，提供查询服务。
+```
+
+## 2. 函数/方法级注释 (`///`)
+
+每个 **pub** 函数必须有文档注释，包含：
+- 功能简述（一句话）
+- 参数说明：`- ` 开头，每个参数一行
+- 返回值说明
+- 内部步骤：编号列表 `1. 2. 3.`，描述关键流程
+
+```rust
+/// 查询监控数据
+///
+/// - `token`: 认证 Token
+/// - `query`: 查询条件
+/// - 返回: 符合条件的监控数据列表
+///
+/// 1. 验证 Token 权限
+/// 2. 从缓存或数据库查询数据
+/// 3. 过滤无权限的 UUID
+```
+
+非 pub 但逻辑复杂的函数也应添加注释，格式相同。
+
+## 3. 行内注释 (`//`)
+
+以下场景必须有行内注释：
+- 复杂算法/数学运算
+- 不直观的排序/过滤/转换逻辑
+- 性能优化相关的特殊处理（如锁的提前释放、批量操作）
+- 安全相关的校验逻辑
+- 注释回答 **"为什么"** 而非 **"是什么"**
+- 不加显而易见的注释（如 `let x = 5; // x 等于 5`）
+
+```rust
+let timestamp_ms = utc.timestamp_millis_opt(t)
+    .single()
+    .unwrap_or_else(|| {
+        // 非唯一时间戳（罕见），使用第一个候选值作为降级策略
+        warn!("非唯一时间戳: {t}");
+        utc.timestamp_millis_opt(t).earliest().unwrap()
+    });
+```
+
+## 4. 结构体/枚举注释 (`///`)
+
+- 结构体本身：说明用途
+- 每个字段：说明含义，标明单位（如毫秒时间戳、字节数）
+
+```rust
+/// Crontab 缓存条目
+struct CachedCrontab {
+    /// 数据库主键 ID
+    id: i64,
+    /// 关联的 Agent UUID
+    agent_uuid: String,
+    /// 上次执行时间（毫秒时间戳）
+    last_run_time: i64,
+}
+```
+
+## 5. 风格规则
+
+- **中文为主**，技术术语保留英文：Token, RPC, Cache, RwLock, WebSocket, UUID, Cron, Task 等
+- 公开 API 用 `///` 文档注释
+- 行内解释用 `//`
+- 统一使用全角标点：，。；：
+- 已有注释风格不统一的，统一到本规范
+- 保持简洁，避免冗余；一行能说清的不写两行
+
+## 6. 禁止修改的内容
+
+- 不修改任何实际代码逻辑
+- 不修改函数签名
+- 不修改类型定义的结构（仅添加注释）
+- 不修改 import 语句
+- auto-generated 文件（entity/, migration/, build.rs）跳过
+
+## 7. 跳过规则
+
+以下文件无需添加注释：
+- `ng-db/src/entity/` — SeaORM 自动生成
+- `ng-db/migration/` — 迁移脚本自动生成
+- `build.rs` — 构建脚本通常为自动生成
+- 纯 re-export 的 `mod.rs`/`prelude.rs` — 仅当内容为简单 pub use 时可跳过

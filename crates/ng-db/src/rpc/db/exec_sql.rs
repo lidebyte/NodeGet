@@ -1,3 +1,5 @@
+//! `db.exec_sql` RPC 实现 — 在用户数据库上执行 SQL
+
 use crate::db_registry::{DbRegistryManager, json_to_sea_value, row_to_json};
 use crate::rpc::db::auth::check_db_permission;
 use crate::rpc::{to_rpc_error, token_identity};
@@ -8,12 +10,23 @@ use sea_orm::ConnectionTrait;
 use serde_json::value::RawValue;
 use tracing::debug;
 
-/// Core SQL execution logic for `exec_sql`.
+/// `exec_sql` 核心逻辑，同时被 `nodeget::exec_sql` 复用
 ///
-/// Performs permission check, parameter validation, query execution, and result serialization.
-/// Uses `query_all_raw` for all SQL types — works for SELECT, DML (with/without RETURNING),
-/// DDL, PRAGMA, CTEs, etc. DML without RETURNING returns `data: []` with `row_count: 0`;
-/// use RETURNING clause to get affected row data.
+/// - `db_name` — 目标数据库名称
+/// - `sql` — 待执行的 SQL 语句
+/// - `params` — SQL 参数，须为 JSON 数组或 null
+/// - `token` — 认证 Token
+/// - 返回值：包含 `data`、`row_count`、`truncated` 的响应
+///
+/// 内部步骤：
+/// 1. 检查 `Db::ExecSql` 权限
+/// 2. 从连接池获取数据库连接
+/// 3. 解析参数为 `SeaORM` `Value` 数组
+/// 4. 执行 SQL 并收集结果行
+/// 5. 超过 10000 行时截断并标记 `truncated: true`
+///
+/// 注意：使用 `query_all_raw` 统一执行所有 SQL 类型（SELECT/DML/DDL/PRAGMA/CTE），
+/// 无 RETURNING 子句的 DML 返回 `data: []` + `row_count: 0`
 pub(crate) async fn exec_sql_inner(
     db_name: &str,
     sql: &str,
@@ -64,6 +77,13 @@ pub(crate) async fn exec_sql_inner(
         .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
 }
 
+/// `db.exec_sql` RPC 入口
+///
+/// - `token` — 认证 Token
+/// - `name` — 目标数据库名称
+/// - `sql` — SQL 语句
+/// - `params` — 参数数组或 null
+/// - 返回值：`RpcResult<Box<RawValue>>`
 pub async fn exec_sql(
     token: String,
     name: String,

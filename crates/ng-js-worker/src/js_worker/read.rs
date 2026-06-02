@@ -1,3 +1,5 @@
+//! `js-worker_read` RPC —— 读取 JS Worker 详情。
+
 use crate::js_worker::auth::check_js_worker_permission;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -10,6 +12,13 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::value::RawValue;
 use tracing::debug;
 
+/// 读取指定 JS Worker 的详情。
+///
+/// - `token` —— 认证 Token
+/// - `name` —— Worker 名称
+///
+/// 返回的字段包含 `js_script_base64`（脚本源码的 Base64 编码），
+/// 不包含 `js_byte_code`（内部字节码无需暴露）。
 pub async fn read(token: String, name: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
         let name = name.trim().to_owned();

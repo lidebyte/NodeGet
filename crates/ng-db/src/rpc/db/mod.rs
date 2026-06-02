@@ -1,3 +1,8 @@
+//! `db` RPC 命名空间 — 用户数据库 CRUD 与 SQL 执行
+//!
+//! 方法：`create` / `read` / `update` / `delete` / `list` / `exec_sql`
+//! 所有方法通过 `rpc_exec!` 宏统一日志输出，通过 `token_identity` 追踪请求来源。
+
 use crate::rpc::{RpcHelper, token_identity};
 use crate::rpc_exec;
 use jsonrpsee::core::RpcResult;
@@ -14,12 +19,14 @@ mod list;
 mod read;
 mod update;
 
+/// 按名称查询参数（已定义但暂未使用，保留供反序列化扩展）
 #[derive(serde::Deserialize)]
 #[allow(dead_code)]
 struct NameParam {
     name: String,
 }
 
+/// 重命名参数（已定义但暂未使用，保留供反序列化扩展）
 #[derive(serde::Deserialize)]
 #[allow(dead_code)]
 struct RenameParam {
@@ -27,6 +34,7 @@ struct RenameParam {
     new_name: String,
 }
 
+/// SQL 执行参数（已定义但暂未使用，保留供反序列化扩展）
 #[derive(serde::Deserialize)]
 #[allow(dead_code)]
 struct ExecSqlParam {
@@ -36,6 +44,7 @@ struct ExecSqlParam {
     params: Option<serde_json::Value>,
 }
 
+/// `db` RPC trait 定义，jsonrpsee 宏自动生成 `RpcServer` trait
 #[rpc(server, namespace = "db")]
 pub trait Rpc {
     #[method(name = "create")]
@@ -68,12 +77,14 @@ pub trait Rpc {
     ) -> RpcResult<Box<RawValue>>;
 }
 
+/// `db` RPC 实现，委托给各子模块函数
 pub struct DbRpcImpl;
 
 impl RpcHelper for DbRpcImpl {}
 
 #[async_trait]
 impl RpcServer for DbRpcImpl {
+    /// 创建用户数据库，附带 tracing span 日志
     async fn create(&self, token: String, name: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "db", "db::create", token_key = tk, username = un, name = %name);
@@ -82,6 +93,7 @@ impl RpcServer for DbRpcImpl {
             .await
     }
 
+    /// 查询用户数据库信息
     async fn read(&self, token: String, name: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "db", "db::read", token_key = tk, username = un, name = %name);
@@ -90,6 +102,7 @@ impl RpcServer for DbRpcImpl {
             .await
     }
 
+    /// 重命名用户数据库
     async fn update(
         &self,
         token: String,
@@ -103,6 +116,7 @@ impl RpcServer for DbRpcImpl {
             .await
     }
 
+    /// 删除用户数据库
     async fn delete(&self, token: String, name: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "db", "db::delete", token_key = tk, username = un, name = %name);
@@ -111,6 +125,7 @@ impl RpcServer for DbRpcImpl {
             .await
     }
 
+    /// 列出所有用户数据库
     async fn list(&self, token: String) -> RpcResult<Box<RawValue>> {
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "db", "db::list", token_key = tk, username = un);
@@ -119,6 +134,7 @@ impl RpcServer for DbRpcImpl {
             .await
     }
 
+    /// 在指定用户数据库上执行 SQL
     async fn exec_sql(
         &self,
         token: String,
@@ -134,7 +150,7 @@ impl RpcServer for DbRpcImpl {
     }
 }
 
-/// Build and return the `db` RPC module, ready to merge into the server's RPC router.
+/// 构建 `db` RPC 模块，供服务端合并到 RPC Router
 #[must_use]
 pub fn rpc_module() -> jsonrpsee::RpcModule<DbRpcImpl> {
     DbRpcImpl.into_rpc()

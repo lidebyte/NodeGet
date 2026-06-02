@@ -1,5 +1,12 @@
-use crate::cache::CrontabCache;
+//! `crontab.get` RPC 实现：获取定时任务列表。
+//!
+//! Super-token 返回全部条目；普通 Token 按权限过滤：
+//! - Global Scope 可见所有条目
+//! - AgentUuid Scope 仅可见包含该 UUID 的 Agent 类型任务
+//! - Server 类型任务仅 Global Scope 可见
+
 use crate::CronType;
+use crate::cache::CrontabCache;
 use jsonrpsee::core::RpcResult;
 use ng_core::error::{NodegetError, anyhow_to_nodeget_error};
 use ng_core::permission::data_structure::{Crontab as CrontabPermission, Permission, Scope, Token};
@@ -11,6 +18,15 @@ use std::collections::HashSet;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+/// 获取定时任务列表。
+///
+/// 1. 解析 Token 格式
+/// 2. 检查是否为 Super-token（是则返回全部条目）
+/// 3. 普通 Token：验证有效期、检查 Crontab::Read 权限
+/// 4. 根据 Token 的 Scope 过滤可见条目
+///
+/// - `token` - 认证 Token 字符串
+/// - 返回 `Vec<Cron>` 的 JSON 序列化
 pub async fn get(token: String) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
         debug!(target: "crontab", "processing crontab get request");
@@ -24,6 +40,7 @@ pub async fn get(token: String) -> RpcResult<Box<RawValue>> {
         let cache = CrontabCache::global();
         let entries = cache.get_all_entries();
 
+        // Super-token 直接返回全部条目，无需权限过滤
         if is_super_token {
             let crontabs: Vec<crate::Cron> = entries
                 .into_iter()
@@ -33,7 +50,8 @@ pub async fn get(token: String) -> RpcResult<Box<RawValue>> {
                     enable: entry.model.enable,
                     cron_expression: entry.model.cron_expression.clone(),
                     cron_type: entry.cron_type.clone(),
-                    last_run_time: cache.get_last_run_time(entry.model.id, entry.model.last_run_time),
+                    last_run_time: cache
+                        .get_last_run_time(entry.model.id, entry.model.last_run_time),
                 })
                 .collect();
 
@@ -45,10 +63,12 @@ pub async fn get(token: String) -> RpcResult<Box<RawValue>> {
                 .map_err(|e| NodegetError::SerializationError(e.to_string()).into());
         }
 
+        // 普通 Token：获取 Token 信息并验证有效期
         let token_info = get_token(&token_or_auth).await?;
 
         let now = get_local_timestamp_ms_i64()?;
 
+        // 检查 Token 时间有效性
         if let Some(from) = token_info.timestamp_from
             && now < from
         {
@@ -61,6 +81,7 @@ pub async fn get(token: String) -> RpcResult<Box<RawValue>> {
             return Err(NodegetError::PermissionDenied("Token has expired".to_owned()).into());
         }
 
+        // 检查是否至少有一个 limit 包含 Crontab::Read 权限
         let has_crontab_read_permission = token_info.token_limit.iter().any(|limit| {
             limit
                 .permissions
@@ -76,6 +97,7 @@ pub async fn get(token: String) -> RpcResult<Box<RawValue>> {
             .into());
         }
 
+        // 根据 Token 的 Scope 过滤可见条目
         let crontabs = filter_entries_by_token(&entries, &token_info, cache);
         let json_str = serde_json::to_string(&crontabs).map_err(|e| {
             NodegetError::SerializationError(format!("Failed to serialize crontabs: {e}"))
@@ -98,6 +120,11 @@ pub async fn get(token: String) -> RpcResult<Box<RawValue>> {
     }
 }
 
+/// 根据 Token 的 Scope 和 Permission 过滤可见的定时任务条目。
+///
+/// - Global Scope：可见所有条目
+/// - AgentUuid Scope：仅可见包含该 UUID 的 Agent 类型任务
+/// - Server 类型任务：仅 Global Scope 可见
 fn filter_entries_by_token(
     entries: &[std::sync::Arc<crate::cache::CachedCrontab>],
     token_info: &Token,
@@ -105,6 +132,8 @@ fn filter_entries_by_token(
 ) -> Vec<crate::Cron> {
     let mut has_global = false;
     let mut allowed_uuids: HashSet<Uuid> = HashSet::new();
+
+    // 遍历 Token 的所有限制，收集允许的 Scope
 
     for limit in &token_info.token_limit {
         let has_crontab_read = limit
@@ -124,12 +153,11 @@ fn filter_entries_by_token(
                 Scope::AgentUuid(uuid) => {
                     allowed_uuids.insert(*uuid);
                 }
+                // 这些 Scope 不适用于 crontab 权限检查，忽略
                 Scope::KvNamespace(_)
                 | Scope::JsWorker(_)
                 | Scope::StaticBucket(_)
-                | Scope::Db(_) => {
-                    // 不适用于 crontab 权限检查，忽略
-                }
+                | Scope::Db(_) => {}
             }
         }
     }
