@@ -34,8 +34,8 @@ impl Default for DbConnectionConfig {
             database_url: String::new(),
             connect_timeout_ms: 3000,
             acquire_timeout_ms: 3000,
-            idle_timeout_ms: 3000,
-            max_lifetime_ms: 30000,
+            idle_timeout_ms: 60000,
+            max_lifetime_ms: 1800000,
             max_connections: 10,
         }
     }

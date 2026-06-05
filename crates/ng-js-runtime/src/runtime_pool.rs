@@ -31,6 +31,9 @@ use tracing::{debug, info, trace, warn};
 const RUNTIME_CLEAN_TIME_NONE: i64 = -1;
 /// 空闲清理扫描间隔（ms）。
 const CLEANUP_INTERVAL_MS: u64 = 5_000;
+/// I/O drain 窗口（ms）。Worker 的 current-thread runtime 在 `block_on` 返回后不再被轮询，
+/// 此窗口让 hyper 连接 task 处理关闭信号，防止 TCP 停留在 CLOSE_WAIT。
+const DRAIN_IO_MS: u64 = 100;
 
 /// 单个 Worker 线程内的运行时状态，持有 `QuickJS` `AsyncRuntime` 和 `AsyncContext`。
 struct RuntimeState {
@@ -546,7 +549,13 @@ fn worker_loop(
                 });
                 let _ = response_tx.send(exec_result);
             }
-            WorkerCommand::Shutdown => break,
+            WorkerCommand::Shutdown => {
+                drop(runtime_state.take());
+                let _ = host_rt.block_on(async {
+                    tokio::time::sleep(std::time::Duration::from_millis(DRAIN_IO_MS)).await;
+                });
+                break;
+            }
         }
     }
 }
@@ -681,7 +690,7 @@ async fn execute_on_worker(
 
         // drop 后关闭信号已发出，需要 runtime 继续轮询才能处理。
         // 否则被中断的 fetch 连接将永远停留在 CLOSE_WAIT。
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(DRAIN_IO_MS)).await;
 
         return Err(js_error(
             "js_runner",
@@ -698,7 +707,7 @@ async fn execute_on_worker(
     if !idle_ok {
         // idle() 超时 —— 运行时存在无法终止的持久工作，丢弃状态
         *runtime_state = None;
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(DRAIN_IO_MS)).await;
         return Err(js_error(
             "js_runner",
             "Runtime cleanup timed out — state discarded",
@@ -715,8 +724,9 @@ async fn execute_on_worker(
     // CLOSE_WAIT（远端已 FIN，本地未 FIN，Recv-Q 有残留字节）。
     //
     // 此 drain 让 runtime 继续运转一小段时间，使连接 task 能处理关闭
-    // 信号、发送 FIN、释放 socket。10ms 相对 30s 默认超时可忽略。
-    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    // 信号、发送 FIN、释放 socket。100ms (DRAIN_IO_MS) 足以覆盖绝大多数
+    // HTTP 连接关闭握手，同时相对 30s 默认超时可忽略。
+    tokio::time::sleep(std::time::Duration::from_millis(DRAIN_IO_MS)).await;
 
     run_outcome
 }

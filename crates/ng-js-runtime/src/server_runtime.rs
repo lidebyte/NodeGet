@@ -33,6 +33,10 @@ pub const DEFAULT_MAX_STACK_SIZE_BYTES: usize = 1024 * 1024;
 /// `max_heap_size` 的应用层默认值（bytes）。与历史常量 `JS_RT_MEMORY_LIMIT_BYTES` 一致。
 pub const DEFAULT_MAX_HEAP_SIZE_BYTES: usize = JS_RT_MEMORY_LIMIT_BYTES;
 
+/// I/O drain 窗口（ms）。一次性 Runtime 的 current-thread 在 `block_on` 返回后
+/// 不再被轮询，此窗口让 hyper 连接 task 处理关闭信号，防止 TCP 停留在 CLOSE_WAIT。
+const DRAIN_IO_MS: u64 = 100;
+
 /// 来自 DB 的可选限制三元组，外加应用层默认兜底。
 ///
 /// 三个字段对应 `js_worker` 表的 `max_run_time` / `max_stack_size` / `max_heap_size`。
@@ -901,13 +905,10 @@ pub fn js_runner(
         // Incoming 向 hyper 连接 task 发出异步关闭信号。
         drop(ctx);
 
-        // Route 模式需要短窗口让 tokio runtime 处理 hyper 关闭信号，
-        // 否则 current_thread runtime 在 block_on 返回后不再被轮询，
-        // TCP 连接将停留在 CLOSE_WAIT。非 Route 模式（inline_call/cron）
-        // 无需此延迟——跳过以减少延迟。
-        if matches!(run_type, RunType::Route) {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
+        // drain I/O 清理窗口：current_thread runtime 在 block_on 返回后不再被轮询，
+        // fetch() 产生的 Response Incoming body drop 向 hyper 连接 task 发出异步关闭信号，
+        // 需要 runtime 继续运转才能处理，否则 TCP 连接停留在 CLOSE_WAIT。
+        tokio::time::sleep(std::time::Duration::from_millis(DRAIN_IO_MS)).await;
 
         if kill_flag.load(Ordering::Relaxed) && outcome.is_err() {
             return Err(js_error(
@@ -1017,12 +1018,9 @@ pub fn js_runner_source_mode(
         let _ = cancel_tx.send(());
 
         // 同 js_runner()：释放 QuickJS 上下文以 drop 未消费的 fetch Response
-        // Incoming body。Route 模式需要短窗口让 hyper 连接 task 处理关闭信号，
-        // 非 Route 模式跳过此延迟。
+        // Incoming body，drain I/O 清理窗口防止 CLOSE_WAIT。
         drop(ctx);
-        if matches!(run_type, RunType::Route) {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
+        tokio::time::sleep(std::time::Duration::from_millis(DRAIN_IO_MS)).await;
 
         if kill_flag.load(Ordering::Relaxed) && outcome.is_err() {
             return Err(js_error(
