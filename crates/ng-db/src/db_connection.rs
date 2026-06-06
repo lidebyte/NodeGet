@@ -35,7 +35,7 @@ impl Default for DbConnectionConfig {
             connect_timeout_ms: 3000,
             acquire_timeout_ms: 3000,
             idle_timeout_ms: 60000,
-            max_lifetime_ms: 1800000,
+            max_lifetime_ms: 1_800_000,
             max_connections: 10,
         }
     }

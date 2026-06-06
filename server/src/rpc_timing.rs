@@ -18,7 +18,9 @@ use tracing::Level;
 /// - level：tracing 输出级别，由 serve 启动时配置
 #[derive(Clone)]
 pub struct RpcTimingMiddleware<S> {
+    /// 被包裹的内部 RPC 服务
     pub service: S,
+    /// tracing 输出级别
     pub level: Level,
 }
 

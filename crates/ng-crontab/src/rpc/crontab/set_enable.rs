@@ -10,7 +10,7 @@ use ng_db::entity::crontab;
 use ng_infra::server::RpcHelper;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::value::RawValue;
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// 设置定时任务的启用/禁用状态。
 ///
@@ -39,6 +39,7 @@ pub async fn set_enable(token: String, name: String, enable: bool) -> RpcResult<
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
         let Some(model) = model else {
+            warn!(target: "crontab", name = %name, "未找到: Crontab 不存在");
             return Err(NodegetError::NotFound(format!("Crontab not found: {name}")).into());
         };
 
@@ -61,8 +62,10 @@ pub async fn set_enable(token: String, name: String, enable: bool) -> RpcResult<
             .await
             .map_err(|e| NodegetError::Other(format!("Failed to set crontab enable: {e}")))?;
 
-        let state = result_state
-            .ok_or_else(|| NodegetError::NotFound(format!("Crontab not found: {name}")))?;
+        let state = result_state.ok_or_else(|| {
+            warn!(target: "crontab", name = %name, "未找到: Crontab 不存在");
+            NodegetError::NotFound(format!("Crontab not found: {name}"))
+        })?;
 
         debug!(target: "crontab", name = %name, enabled = state, "Crontab enable state updated");
 

@@ -15,7 +15,7 @@ use ng_core::permission::token_auth::TokenOrAuth;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::OnceLock;
-use tracing::trace;
+use tracing::{debug, trace, warn};
 use uuid::Uuid;
 
 // ── TokenPermissionChecker trait + 全局注入 ─────────────────────────────
@@ -97,6 +97,7 @@ pub async fn check_terminal_connect_permission(
         .await?;
 
     if has_agent_permission {
+        debug!(target: "terminal", agent_uuid = %agent_uuid, "AgentUuid Scope 权限通过");
         return Ok(());
     }
 
@@ -110,9 +111,11 @@ pub async fn check_terminal_connect_permission(
         .await?;
 
     if has_global_permission {
+        debug!(target: "terminal", agent_uuid = %agent_uuid, "Global Scope 权限通过");
         return Ok(());
     }
 
+    warn!(target: "terminal", "权限拒绝: 无 Terminal 连接权限, agent_uuid={agent_uuid}");
     Err(NodegetError::PermissionDenied(format!(
         "No terminal connect permission for agent '{agent_uuid}'"
     ))

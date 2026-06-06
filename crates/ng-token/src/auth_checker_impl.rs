@@ -5,6 +5,7 @@
 use ng_core::permission::data_structure::Token;
 use ng_core::permission::token_auth::TokenOrAuth;
 use ng_infra::server::AuthChecker;
+use tracing::{trace, warn};
 
 use crate::get::get_token;
 
@@ -31,12 +32,25 @@ impl AuthChecker for TokenAuthChecker {
     /// 2. 使用 block_in_place 在当前线程阻塞等待异步认证结果
     ///    （block_in_place 允许 runtime 在此线程阻塞时继续调度其他任务）
     fn check(&self, raw_token: &str) -> anyhow::Result<Token> {
-        let token_or_auth = TokenOrAuth::from_full_token(raw_token)
-            .map_err(|e| ng_core::error::NodegetError::ParseError(e.to_string()))?;
+        trace!(target: "token", "认证检查入口");
+
+        let token_or_auth = TokenOrAuth::from_full_token(raw_token).map_err(|e| {
+            warn!(target: "token", "认证失败: 凭据解析错误, {e}");
+            ng_core::error::NodegetError::ParseError(e.to_string())
+        })?;
 
         tokio::task::block_in_place(|| {
             let handle = tokio::runtime::Handle::current();
-            handle.block_on(get_token(&token_or_auth))
+            match handle.block_on(get_token(&token_or_auth)) {
+                Ok(token) => {
+                    trace!(target: "token", "认证检查完成");
+                    Ok(token)
+                }
+                Err(e) => {
+                    warn!(target: "token", "认证失败: {e}");
+                    Err(e)
+                }
+            }
         })
     }
 }

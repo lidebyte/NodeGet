@@ -19,7 +19,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilt
 use serde_json::Value;
 use std::sync::OnceLock;
 use std::time::Duration;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, trace, warn};
 
 /// 获取当前 QuickJS 字节码版本号（首字节）。
 ///
@@ -116,6 +116,7 @@ pub async fn enqueue_defined_js_worker_run(
 ) -> anyhow::Result<i64> {
     let script_name = js_script_name.trim().to_owned();
     if script_name.is_empty() {
+        warn!(target: "js_worker", "验证失败: js_script_name 为空");
         return Err(NodegetError::InvalidInput("js_script_name cannot be empty".to_owned()).into());
     }
     debug!(target: "js_worker", script_name = %script_name, run_type = ?run_type, "enqueuing defined js_worker run (bytecode)");
@@ -238,18 +239,21 @@ pub async fn run_inline_call_and_record_result(
 ) -> anyhow::Result<String> {
     let script_name = js_script_name.trim().to_owned();
     if script_name.is_empty() {
+        warn!(target: "js_worker", "验证失败: js_worker_name 为空");
         return Err(NodegetError::InvalidInput("js_worker_name cannot be empty".to_owned()).into());
     }
     debug!(target: "js_worker", script_name = %script_name, timeout_sec = ?timeout_sec, inline_caller = ?inline_caller, "running inline call and recording result");
 
     // 解析 params_json 为 Value，仅用于 DB 记录；JS 执行层直接用字符串透传
     let params: Value = serde_json::from_str(&params_json).map_err(|e| {
+        warn!(target: "js_worker", "验证失败: inline_call params 不是有效 JSON");
         NodegetError::InvalidInput(format!("inline_call params is not valid JSON: {e}"))
     })?;
 
     let timeout_duration = match timeout_sec {
         Some(value) if value.is_finite() && value > 0.0 => Some(Duration::from_secs_f64(value)),
         Some(value) => {
+            warn!(target: "js_worker", "验证失败: timeout_sec 无效: {}", value);
             return Err(NodegetError::InvalidInput(format!(
                 "timeout_sec must be a positive finite number, got: {value}"
             ))
@@ -388,6 +392,7 @@ pub async fn enqueue_source_js_worker_run(
 ) -> anyhow::Result<i64> {
     let script_name = js_script_name.trim().to_owned();
     if script_name.is_empty() {
+        warn!(target: "js_worker", "验证失败: js_script_name 为空");
         return Err(NodegetError::InvalidInput("js_script_name cannot be empty".to_owned()).into());
     }
     debug!(target: "js_worker", script_name = %script_name, run_type = ?run_type, "enqueuing source mode js_worker run");

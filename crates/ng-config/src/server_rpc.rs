@@ -9,7 +9,7 @@ use ng_core::error::{NodegetError, anyhow_to_nodeget_error};
 use ng_core::permission::token_auth::TokenOrAuth;
 use std::path::Path;
 use std::sync::OnceLock;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 /// Super Token 验证函数的类型签名。
 ///
@@ -49,11 +49,13 @@ async fn ensure_super_token(token: &str) -> anyhow::Result<()> {
         .get()
         .ok_or_else(|| NodegetError::Other("check_super_token not registered".to_owned()))?;
 
-    let is_super = check_fn(&token_or_auth)
-        .await
-        .map_err(|e| NodegetError::PermissionDenied(format!("{e}")))?;
+    let is_super = check_fn(&token_or_auth).await.map_err(|e| {
+        warn!(target: "server", "权限拒绝: Super Token 检查失败: {e}");
+        NodegetError::PermissionDenied(format!("{e}"))
+    })?;
 
     if !is_super {
+        warn!(target: "server", "权限拒绝: 非 Super Token 尝试访问受保护操作");
         return Err(NodegetError::PermissionDenied(
             "Permission Denied: Super token required".to_owned(),
         )
@@ -85,6 +87,7 @@ fn validate_config_path(config_path: &str) -> anyhow::Result<&Path> {
 
     // 验证路径在允许目录内
     if !canonical_path.starts_with(&current_dir) {
+        warn!(target: "server", "权限拒绝: 配置路径不在工作目录内: {}", config_path);
         return Err(NodegetError::PermissionDenied(
             "Config path must be within working directory".to_owned(),
         )

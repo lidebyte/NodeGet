@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;
 use tokio::fs;
+use tracing::warn;
 
 /// 默认配置文件路径
 pub const DEFAULT_AGENT_CONFIG_PATH: &str = "config.toml";
@@ -266,6 +267,7 @@ impl AgentConfig {
 
         // 4. 校验 connect_timeout_ms 不为零
         if matches!(config.connect_timeout_ms, Some(0)) {
+            warn!(target: "config", "配置验证失败: connect_timeout_ms 不能为 0");
             return Err("connect_timeout_ms must be greater than 0".into());
         }
 
@@ -274,6 +276,7 @@ impl AgentConfig {
             let mut seen = HashSet::with_capacity(servers.len());
             for server in servers {
                 if !seen.insert(&server.name) {
+                    warn!(target: "config", "配置验证失败: 重复的服务器名称 '{}'", server.name);
                     return Err(format!("Duplicate server name '{}' in config", server.name).into());
                 }
             }
@@ -284,9 +287,11 @@ impl AgentConfig {
             let dynamic_interval = config.dynamic_report_interval_ms_or_default();
             let summary_interval = config.dynamic_summary_report_interval_ms_or_default();
             if summary_interval == 0 {
+                warn!(target: "config", "配置验证失败: dynamic_summary_report_interval_ms 不能为 0");
                 return Err("dynamic_summary_report_interval_ms must be greater than 0".into());
             }
             if !dynamic_interval.is_multiple_of(summary_interval) {
+                warn!(target: "config", "配置验证失败: dynamic_report_interval_ms ({dynamic_interval}) 不是 dynamic_summary_report_interval_ms ({summary_interval}) 的整数倍");
                 return Err(format!(
                     "dynamic_report_interval_ms ({dynamic_interval}) must be an integer multiple of dynamic_summary_report_interval_ms ({summary_interval})"
                 )

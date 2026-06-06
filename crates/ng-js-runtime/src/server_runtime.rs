@@ -99,10 +99,7 @@ impl RuntimeLimits {
         caller_soft_timeout: Option<std::time::Duration>,
     ) -> std::time::Duration {
         let hard = std::time::Duration::from_millis(self.max_run_time_ms);
-        match caller_soft_timeout {
-            Some(soft) => hard.min(soft),
-            None => hard,
-        }
+        caller_soft_timeout.map_or(hard, |soft| hard.min(soft))
     }
 }
 
@@ -116,6 +113,7 @@ impl Default for RuntimeLimits {
 ///
 /// `set_memory_limit(0)` 在 `QuickJS` 里表示"无限"；我们始终传正数。
 /// `set_max_stack_size` 必须在第一次执行脚本之前调用才有意义。
+#[allow(clippy::future_not_send)]
 pub(crate) async fn apply_runtime_limits(rt: &AsyncRuntime, limits: RuntimeLimits) {
     rt.set_memory_limit(limits.max_heap_size_bytes).await;
     rt.set_max_stack_size(limits.max_stack_size_bytes).await;
@@ -129,6 +127,7 @@ pub(crate) async fn apply_runtime_limits(rt: &AsyncRuntime, limits: RuntimeLimit
 /// `store(true)`，`QuickJS` 下一个检查点就被打断。
 ///
 /// 这样即便脚本里写的是 `while(true){}` 这种无 await 纯 CPU 循环，也能被杀。
+#[allow(clippy::future_not_send)]
 pub(crate) async fn install_kill_handler(rt: &AsyncRuntime, kill_flag: Arc<AtomicBool>) {
     rt.set_interrupt_handler(Some(Box::new(move || kill_flag.load(Ordering::Relaxed))))
         .await;
@@ -146,7 +145,9 @@ pub(crate) async fn install_kill_handler(rt: &AsyncRuntime, kill_flag: Arc<Atomi
 
 /// 看门狗线程中一条活跃监控记录。
 struct ActiveWatch {
+    /// 截止时间（毫秒时间戳）
     deadline_ms: u64,
+    /// 强制终止标记
     kill_flag: Arc<AtomicBool>,
     /// 当 `cancel_tx` drop 时，`try_recv` 返回 `Disconnected`，表示执行完成、取消监控。
     cancel_rx: mpsc::Receiver<()>,
@@ -154,13 +155,17 @@ struct ActiveWatch {
 
 /// 看门狗请求：向常驻看门狗线程注册一条监控。
 struct WatchdogRegister {
+    /// 截止时间（毫秒时间戳）
     deadline_ms: u64,
+    /// 强制终止标记
     kill_flag: Arc<AtomicBool>,
+    /// 取消信号接收端
     cancel_rx: mpsc::Receiver<()>,
 }
 
 /// 全局看门狗管理器，持有向常驻看门狗线程发送注册请求的通道。
 struct WatchdogManager {
+    /// Watchdog 命令发送端
     sender: mpsc::Sender<WatchdogRegister>,
 }
 
@@ -222,10 +227,7 @@ fn init_watchdog_manager() -> WatchdogManager {
                 let nearest = active.iter().map(|w| w.deadline_ms).min();
 
                 // 4. Sleep 到最近的 deadline（或短间隔以检查新请求）
-                let sleep_ms = match nearest {
-                    Some(d) => (d.saturating_sub(now_ms())).min(50),
-                    None => 50, // 无活跃请求，短轮询间隔
-                };
+                let sleep_ms = nearest.map_or(50, |d| (d.saturating_sub(now_ms())).min(50));
                 if sleep_ms > 0 {
                     let _ = req_rx.recv_timeout(std::time::Duration::from_millis(sleep_ms));
                 }
@@ -801,6 +803,7 @@ pub fn resolve_invoke_result<'js>(ctx: &Ctx<'js>, js_value: JsValue<'js>) -> Res
 ///
 /// # Errors
 /// 若构建宿主 Runtime 或 JS 执行失败，返回错误。
+#[allow(clippy::too_many_arguments)]
 pub fn js_runner(
     js_code: JsCodeInput,
     run_type: RunType,
@@ -901,10 +904,9 @@ pub fn js_runner(
         // 外层 tokio::time::timeout 捕捉 async 路径上的挂起（await 点停在
         // 远端 I/O 等）。两层共同保障 max_run_time_ms 兜得住。
         let cancel_tx = register_watchdog(Arc::clone(&kill_flag), effective_timeout);
-        let outcome = match tokio::time::timeout(effective_timeout, execute).await {
-            Ok(result) => result,
-            Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
-        };
+        let outcome = tokio::time::timeout(effective_timeout, execute)
+            .await
+            .unwrap_or_else(|_| Err(js_error("js_runner", "JavaScript execution timed out")));
 
         // 执行完成或超时后，取消看门狗监控（常驻线程自动清理，无需 join）
         let _ = cancel_tx.send(());
@@ -1020,10 +1022,9 @@ pub fn js_runner_source_mode(
         };
 
         let cancel_tx = register_watchdog(Arc::clone(&kill_flag), effective_timeout);
-        let outcome = match tokio::time::timeout(effective_timeout, execute).await {
-            Ok(result) => result,
-            Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
-        };
+        let outcome = tokio::time::timeout(effective_timeout, execute)
+            .await
+            .unwrap_or_else(|_| Err(js_error("js_runner", "JavaScript execution timed out")));
         let _ = cancel_tx.send(());
 
         // 同 js_runner()：释放 QuickJS 上下文以 drop 未消费的 fetch Response

@@ -18,6 +18,7 @@ use uuid::Uuid;
 static CACHE: OnceLock<MonitoringLastCache> = OnceLock::new();
 
 /// 监控数据最新值缓存，按 UUID 维度存储每类数据的最新一条 JSON 记录。
+#[allow(clippy::struct_field_names)]
 pub struct MonitoringLastCache {
     /// 静态监控最新值缓存
     static_cache: RwLock<HashMap<Uuid, serde_json::Value>>,

@@ -8,6 +8,7 @@ use crate::query::QueryCondition;
 use ng_core::error::NodegetError;
 use ng_core::permission::data_structure::Scope;
 use std::collections::HashSet;
+use tracing::warn;
 
 /// 从查询条件中提取 Scope 列表。
 ///
@@ -93,6 +94,7 @@ pub async fn resolve_conditions(
         match cond {
             QueryCondition::Uuid(uuid) => {
                 let uuid_id = cache.get_id(uuid).ok_or_else(|| {
+                    warn!(target: "monitoring", %uuid, "UUID 查找失败: 在监控注册表中未找到");
                     NodegetError::NotFound(format!(
                         "Agent UUID not found in monitoring registry: {uuid}"
                     ))

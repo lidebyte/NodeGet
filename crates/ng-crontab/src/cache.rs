@@ -37,6 +37,7 @@ struct CrontabCacheInner {
 /// 基于 DB 的 Crontab 全量缓存，提供按 ID 查询、启用条目枚举、
 /// last_run_time 原子更新等操作。
 pub struct CrontabCache {
+    /// 内部缓存数据，RwLock 保护并发读写
     inner: RwLock<CrontabCacheInner>,
 }
 

@@ -307,14 +307,15 @@ pub async fn handle_task() {
                             if matches!(task_type, TaskEventType::WebShell(_)) {
                                 fut.await
                             } else {
-                                match time::timeout(TASK_MAX_TIMEOUT, fut).await {
-                                    Ok(res) => res,
-                                    Err(_) => Err(NodegetError::Other(format!(
-                                        "Task timed out after {}s",
-                                        TASK_MAX_TIMEOUT.as_secs()
-                                    ))
-                                    .into()),
-                                }
+                                time::timeout(TASK_MAX_TIMEOUT, fut)
+                                    .await
+                                    .unwrap_or_else(|_| {
+                                        Err(NodegetError::Other(format!(
+                                            "Task timed out after {}s",
+                                            TASK_MAX_TIMEOUT.as_secs()
+                                        ))
+                                        .into())
+                                    })
                             }
                         } else {
                             Err(NodegetError::PermissionDenied(

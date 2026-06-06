@@ -34,9 +34,10 @@ pub async fn get(token: String, supertoken: Option<String>) -> RpcResult<Box<Raw
                 NodegetError::ParseError(format!("Failed to parse supertoken: {e}"))
             })?;
 
-            let is_super_token = check_super_token(&supertoken_or_auth)
-                .await
-                .map_err(|e| NodegetError::PermissionDenied(format!("{e}")))?;
+            let is_super_token = check_super_token(&supertoken_or_auth).await.map_err(|e| {
+                warn!(target: "token", "权限拒绝: {e}");
+                NodegetError::PermissionDenied(format!("{e}"))
+            })?;
 
             if !is_super_token {
                 warn!(target: "token", "non-supertoken attempted supertoken-only get query");

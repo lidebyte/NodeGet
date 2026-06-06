@@ -53,6 +53,7 @@ struct TokenCacheInner {
 /// 提供 `find_by_key`、`find_by_username`、`get_super_token`、`authenticate` 等查询方法，
 /// 以及 `DbBackedCache` trait 要求的 `build_cache` / `reload_from_models` / `load_all` 生命周期方法。
 pub struct TokenCache {
+    /// 内部缓存数据，RwLock 保护并发读写
     inner: RwLock<TokenCacheInner>,
 }
 
@@ -135,6 +136,7 @@ impl TokenCache {
     ///
     /// - `all_tokens`：从数据库加载的全部 Token 模型
     /// - 返回：`(by_key 索引, by_username 索引, super_token 条目)`
+    #[allow(clippy::type_complexity)]
     fn build_maps(
         all_tokens: Vec<token::Model>,
     ) -> (
@@ -340,10 +342,10 @@ fn hex_to_bytes(hex_str: &str) -> Option<[u8; 32]> {
         return None;
     }
     let mut bytes = [0u8; 32];
-    for i in 0..32 {
+    for (i, byte) in bytes.iter_mut().enumerate() {
         let hi = hex_str.as_bytes().get(i * 2)?;
         let lo = hex_str.as_bytes().get(i * 2 + 1)?;
-        bytes[i] = (hex_nibble(*hi)? << 4) | hex_nibble(*lo)?;
+        *byte = (hex_nibble(*hi)? << 4) | hex_nibble(*lo)?;
     }
     Some(bytes)
 }

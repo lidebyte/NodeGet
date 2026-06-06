@@ -80,6 +80,7 @@ impl DbRegistryManager {
     ///
     /// 若 `Mutex` 被 poison（仅当其他持有者在持锁期间 panic 时可能发生），或
     /// `OnceLock` 内部 `expect` 失败时会 panic
+    #[allow(clippy::unused_async)]
     pub async fn init(db_path: String) -> Arc<Self> {
         static INIT: std::sync::Once = std::sync::Once::new();
         INIT.call_once(|| {
@@ -161,9 +162,11 @@ impl DbRegistryManager {
             }
         }
         // 锁内仅做快速 HashMap 插入
-        let mut pools = self.pools.write().await;
-        for (name, tracked) in built {
-            pools.insert(name, tracked);
+        {
+            let mut pools = self.pools.write().await;
+            for (name, tracked) in built {
+                pools.insert(name, tracked);
+            }
         }
         Ok(())
     }
@@ -217,6 +220,7 @@ impl DbRegistryManager {
             {
                 Ok(Some(m)) => {
                     if let Some(lifetime_ms) = m.max_lifetime_ms {
+                        #[allow(clippy::cast_possible_wrap)]
                         let elapsed_ms = now_ms_u64().saturating_sub(last_used) as i64;
                         if elapsed_ms >= lifetime_ms {
                             to_remove.push(name);
@@ -304,13 +308,22 @@ impl DbRegistryManager {
                 )
                 .await;
         }
+        #[allow(clippy::cast_possible_wrap)]
         let now_ms = now_ms_u64() as i64;
         let main_db = get_main_db()?;
         let existing = dbreg_entity::Entity::find()
             .filter(dbreg_entity::Column::Name.eq(name))
             .one(main_db)
             .await?;
-        if existing.is_none() {
+        if let Some(existing_model) = existing {
+            let current_conns = existing_model.db_connections.unwrap_or(0).saturating_add(1);
+            let mut active: dbreg_entity::ActiveModel = existing_model.into();
+            active.db_connections = Set(Some(current_conns));
+            if max_lifetime_ms.is_some() {
+                active.max_lifetime_ms = Set(max_lifetime_ms);
+            }
+            active.update(main_db).await?;
+        } else {
             let active = dbreg_entity::ActiveModel {
                 name: Set(name.to_owned()),
                 db_connections: Set(Some(1)),
@@ -320,15 +333,6 @@ impl DbRegistryManager {
             };
             let result = active.insert(main_db).await?;
             info!(target: "db", name = %result.name, id = result.id, "Database registered");
-        } else {
-            let existing_model = existing.unwrap();
-            let current_conns = existing_model.db_connections.unwrap_or(0).saturating_add(1);
-            let mut active: dbreg_entity::ActiveModel = existing_model.into();
-            active.db_connections = Set(Some(current_conns));
-            if max_lifetime_ms.is_some() {
-                active.max_lifetime_ms = Set(max_lifetime_ms);
-            }
-            active.update(main_db).await?;
         }
         {
             let mut pools = self.pools.write().await;
@@ -526,16 +530,10 @@ fn try_column_as_json(r: &sea_orm::QueryResult, col: &str) -> serde_json::Value 
         return v.map_or(serde_json::Value::Null, serde_json::Value::Bool);
     }
     if let Ok(v) = r.try_get::<Option<Vec<u8>>>("", col) {
-        return match v {
-            Some(bytes) => {
-                if let Ok(j) = serde_json::from_slice::<serde_json::Value>(&bytes) {
-                    j
-                } else {
-                    serde_json::Value::String(hex::encode(&bytes))
-                }
-            }
-            None => serde_json::Value::Null,
-        };
+        return v.map_or(serde_json::Value::Null, |bytes| {
+            serde_json::from_slice::<serde_json::Value>(&bytes)
+                .unwrap_or_else(|_| serde_json::Value::String(hex::encode(&bytes)))
+        });
     }
     if let Ok(v) = r.try_get::<Option<serde_json::Value>>("", col) {
         return v.unwrap_or(serde_json::Value::Null);
@@ -554,17 +552,20 @@ pub fn json_to_sea_value(json: &serde_json::Value) -> sea_orm::Value {
     match json {
         serde_json::Value::Null => sea_orm::Value::Json(None),
         serde_json::Value::Bool(b) => sea_orm::Value::Bool(Some(*b)),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                sea_orm::Value::BigInt(Some(i))
-            } else if let Some(u) = n.as_u64() {
-                sea_orm::Value::BigUnsigned(Some(u))
-            } else if let Some(f) = n.as_f64() {
-                sea_orm::Value::Double(Some(f))
-            } else {
-                sea_orm::Value::String(Some(n.to_string()))
-            }
-        }
+        serde_json::Value::Number(n) => n.as_i64().map_or_else(
+            || {
+                n.as_u64().map_or_else(
+                    || {
+                        n.as_f64().map_or_else(
+                            || sea_orm::Value::String(Some(n.to_string())),
+                            |f| sea_orm::Value::Double(Some(f)),
+                        )
+                    },
+                    |u| sea_orm::Value::BigUnsigned(Some(u)),
+                )
+            },
+            |i| sea_orm::Value::BigInt(Some(i)),
+        ),
         serde_json::Value::String(s) => sea_orm::Value::String(Some(s.clone())),
         serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
             sea_orm::Value::Json(Some(Box::new(json.clone())))

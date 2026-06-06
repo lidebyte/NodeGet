@@ -5,6 +5,7 @@
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use log::warn;
 use ng_core::error::NodegetError;
 use ng_task::{HttpRequestTask, HttpRequestTaskResult};
 use reqwest::{Client, Method};
@@ -58,14 +59,18 @@ fn get_default_client() -> Client {
 pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTaskResult> {
     ensure_rustls_ring_provider();
 
-    let method = Method::from_bytes(task.method.trim().to_ascii_uppercase().as_bytes())
-        .map_err(|e| NodegetError::InvalidInput(format!("Invalid http_request.method: {e}")))?;
+    let method =
+        Method::from_bytes(task.method.trim().to_ascii_uppercase().as_bytes()).map_err(|e| {
+            warn!(target: "task", "HTTP 请求方法无效: method={}, error={e}", task.method);
+            NodegetError::InvalidInput(format!("Invalid http_request.method: {e}"))
+        })?;
 
     let client = if let Some(ip_raw) = task.ip.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         let ip = match ip_raw.to_ascii_lowercase().as_str() {
             "ipv4 auto" => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             "ipv6 auto" => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
             _ => ip_raw.parse().map_err(|e| {
+                warn!(target: "task", "HTTP 请求 IP 无效: ip='{ip_raw}', error={e}");
                 NodegetError::InvalidInput(format!("Invalid http_request.ip '{ip_raw}': {e}"))
             })?,
         };
@@ -73,11 +78,15 @@ pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTa
             .timeout(HTTP_REQUEST_TIMEOUT)
             .local_address(ip)
             .build()
-            .map_err(|e| NodegetError::Other(format!("Failed to build HTTP client: {e}")))?
+            .map_err(|e| {
+                warn!(target: "task", "HTTP 客户端构建失败: error={e}");
+                NodegetError::Other(format!("Failed to build HTTP client: {e}"))
+            })?
     } else {
         get_default_client()
     };
 
+    let url_str = task.url.to_string();
     let mut req = client.request(method, task.url);
     for (k, v) in &task.headers {
         req = req.header(k, v);
@@ -85,6 +94,7 @@ pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTa
 
     match (&task.body, &task.body_base64) {
         (Some(_), Some(_)) => {
+            warn!(target: "task", "HTTP 请求参数冲突: body 和 body_base64 不能同时指定");
             return Err(NodegetError::InvalidInput(
                 "http_request.body and http_request.body_base64 are mutually exclusive".to_owned(),
             )
@@ -95,6 +105,7 @@ pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTa
         }
         (None, Some(b64)) => {
             let bytes = BASE64_STANDARD.decode(b64).map_err(|e| {
+                warn!(target: "task", "HTTP 请求 body_base64 解码失败: error={e}");
                 NodegetError::InvalidInput(format!("Invalid http_request.body_base64: {e}"))
             })?;
             req = req.body(bytes);
@@ -102,10 +113,10 @@ pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTa
         (None, None) => {}
     }
 
-    let resp = req
-        .send()
-        .await
-        .map_err(|e| NodegetError::Other(format!("HTTP request failed: {e}")))?;
+    let resp = req.send().await.map_err(|e| {
+        warn!(target: "task", "HTTP 请求发送失败: url={url_str}, error={e}");
+        NodegetError::Other(format!("HTTP request failed: {e}"))
+    })?;
 
     let status = resp.status().as_u16();
 
@@ -123,10 +134,10 @@ pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTa
         })
         .collect();
 
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| NodegetError::Other(format!("Failed to read HTTP response body: {e}")))?;
+    let bytes = resp.bytes().await.map_err(|e| {
+        warn!(target: "task", "HTTP 响应体读取失败: error={e}");
+        NodegetError::Other(format!("Failed to read HTTP response body: {e}"))
+    })?;
     let (body, body_base64) = String::from_utf8(bytes.to_vec()).map_or_else(
         |_| (None, Some(BASE64_STANDARD.encode(&bytes))),
         |s| (Some(s), None),

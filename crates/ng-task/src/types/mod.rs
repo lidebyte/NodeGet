@@ -222,6 +222,7 @@ pub struct TaskEvent {
 /// 任务事件结果枚举，定义任务执行后的返回结果
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum TaskEventResult {
     /// Ping 结果，单位：毫秒
     Ping(f64),

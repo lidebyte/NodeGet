@@ -106,28 +106,51 @@ pub struct DynamicResponseItem {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum DynamicSummaryQueryField {
+    /// CPU 使用率（百分比）
     CpuUsage,
+    /// GPU 使用率（百分比）
     GpuUsage,
+    /// 已用交换空间（字节）
     UsedSwap,
+    /// 总交换空间（字节）
     TotalSwap,
+    /// 已用内存（字节）
     UsedMemory,
+    /// 总内存（字节）
     TotalMemory,
+    /// 可用内存（字节）
     AvailableMemory,
+    /// 1 分钟平均负载
     LoadOne,
+    /// 5 分钟平均负载
     LoadFive,
+    /// 15 分钟平均负载
     LoadFifteen,
+    /// 运行时间（秒）
     Uptime,
+    /// 启动时间（Unix 时间戳）
     BootTime,
+    /// 进程数
     ProcessCount,
+    /// 总磁盘空间（字节）
     TotalSpace,
+    /// 可用磁盘空间（字节）
     AvailableSpace,
+    /// 磁盘读取速度（字节/秒）
     ReadSpeed,
+    /// 磁盘写入速度（字节/秒）
     WriteSpeed,
+    /// TCP 连接数
     TcpConnections,
+    /// UDP 连接数
     UdpConnections,
+    /// 总接收字节数
     TotalReceived,
+    /// 总发送字节数
     TotalTransmitted,
+    /// 发送速度（字节/秒）
     TransmitSpeed,
+    /// 接收速度（字节/秒）
     ReceiveSpeed,
 }
 

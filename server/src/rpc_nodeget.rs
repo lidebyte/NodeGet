@@ -110,6 +110,7 @@ pub struct NodegetServerRpcImpl;
 
 impl RpcHelper for NodegetServerRpcImpl {}
 
+#[allow(clippy::too_many_lines)]
 #[async_trait]
 impl RpcServer for NodegetServerRpcImpl {
     /// 返回服务器运行状态确认字符串

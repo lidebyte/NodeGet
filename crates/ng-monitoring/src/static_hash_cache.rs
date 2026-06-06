@@ -16,6 +16,7 @@ struct Inner {
 
 /// 静态数据哈希去重缓存。
 pub struct StaticHashCache {
+    /// 内部哈希映射数据（`uuid_id` → 数据哈希），通过 `RwLock` 保证并发安全
     inner: RwLock<Inner>,
 }
 
@@ -84,8 +85,8 @@ impl StaticHashCache {
     ///
     /// - `uuid_id` — 设备数字 ID
     /// - `data_hash` — 新数据的哈希值
-    pub fn update(&self, uuid_id: i16, data_hash: Vec<u8>) {
+    pub fn update(&self, uuid_id: i16, data_hash: &[u8]) {
         let mut guard = recover_write(&self.inner);
-        guard.by_uuid_id.insert(uuid_id, truncate_to_16(&data_hash));
+        guard.by_uuid_id.insert(uuid_id, truncate_to_16(data_hash));
     }
 }

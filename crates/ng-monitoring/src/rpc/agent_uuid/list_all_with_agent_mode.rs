@@ -9,7 +9,7 @@ use ng_core::permission::data_structure::{MonitoringUuid, Permission, Scope};
 use ng_core::permission::token_auth::TokenOrAuth;
 use ng_token::get::check_token_limit;
 use serde_json::value::RawValue;
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// 响应项，包含 UUID 及其软删除状态。
 #[derive(serde::Serialize)]
@@ -43,6 +43,7 @@ pub async fn list_all_agent_uuids_with_agent_mode(token: String) -> RpcResult<Bo
         .await?;
 
         if !is_allowed {
+            warn!(target: "monitoring", "权限拒绝: 缺少 MonitoringUuid::List 权限");
             return Err(anyhow::anyhow!(NodegetError::PermissionDenied(
                 "Permission Denied: Missing MonitoringUuid::List permission".to_owned(),
             )));

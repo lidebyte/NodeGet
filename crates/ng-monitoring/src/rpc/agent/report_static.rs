@@ -23,7 +23,7 @@ use ng_infra::server::RpcHelper;
 use ng_token::get::check_token_limit;
 use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde_json::value::RawValue;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 /// Agent 上报静态监控数据。
 ///
@@ -39,6 +39,7 @@ use tracing::{debug, error};
 /// 5. **慢速去重**：查询数据库确认哈希是否已存在
 /// 6. 通过去重后，构建 `ActiveModel` 送入 `MonitoringBuffer`
 /// 7. 更新 `StaticHashCache` 哈希缓存
+#[allow(clippy::too_many_lines)]
 pub async fn report_static(
     token: String,
     static_monitoring_data: StaticMonitoringData,
@@ -59,6 +60,7 @@ pub async fn report_static(
         .await?;
 
         if !is_allowed {
+            warn!(target: "monitoring", agent_uuid = %agent_uuid, "权限拒绝: 缺少 StaticMonitoring Write 权限");
             return Err(NodegetError::PermissionDenied(
                 "Permission Denied: Missing StaticMonitoring Write permission for this Agent"
                     .to_string(),
@@ -120,7 +122,7 @@ pub async fn report_static(
             })?;
 
         if exists.is_some() {
-            hash_cache.update(uuid_id, static_monitoring_data.data_hash.clone());
+            hash_cache.update(uuid_id, &static_monitoring_data.data_hash);
             debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Static data hash already exists, skipping");
             return RawValue::from_string(
                 r#"{"status":"skipped","reason":"duplicate_hash"}"#.to_owned(),
@@ -144,7 +146,7 @@ pub async fn report_static(
 
         monitoring_buffer::get().static_mon.send(in_data);
 
-        hash_cache.update(uuid_id, data_hash);
+        hash_cache.update(uuid_id, &data_hash);
 
         debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Static data buffered successfully");
 

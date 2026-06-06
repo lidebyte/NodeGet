@@ -7,7 +7,7 @@ use ng_core::error::NodegetError;
 use ng_core::permission::data_structure::{Db as DbPermission, Permission, Scope};
 use ng_core::permission::token_auth::TokenOrAuth;
 use serde_json::value::RawValue;
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// 列出所有已注册数据库
 ///
@@ -36,6 +36,7 @@ pub async fn list(token: String) -> RpcResult<Box<RawValue>> {
             .await?;
 
         if !is_allowed {
+            warn!(target: "db", "权限拒绝: Db::List in Global scope");
             return Err(NodegetError::PermissionDenied(
                 "Permission Denied: Requires Db::List in Global scope".to_owned(),
             )

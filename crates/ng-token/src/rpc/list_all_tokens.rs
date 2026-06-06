@@ -36,9 +36,10 @@ pub async fn list_all_tokens(token: String) -> RpcResult<Box<RawValue>> {
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
-        let is_super_token = check_super_token(&token_or_auth)
-            .await
-            .map_err(|e| NodegetError::PermissionDenied(format!("{e}")))?;
+        let is_super_token = check_super_token(&token_or_auth).await.map_err(|e| {
+            warn!(target: "token", "权限拒绝: {e}");
+            NodegetError::PermissionDenied(format!("{e}"))
+        })?;
 
         if !is_super_token {
             warn!(target: "token", "non-supertoken attempted to list all tokens");

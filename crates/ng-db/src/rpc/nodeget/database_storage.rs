@@ -7,7 +7,7 @@ use sea_orm::{DatabaseBackend, DatabaseConnection, FromQueryResult, Statement};
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::collections::BTreeMap;
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// 排除的系统表名前缀/模式，不纳入用户存储统计
 const EXCLUDED_TABLES: &[&str] = &["seaql_migrations"];
@@ -56,9 +56,13 @@ pub async fn database_storage(token: String) -> jsonrpsee::core::RpcResult<Box<R
         let is_super = provider
             .check_super_token(&token_or_auth)
             .await
-            .map_err(|e| NodegetError::PermissionDenied(format!("{e}")))?;
+            .map_err(|e| {
+                warn!(target: "db", "权限拒绝: {e}");
+                NodegetError::PermissionDenied(format!("{e}"))
+            })?;
 
         if !is_super {
+            warn!(target: "db", "权限拒绝: 需要 Super Token 权限");
             return Err(NodegetError::PermissionDenied(
                 "Permission Denied: Super token required".to_owned(),
             )
@@ -155,6 +159,7 @@ async fn query_postgres(db: &DatabaseConnection) -> anyhow::Result<BTreeMap<Stri
 /// 表名发现查询结果行
 #[derive(FromQueryResult)]
 struct TableNameRow {
+    /// 表名
     table_name: String,
 }
 

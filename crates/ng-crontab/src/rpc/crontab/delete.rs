@@ -10,7 +10,7 @@ use ng_db::entity::crontab;
 use ng_infra::server::RpcHelper;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::value::RawValue;
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// 删除定时任务。
 ///
@@ -38,6 +38,7 @@ pub async fn delete(token: String, name: String) -> RpcResult<Box<RawValue>> {
             .map_err(|e| NodegetError::DatabaseError(e.to_string()))?;
 
         let Some(model) = model else {
+            warn!(target: "crontab", name = %name, "未找到: Crontab 不存在");
             return Err(NodegetError::NotFound(format!("Crontab not found: {name}")).into());
         };
 
@@ -61,6 +62,7 @@ pub async fn delete(token: String, name: String) -> RpcResult<Box<RawValue>> {
             .map_err(|e| NodegetError::Other(format!("Failed to delete crontab: {e}")))?;
 
         if !deleted {
+            warn!(target: "crontab", name = %name, "未找到: Crontab 删除失败，任务不存在");
             return Err(NodegetError::NotFound(format!("Crontab not found: {name}")).into());
         }
 

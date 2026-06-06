@@ -23,7 +23,7 @@ use sea_orm::{
 };
 use serde_json::value::RawValue;
 use std::collections::HashSet;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use uuid::Uuid;
 
 /// 批量查询多台设备的静态监控最新值。
@@ -39,6 +39,7 @@ use uuid::Uuid;
 /// 3. 优先从 `MonitoringLastCache` 获取缓存命中
 /// 4. 缓存未命中的部分构建 UNION ALL 语句查询 DB
 /// 5. 合并缓存与 DB 结果，序列化返回
+#[allow(clippy::too_many_lines)]
 pub async fn static_data_multi_last_query(
     token: String,
     uuids: Vec<Uuid>,
@@ -83,6 +84,7 @@ pub async fn static_data_multi_last_query(
         };
 
         if !is_allowed {
+            warn!(target: "monitoring", "权限拒绝: 缺少 StaticMonitoring Read 权限");
             return Err(NodegetError::PermissionDenied(
                 "Permission Denied: Insufficient StaticMonitoring Read permissions".to_owned(),
             )

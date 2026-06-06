@@ -17,7 +17,7 @@ use ng_infra::server::RpcHelper;
 use ng_token::check_token_limit;
 use sea_orm::{ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde_json::value::RawValue;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 /// 删除动态摘要监控数据。
 ///
@@ -30,6 +30,7 @@ use tracing::{debug, error};
 /// 2. 解析条件中的 `Limit`/`Last` 标记和 `ResolvedCondition`
 /// 3. 若有 Limit/Last：先查询 ID 列表，再按 ID 批量删除
 /// 4. 否则：直接按条件构建 `delete_many` 并执行
+#[allow(clippy::too_many_lines)]
 pub async fn delete_dynamic_summary(
     token: String,
     conditions: Vec<QueryCondition>,
@@ -50,6 +51,7 @@ pub async fn delete_dynamic_summary(
         .await?;
 
         if !is_allowed {
+            warn!(target: "monitoring", "权限拒绝: 缺少 DynamicMonitoringSummary Delete 权限");
             return Err(NodegetError::PermissionDenied(
                 "Permission Denied: Missing DynamicMonitoringSummary Delete permission".to_owned(),
             )

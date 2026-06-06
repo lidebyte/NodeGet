@@ -16,7 +16,7 @@ use ng_token::{TokenOrAuth, check_super_token, get_token};
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::collections::HashSet;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 use uuid::Uuid;
 
 /// Agent UUID 列表权限等级。
@@ -101,9 +101,10 @@ async fn resolve_list_agent_uuid_permission(
     let token_or_auth = TokenOrAuth::from_full_token(token)
         .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 
-    let is_super_token = check_super_token(&token_or_auth)
-        .await
-        .map_err(|e| NodegetError::PermissionDenied(format!("{e}")))?;
+    let is_super_token = check_super_token(&token_or_auth).await.map_err(|e| {
+        warn!(target: "monitoring", "权限拒绝: super token 校验失败");
+        NodegetError::PermissionDenied(format!("{e}"))
+    })?;
     if is_super_token {
         trace!(target: "server", "Super token detected, granting All agent UUID access");
         return Ok(AgentUuidListPermission::All);
@@ -115,12 +116,14 @@ async fn resolve_list_agent_uuid_permission(
     if let Some(from) = token_info.timestamp_from
         && now < from
     {
+        warn!(target: "monitoring", "权限拒绝: Token 尚未生效");
         return Err(NodegetError::PermissionDenied("Token is not yet valid".to_owned()).into());
     }
 
     if let Some(to) = token_info.timestamp_to
         && now > to
     {
+        warn!(target: "monitoring", "权限拒绝: Token 已过期");
         return Err(NodegetError::PermissionDenied("Token has expired".to_owned()).into());
     }
 
@@ -173,6 +176,7 @@ async fn resolve_list_agent_uuid_permission(
     }
 
     if nodeget_scoped_uuids.is_empty() {
+        warn!(target: "monitoring", "权限拒绝: 缺少 ListAllAgentUuid 权限");
         return Err(NodegetError::PermissionDenied(
             "Permission Denied: Insufficient NodeGet ListAllAgentUuid permissions".to_owned(),
         )

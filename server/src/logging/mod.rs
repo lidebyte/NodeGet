@@ -172,6 +172,7 @@ pub fn init(config: Option<&LoggingConfig>) {
 ///
 /// 缓冲区满时淘汰最旧条目。
 struct MemoryLogLayer {
+    /// 有界环形缓冲区，存储 JSON 格式日志事件
     buffer: Arc<Mutex<VecDeque<serde_json::Value>>>,
 }
 
@@ -180,6 +181,11 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_event(&self, event: &Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // 内存日志收集：采集事件字段 → 组装 span 上下文 → 构建日志条目 → 写入有界缓冲区
+        // 1. JsonFieldVisitor 收集事件的结构化字段与 message
+        // 2. 遍历 event_scope 中所有 span，用直接 Map 构造替代 json! 宏避免中间 Value 分配
+        // 3. build_log_entry 组装完整日志条目
+        // 4. 写入 VecDeque 缓冲区，超限时从队首弹出；使用 unwrap_or_else(into_inner) 从 Mutex 中毒恢复
         let meta = event.metadata();
 
         // 收集结构化字段
@@ -356,6 +362,7 @@ fn remap_target(target: &str) -> &str {
 ///
 /// 输出格式：`<时间戳> <级别> <target>: <字段> [span<fields>]`
 struct NodeGetFormat {
+    /// 时间戳格式化器
     timer: ChronoLocal,
 }
 
@@ -378,6 +385,12 @@ where
         mut writer: format::Writer<'_>,
         event: &Event<'_>,
     ) -> stdfmt::Result {
+        // 控制台单行格式化：时间戳 → 彩色级别 → target 重映射 → 字段 → span 上下文
+        // 1. timer 输出时间戳
+        // 2. 根据 ANSI 支持决定是否着色级别（5 字符右对齐）
+        // 3. remap_target 映射模块路径为友好名称，灰色显示
+        // 4. format_fields 渲染事件字段
+        // 5. 遍历 event_scope 拼接 [span{fields} < span{fields}] 格式的 span 上下文
         // 时间戳
         self.timer.format_time(&mut writer)?;
 
@@ -453,6 +466,11 @@ where
         mut writer: format::Writer<'_>,
         event: &Event<'_>,
     ) -> stdfmt::Result {
+        // JSON 文件格式化：采集字段 → 构建 span 上下文 → 组装日志条目 → 输出单行 JSON
+        // 1. JsonFieldVisitor 收集事件字段与 message
+        // 2. 遍历 span 链用直接 Map 构造上下文对象，strip_ansi 清除 ANSI 转义
+        // 3. build_log_entry 统一组装（含 remap_target），保证与控制台层 target 命名一致
+        // 4. 写入单行 JSON + 换行
         let meta = event.metadata();
         // 收集字段
         let mut visitor = JsonFieldVisitor::default();
@@ -742,6 +760,7 @@ fn parse_level_filter(s: &str) -> Option<tracing::level_filters::LevelFilter> {
 /// 此过滤器仅检查是否存在订阅者（`subscriber_count > 0`），
 /// per-subscriber 过滤在 `StreamLogLayer::on_event` 内完成。
 struct StreamLogFilter {
+    /// 流日志订阅管理器
     manager: Arc<StreamLogManager>,
 }
 
@@ -768,6 +787,7 @@ where
 /// 使用与 [`MemoryLogLayer`] 相同的 JSON 格式序列化事件，
 /// 通过 `try_send`（非阻塞）发送，避免慢订阅者的背压。
 struct StreamLogLayer {
+    /// 流日志订阅管理器
     manager: Arc<StreamLogManager>,
 }
 
@@ -776,6 +796,12 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_event(&self, event: &Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // WebSocket 流日志推送：快速路径过滤 → 读锁筛选订阅者 → 序列化 → 广播预序列化 JSON
+        // 1. has_subscribers() 快速路径：无订阅者直接返回，避免不必要的字段采集与序列化
+        // 2. 读锁遍历 subscribers，用 filter.is_enabled(meta) 收集感兴趣的通道
+        // 3. JsonFieldVisitor 采集字段，遍历 span 链构建上下文，remap_target 映射模块路径
+        // 4. serde_json::json! 组装完整条目，to_string 序列化一次
+        // 5. try_send 将预序列化 JSON 字符串克隆广播给所有订阅者，避免 per-subscriber 深拷贝
         // 快速路径：无订阅者
         if !self.manager.has_subscribers() {
             return;
@@ -842,9 +868,8 @@ where
         });
 
         // 序列化一次，广播预序列化 JSON 字符串给所有订阅者（避免 per-subscriber 深拷贝）
-        let json_str = match serde_json::to_string(&entry) {
-            Ok(s) => s,
-            Err(_) => return,
+        let Ok(json_str) = serde_json::to_string(&entry) else {
+            return;
         };
 
         for tx in interested_tx {

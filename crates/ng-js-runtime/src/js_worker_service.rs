@@ -42,6 +42,7 @@ pub trait RawJsonDispatcher: Send + Sync {
     ///
     /// - `json` —— JSON-RPC 请求原始字符串
     /// - `buf_size` —— 响应缓冲区大小
+    #[allow(clippy::type_complexity)]
     fn raw_json_request(
         &self,
         json: &str,
@@ -61,6 +62,10 @@ pub fn set_js_worker_service(service: Box<dyn JsWorkerService>) {
 /// 获取全局 `JsWorkerService`。
 ///
 /// 若未初始化则 panic —— 必须先调用 [`set_js_worker_service`]。
+///
+/// # Panics
+///
+/// 若 [`set_js_worker_service`] 未被调用，则 panic。
 pub fn get_js_worker_service() -> &'static dyn JsWorkerService {
     JS_WORKER_SERVICE
         .get()

@@ -126,15 +126,19 @@ async fn connection_manager(
     downlink_tx: broadcast::Sender<Message>,
     connect_timeout: Duration,
 ) {
-    // 临时定义用于检测 JsonRpc 长连接错误
+    /// 临时定义用于检测 `JsonRpc` 长连接错误
     #[derive(Deserialize)]
     struct JsonRpcErrorCheck {
+        /// `JsonRpc` Error 对象（存在则表示请求失败）
         error: Option<JsonRpcErrorDetail>,
     }
 
+    /// `JsonRpc` Error 详情
     #[derive(Deserialize)]
     struct JsonRpcErrorDetail {
+        /// 错误码
         code: i64,
+        /// 错误描述
         message: String,
     }
 

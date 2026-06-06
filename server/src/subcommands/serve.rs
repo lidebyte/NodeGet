@@ -46,6 +46,7 @@ use crate::rpc_timing::RpcTimingMiddleware;
 /// 6. 启动 TCP（可选 TLS）+ Unix Socket 监听
 /// 7. 通过 `tokio::select!` 同时等待：服务器正常退出 或 热重载信号
 /// 8. 退出前刷新 monitoring buffer、关闭 DB registry、清理 Unix socket 文件
+#[allow(clippy::too_many_lines)]
 pub async fn run(config: &ServerConfig) {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -574,6 +575,7 @@ struct JsRouteOutputHeader {
 ///
 /// - `route_name`：JS Worker 路由名称
 /// - req：原始 HTTP 请求
+#[allow(clippy::too_many_lines)]
 async fn handle_js_worker_route(
     route_name: String,
     req: axum::extract::Request,

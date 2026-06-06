@@ -10,6 +10,8 @@
 //! - `auth` 模块 —— 权限校验（通过 `TokenPermissionChecker` trait 注入）
 //! - `rpc_module()` —— 构建并返回合并的 RPC Module（含 `js-worker` 和 `js-result` 两个命名空间）
 
+#![cfg_attr(feature = "server", allow(clippy::too_many_arguments))]
+
 #[cfg(feature = "server")]
 mod auth;
 #[cfg(feature = "server")]

@@ -257,6 +257,12 @@ impl RpcServer for TaskRpcImpl {
         token: String,
         uuid: Uuid,
     ) -> SubscriptionResult {
+        // Task 订阅注册：鉴权 → 权限校验 → 建立会话 → 启动转发协程
+        // 1. 解析 TokenOrAuth 格式，失败则 reject 订阅
+        // 2. 获取 AuthProvider，校验 Task::Listen 权限（scope 为目标 Agent UUID）
+        // 3. 权限通过后 accept sink，向 TaskManager 注册 (uuid, reg_id, tx) 会话
+        // 4. spawn 协程从 mpsc 读取 TaskEvent → 序列化为 RawValue → 推送到 WebSocket sink
+        // 5. 断连或序列化失败时从 TaskManager 移除会话
         let (tk, un) = token_identity(&token);
         let span = tracing::info_span!(target: "task", "task::register_task", token_key = tk, username = un, uuid = %uuid);
         let _guard = span.enter();
@@ -406,6 +412,12 @@ pub struct TaskManager {
     peers: Peers,
     /// 等待结果的 blocking waiter 表
     blocking_waiters: BlockingWaiters,
+}
+
+impl Default for TaskManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TaskManager {

@@ -28,6 +28,7 @@ use tracing::{debug, warn};
 /// 4. 更新 `db_registry` 表中的名称
 /// 5. 若注册表更新失败，回滚文件重命名
 /// 6. 刷新连接池：移除旧连接、创建新连接
+#[allow(clippy::too_many_lines)]
 pub async fn update(token: String, name: String, new_name: String) -> RpcResult<Box<RawValue>> {
     let (tk, un) = token_identity(&token);
 

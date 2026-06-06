@@ -22,6 +22,8 @@ pub async fn check_db_permission(
     db_name: &str,
     permission: DbPermission,
 ) -> anyhow::Result<()> {
+    tracing::trace!(target: "db", db_name = db_name, "数据库权限检查: Db::{permission:?} on {db_name}");
+
     let token_or_auth = TokenOrAuth::from_full_token(token)
         .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
 

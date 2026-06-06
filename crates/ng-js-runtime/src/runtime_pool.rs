@@ -44,6 +44,7 @@ struct RuntimeState {
     /// 当前已加载字节码的哈希值，用于判断是否需要重新加载
     loaded_bytecode_hash: Option<u64>,
     /// 本 Worker 的 heap/stack 是在首次创建时固定的；记录下来以便后续 stats 或日志使用。
+    #[allow(dead_code)]
     limits: RuntimeLimits,
     /// interrupt handler 在 Worker 创建时安装，`kill_flag` 被共享；每次 execute 前
     /// `store(false)`，完成后一并处理。
@@ -245,6 +246,7 @@ impl JsRuntimePool {
     ///
     /// # Errors
     /// 若 Worker 通道已关闭或脚本执行失败，返回错误。
+    #[allow(clippy::too_many_arguments)]
     pub async fn execute_script(
         &self,
         script_name: &str,
@@ -578,7 +580,7 @@ fn worker_loop(
 /// 8. 若被硬超时打断：丢弃整个 RuntimeState（残留未清理的 promise 会影响后续执行）
 /// 9. 等待 `rt.idle()` 确保 `QuickJS` GC 完成（100ms 超时兜底）
 /// 10. drain I/O 清理窗口（10ms），让 hyper 连接 task 处理关闭信号
-#[allow(clippy::future_not_send)]
+#[allow(clippy::future_not_send, clippy::too_many_arguments)]
 async fn execute_on_worker(
     runtime_state: &mut Option<RuntimeState>,
     script_name: &str,
@@ -658,11 +660,9 @@ async fn execute_on_worker(
 
         resolve_invoke_result(&ctx, js_value)
     });
-    let run_outcome: Result<Value, Error> =
-        match tokio::time::timeout(effective_timeout, run_future).await {
-            Ok(result) => result,
-            Err(_) => Err(js_error("js_runner", "JavaScript execution timed out")),
-        };
+    let run_outcome: Result<Value, Error> = tokio::time::timeout(effective_timeout, run_future)
+        .await
+        .unwrap_or_else(|_| Err(js_error("js_runner", "JavaScript execution timed out")));
     let _ = cancel_tx.send(());
 
     // 判定是否是因为硬超时被 interrupt 打断。interrupt 会让 QuickJS 抛不可
