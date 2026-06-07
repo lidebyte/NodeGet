@@ -658,7 +658,21 @@ async fn execute_on_worker(
             invoke_promise.into_future::<JsValue<'_>>().await,
         )?;
 
-        resolve_invoke_result(&ctx, js_value)
+        let result = resolve_invoke_result(&ctx, js_value);
+
+        // 执行完成后清理全局变量，释放 JS 堆内存。
+        // Pool 路径复用 AsyncContext，不清理会导致 params/env 留在 globalThis 上无法 GC。
+        // 注意：不能清理 __nodeget_entry，因为 pool 路径只在 bytecode 变化时重新加载模块，
+        // __nodeget_entry 需要保留供后续执行使用（one-shot 路径可以清理，因为 Runtime 用完即弃）。
+        ctx.eval::<(), _>(
+            "globalThis.__nodeget_run_params = null;\
+             globalThis.__nodeget_env = null;\
+             globalThis.inlineCall = null;\
+             globalThis.__nodeget_inline_caller = null;",
+        )
+        .ok();
+
+        result
     });
     let run_outcome: Result<Value, Error> = tokio::time::timeout(effective_timeout, run_future)
         .await

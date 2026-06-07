@@ -53,5 +53,9 @@ tracing-subscriber = { workspace = true }
 # JS Worker 路由处理
 base64 = { workspace = true }
 
+# 性能分析
+dhat = { workspace = true, optional = true }
+
 [features]
 default = []
+dhat-heap = ["dhat"]
