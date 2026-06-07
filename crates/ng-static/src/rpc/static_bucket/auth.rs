@@ -2,7 +2,6 @@
 //!
 //! `list` RPC 要求 SuperToken 权限，此处封装校验逻辑。
 
-use crate::auth::get_token_checker;
 use ng_core::error::NodegetError;
 use ng_core::permission::token_auth::TokenOrAuth;
 use tracing::{debug, trace, warn};
@@ -18,7 +17,10 @@ pub async fn check_super_token(token: &str) -> anyhow::Result<bool> {
         warn!(target: "static_bucket", "权限拒绝: Token 解析失败: {e}");
         NodegetError::ParseError(format!("Failed to parse token: {e}"))
     })?;
-    let result = get_token_checker()
+    let checker = ng_core::permission::permission_checker::get_permission_checker().ok_or_else(|| {
+        NodegetError::ConfigNotFound("PermissionChecker not initialized".to_owned())
+    })?;
+    let result = checker
         .check_super_token(&token_or_auth)
         .await
         .map_err(|e| {

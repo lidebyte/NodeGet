@@ -11,10 +11,10 @@ use crate::rpc::agent::delete_common::{
 use jsonrpsee::core::RpcResult;
 use ng_core::error::NodegetError;
 use ng_core::permission::data_structure::{DynamicMonitoringSummary, Permission};
+use ng_core::permission::permission_checker::require_permission_checker;
 use ng_core::permission::token_auth::TokenOrAuth;
 use ng_db::entity::dynamic_monitoring_summary;
 use ng_infra::server::RpcHelper;
-use ng_token::check_token_limit;
 use sea_orm::{ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde_json::value::RawValue;
 use tracing::{debug, error, warn};
@@ -41,7 +41,8 @@ pub async fn delete_dynamic_summary(
         debug!(target: "monitoring", conditions_count = conditions.len(), "delete_dynamic_summary: request received");
 
         let scopes = scopes_from_conditions(&conditions);
-        let is_allowed = check_token_limit(
+        let checker = require_permission_checker()?;
+        let is_allowed = checker.check_token_limit(
             &token_or_auth,
             scopes,
             vec![Permission::DynamicMonitoringSummary(

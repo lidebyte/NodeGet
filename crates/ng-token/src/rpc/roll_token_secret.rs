@@ -69,7 +69,7 @@ pub async fn roll_token_secret(token: String, target_token: String) -> RpcResult
             "key": updated.token_key,
             "secret": new_secret
         }))
-        .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
+        .map_err(|e| NodegetError::from(e).into())
     };
 
     // 统一错误转换：anyhow → NodegetError → JSON-RPC ErrorObject

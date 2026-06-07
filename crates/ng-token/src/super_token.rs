@@ -164,7 +164,9 @@ pub async fn roll_super_token() -> anyhow::Result<(String, String)> {
 /// - 返回：`true` 表示为超级令牌，`false` 表示不是
 /// - 错误：缓存中缺少超级令牌记录
 pub async fn check_super_token(token_or_auth: &TokenOrAuth) -> anyhow::Result<bool> {
-    let cache = TokenCache::global();
+    let cache = TokenCache::global().ok_or_else(|| {
+        NodegetError::ConfigNotFound("TokenCache not initialized".to_owned())
+    })?;
     let super_entry = cache.get_super_token().ok_or_else(|| {
         NodegetError::NotFound("Super Token record (ID 1) not found in cache".to_owned())
     })?;

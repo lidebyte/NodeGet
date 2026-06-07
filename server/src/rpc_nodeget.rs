@@ -359,11 +359,11 @@ impl RpcServer for NodegetServerRpcImpl {
         async {
             let process_logic: anyhow::Result<()> = async {
                 let token_or_auth = TokenOrAuth::from_full_token(&token)
-                    .map_err(|e| ng_core::error::NodegetError::ParseError(format!("Failed to parse token: {e}")))?;
+                    .map_err(ng_core::error::NodegetError::ParseError)?;
 
                 let is_super = check_super_token(&token_or_auth)
                     .await
-                    .map_err(|e| ng_core::error::NodegetError::PermissionDenied(format!("{e}")))?;
+                    .map_err(|e| ng_core::error::NodegetError::PermissionDenied(e.to_string()))?;
 
                 if !is_super {
                     return Err(ng_core::error::NodegetError::PermissionDenied(

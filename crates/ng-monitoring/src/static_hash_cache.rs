@@ -57,15 +57,9 @@ impl StaticHashCache {
         });
     }
 
-    /// 获取全局单例引用，未初始化时 panic。
-    ///
-    /// # Panics
-    ///
-    /// 若全局 `StaticHashCache` 未初始化（即未调用 `init()`）则 panic。
-    pub fn global() -> &'static Self {
-        CACHE
-            .get()
-            .expect("StaticHashCache not initialized — call StaticHashCache::init() first")
+    /// 获取全局单例引用，未初始化时返回 `None`。
+    pub fn global() -> Option<&'static Self> {
+        CACHE.get()
     }
 
     /// 判断指定设备的静态数据哈希是否与缓存中的相同（即数据重复）。

@@ -7,7 +7,7 @@
 //! - `service` 模块 —— 核心 JS Worker 服务（入队执行、内联调用、记录结果）
 //! - `js_worker` RPC 命名空间 —— create、read、update、delete、run、get_rt_pool、list_all_js_worker
 //! - `js_result` RPC 命名空间 —— query、delete
-//! - `auth` 模块 —— 权限校验（通过 `TokenPermissionChecker` trait 注入）
+//! - `auth` 模块 —— 权限校验辅助函数
 //! - `rpc_module()` —— 构建并返回合并的 RPC Module（含 `js-worker` 和 `js-result` 两个命名空间）
 
 #![cfg_attr(feature = "server", allow(clippy::too_many_arguments))]
@@ -20,9 +20,6 @@ pub mod js_result;
 pub mod js_worker;
 #[cfg(feature = "server")]
 pub mod service;
-
-#[cfg(feature = "server")]
-pub use auth::{TokenPermissionChecker, set_token_checker};
 
 #[cfg(feature = "server")]
 pub use service::{

@@ -60,7 +60,7 @@ pub struct DbRegistryManager {
 fn now_ms_u64() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .expect("System time is before UNIX epoch")
         .as_millis() as u64
 }
 
@@ -101,16 +101,12 @@ impl DbRegistryManager {
             *mgr_inner.cleanup_handle.lock().unwrap() = Some(handle);
             let _ = MGR.set(mgr_inner);
         });
-        Arc::clone(MGR.get().expect("DbRegistryManager not initialized"))
+        Arc::clone(MGR.get().expect("DbRegistryManager just set but get() returned None"))
     }
 
-    /// 获取全局单例引用，初始化前调用会 panic
-    ///
-    /// # Panics
-    ///
-    /// 若 `DbRegistryManager` 尚未初始化（即 `init` 未被调用）时会 panic
-    pub fn global() -> &'static Arc<Self> {
-        MGR.get().expect("DbRegistryManager not initialized")
+    /// 获取全局单例引用，初始化前调用返回 `None`
+    pub fn global() -> Option<&'static Arc<Self>> {
+        MGR.get()
     }
 
     /// 从主库 `db_registry` 表恢复已有连接到内存池

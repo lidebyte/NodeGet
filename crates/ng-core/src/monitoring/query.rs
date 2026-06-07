@@ -89,3 +89,138 @@ impl DynamicDataQueryField {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{DynamicDataQueryField, StaticDataQueryField};
+
+    // ── StaticDataQueryField ────────────────────────────────────────
+
+    #[test]
+    fn static_field_cpu() {
+        assert_eq!(StaticDataQueryField::Cpu.column_name(), "cpu_data");
+        assert_eq!(StaticDataQueryField::Cpu.json_key(), "cpu");
+    }
+
+    #[test]
+    fn static_field_system() {
+        assert_eq!(StaticDataQueryField::System.column_name(), "system_data");
+        assert_eq!(StaticDataQueryField::System.json_key(), "system");
+    }
+
+    #[test]
+    fn static_field_gpu() {
+        assert_eq!(StaticDataQueryField::Gpu.column_name(), "gpu_data");
+        assert_eq!(StaticDataQueryField::Gpu.json_key(), "gpu");
+    }
+
+    #[test]
+    fn static_field_eq() {
+        assert_eq!(StaticDataQueryField::Cpu, StaticDataQueryField::Cpu);
+        assert_ne!(StaticDataQueryField::Cpu, StaticDataQueryField::Gpu);
+    }
+
+    #[test]
+    fn static_field_clone_copy() {
+        let a = StaticDataQueryField::Cpu;
+        let b = a; // Copy
+        let c = a; // Copy again
+        assert_eq!(a, b);
+        assert_eq!(a, c);
+    }
+
+    #[test]
+    fn static_field_serde_round_trip() {
+        for field in [StaticDataQueryField::Cpu, StaticDataQueryField::System, StaticDataQueryField::Gpu] {
+            let json = serde_json::to_string(&field).unwrap();
+            let de: StaticDataQueryField = serde_json::from_str(&json).unwrap();
+            assert_eq!(field, de);
+        }
+    }
+
+    #[test]
+    fn static_field_debug() {
+        let d = format!("{:?}", StaticDataQueryField::Cpu);
+        assert_eq!(d, "Cpu");
+    }
+
+    // ── DynamicDataQueryField ───────────────────────────────────────
+
+    #[test]
+    fn dynamic_field_cpu() {
+        assert_eq!(DynamicDataQueryField::Cpu.column_name(), "cpu_data");
+        assert_eq!(DynamicDataQueryField::Cpu.json_key(), "cpu");
+    }
+
+    #[test]
+    fn dynamic_field_ram() {
+        assert_eq!(DynamicDataQueryField::Ram.column_name(), "ram_data");
+        assert_eq!(DynamicDataQueryField::Ram.json_key(), "ram");
+    }
+
+    #[test]
+    fn dynamic_field_load() {
+        assert_eq!(DynamicDataQueryField::Load.column_name(), "load_data");
+        assert_eq!(DynamicDataQueryField::Load.json_key(), "load");
+    }
+
+    #[test]
+    fn dynamic_field_system() {
+        assert_eq!(DynamicDataQueryField::System.column_name(), "system_data");
+        assert_eq!(DynamicDataQueryField::System.json_key(), "system");
+    }
+
+    #[test]
+    fn dynamic_field_disk() {
+        assert_eq!(DynamicDataQueryField::Disk.column_name(), "disk_data");
+        assert_eq!(DynamicDataQueryField::Disk.json_key(), "disk");
+    }
+
+    #[test]
+    fn dynamic_field_network() {
+        assert_eq!(DynamicDataQueryField::Network.column_name(), "network_data");
+        assert_eq!(DynamicDataQueryField::Network.json_key(), "network");
+    }
+
+    #[test]
+    fn dynamic_field_gpu() {
+        assert_eq!(DynamicDataQueryField::Gpu.column_name(), "gpu_data");
+        assert_eq!(DynamicDataQueryField::Gpu.json_key(), "gpu");
+    }
+
+    #[test]
+    fn dynamic_field_eq() {
+        assert_eq!(DynamicDataQueryField::Ram, DynamicDataQueryField::Ram);
+        assert_ne!(DynamicDataQueryField::Ram, DynamicDataQueryField::Cpu);
+    }
+
+    #[test]
+    fn dynamic_field_clone_copy() {
+        let a = DynamicDataQueryField::Disk;
+        let b = a;
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn dynamic_field_serde_round_trip() {
+        for field in [
+            DynamicDataQueryField::Cpu,
+            DynamicDataQueryField::Ram,
+            DynamicDataQueryField::Load,
+            DynamicDataQueryField::System,
+            DynamicDataQueryField::Disk,
+            DynamicDataQueryField::Network,
+            DynamicDataQueryField::Gpu,
+        ] {
+            let json = serde_json::to_string(&field).unwrap();
+            let de: DynamicDataQueryField = serde_json::from_str(&json).unwrap();
+            assert_eq!(field, de);
+        }
+    }
+
+    #[test]
+    fn dynamic_field_debug() {
+        let d = format!("{:?}", DynamicDataQueryField::Ram);
+        assert_eq!(d, "Ram");
+    }
+}

@@ -96,3 +96,67 @@ impl Display for NodeGetVersion {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::NodeGetVersion;
+
+    #[test]
+    fn nodeget_version_get_returns_static() {
+        let v1 = NodeGetVersion::get();
+        let v2 = NodeGetVersion::get();
+        // Same static reference
+        assert!(std::ptr::eq(v1, v2));
+    }
+
+    #[test]
+    fn nodeget_version_binary_type_default() {
+        // binary_type depends on which feature is active:
+        // for-server -> "Server", for-agent -> "Agent", neither -> "Unknown"
+        // Under `cargo test --workspace`, Cargo unifies features so for-server may be enabled.
+        let v = NodeGetVersion::get();
+        let expected = if cfg!(feature = "for-server") {
+            "Server"
+        } else if cfg!(feature = "for-agent") {
+            "Agent"
+        } else {
+            "Unknown"
+        };
+        assert_eq!(v.binary_type, expected);
+    }
+
+    #[test]
+    fn nodeget_version_display_contains_fields() {
+        let v = NodeGetVersion::get();
+        let display = format!("{v}");
+        let expected_prefix = format!("NodeGet {} Version:", v.binary_type);
+        assert!(display.starts_with(&expected_prefix));
+        assert!(display.contains("Git Branch:"));
+        assert!(display.contains("Commit SHA:"));
+        assert!(display.contains("Target Triple:"));
+        assert!(display.contains("Rustc Channel:"));
+    }
+
+    #[test]
+    fn nodeget_version_debug() {
+        let v = NodeGetVersion::get();
+        let debug = format!("{v:?}");
+        assert!(debug.contains("NodeGetVersion"));
+        assert!(debug.contains("binary_type"));
+    }
+
+    #[test]
+    fn nodeget_version_clone_eq() {
+        let v = NodeGetVersion::get();
+        let cloned = v.clone();
+        assert_eq!(*v, cloned);
+    }
+
+    #[test]
+    fn nodeget_version_serde_round_trip() {
+        let v = NodeGetVersion::get();
+        let json = serde_json::to_string(v).unwrap();
+        let de: NodeGetVersion = serde_json::from_str(&json).unwrap();
+        assert_eq!(*v, de);
+    }
+}

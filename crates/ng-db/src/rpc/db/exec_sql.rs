@@ -35,7 +35,9 @@ pub async fn exec_sql_inner(
 ) -> anyhow::Result<Box<RawValue>> {
     check_db_permission(token, db_name, DbPermission::ExecSql).await?;
 
-    let mgr = DbRegistryManager::global();
+    let mgr = DbRegistryManager::global().ok_or_else(|| {
+        NodegetError::ConfigNotFound("DbRegistryManager not initialized".to_owned())
+    })?;
     let db_conn = mgr
         .get_conn(db_name)
         .await

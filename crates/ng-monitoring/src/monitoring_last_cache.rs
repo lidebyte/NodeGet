@@ -38,15 +38,9 @@ impl MonitoringLastCache {
         });
     }
 
-    /// 获取全局单例引用，未初始化时 panic。
-    ///
-    /// # Panics
-    ///
-    /// 若全局 `MonitoringLastCache` 未初始化（即未调用 `init()`）则 panic。
-    pub fn global() -> &'static Self {
-        CACHE
-            .get()
-            .expect("MonitoringLastCache not initialized — call MonitoringLastCache::init() first")
+    /// 获取全局单例引用，未初始化时返回 `None`。
+    pub fn global() -> Option<&'static Self> {
+        CACHE.get()
     }
 
     /// 直接用预构建的 JSON 值更新静态最新缓存。

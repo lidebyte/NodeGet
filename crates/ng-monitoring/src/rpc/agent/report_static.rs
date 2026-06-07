@@ -69,7 +69,7 @@ pub async fn report_static(
         }
         debug!(target: "monitoring", agent_uuid = %agent_uuid, "report_static: permission check passed");
 
-        let uuid_id = MonitoringUuidCache::global()
+        let uuid_id = MonitoringUuidCache::global().ok_or_else(|| NodegetError::ConfigNotFound("MonitoringUuidCache not initialized".to_owned()))?
             .get_or_insert(agent_uuid)
             .await
             .map_err(|e| NodegetError::DatabaseError(format!("UUID cache error: {e}")))?;
@@ -97,10 +97,10 @@ pub async fn report_static(
         cache_obj.insert("gpu".to_owned(), gpu_val.clone());
         let cache_value = serde_json::Value::Object(cache_obj);
 
-        MonitoringLastCache::global().update_static_prebuilt(agent_uuid, cache_value);
+        MonitoringLastCache::global().ok_or_else(|| NodegetError::ConfigNotFound("MonitoringLastCache not initialized".to_owned()))?.update_static_prebuilt(agent_uuid, cache_value);
 
         // Fast path: check in-memory hash cache first to avoid DB query
-        let hash_cache = StaticHashCache::global();
+        let hash_cache = StaticHashCache::global().ok_or_else(|| NodegetError::ConfigNotFound("StaticHashCache not initialized".to_owned()))?;
         if hash_cache.is_duplicate(uuid_id, &static_monitoring_data.data_hash) {
             debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Static data hash cached as duplicate, skipping");
             return RawValue::from_string(
@@ -144,7 +144,7 @@ pub async fn report_static(
 
         debug!(target: "monitoring", agent_uuid = %static_monitoring_data.uuid, "Received static data, sending to buffer");
 
-        monitoring_buffer::get().static_mon.send(in_data);
+        monitoring_buffer::get().ok_or_else(|| NodegetError::ConfigNotFound("MonitoringBuffers not initialized".to_owned()))?.static_mon.send(in_data);
 
         hash_cache.update(uuid_id, &data_hash);
 

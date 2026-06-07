@@ -362,3 +362,90 @@ fn hex_nibble(b: u8) -> Option<u8> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── hex_nibble ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_hex_nibble_digits() {
+        assert_eq!(hex_nibble(b'0'), Some(0));
+        assert_eq!(hex_nibble(b'9'), Some(9));
+    }
+
+    #[test]
+    fn test_hex_nibble_lowercase() {
+        assert_eq!(hex_nibble(b'a'), Some(10));
+        assert_eq!(hex_nibble(b'f'), Some(15));
+    }
+
+    #[test]
+    fn test_hex_nibble_uppercase() {
+        assert_eq!(hex_nibble(b'A'), Some(10));
+        assert_eq!(hex_nibble(b'F'), Some(15));
+    }
+
+    #[test]
+    fn test_hex_nibble_invalid() {
+        assert_eq!(hex_nibble(b'g'), None);
+        assert_eq!(hex_nibble(b'G'), None);
+        assert_eq!(hex_nibble(b' '), None);
+        assert_eq!(hex_nibble(b'z'), None);
+    }
+
+    // ── hex_to_bytes ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_hex_to_bytes_valid_64_chars() {
+        let hex_64 = "0123456789abcdef".repeat(4); // 64 chars
+        let result = hex_to_bytes(&hex_64);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().len(), 32);
+    }
+
+    #[test]
+    fn test_hex_to_bytes_all_zeros() {
+        let hex_64 = "0".repeat(64);
+        let result = hex_to_bytes(&hex_64).unwrap();
+        assert_eq!(result, [0u8; 32]);
+    }
+
+    #[test]
+    fn test_hex_to_bytes_all_f() {
+        let hex_64 = "f".repeat(64);
+        let result = hex_to_bytes(&hex_64).unwrap();
+        assert_eq!(result, [0xFFu8; 32]);
+    }
+
+    #[test]
+    fn test_hex_to_bytes_uppercase() {
+        let hex_64 = "A".repeat(64);
+        let result = hex_to_bytes(&hex_64).unwrap();
+        assert_eq!(result, [0xAAu8; 32]);
+    }
+
+    #[test]
+    fn test_hex_to_bytes_wrong_length() {
+        assert!(hex_to_bytes("abc").is_none()); // too short
+        assert!(hex_to_bytes(&"0".repeat(63)).is_none()); // 63 chars
+        assert!(hex_to_bytes(&"0".repeat(65)).is_none()); // 65 chars
+    }
+
+    #[test]
+    fn test_hex_to_bytes_invalid_chars() {
+        let mut bad = "0".repeat(64);
+        bad.replace_range(0..1, "g"); // 'g' is not a hex digit
+        assert!(hex_to_bytes(&bad).is_none());
+    }
+
+    #[test]
+    fn test_hex_to_bytes_roundtrip_with_hash_to_bytes() {
+        use crate::hash_to_bytes;
+        let bytes = hash_to_bytes("roundtrip_test");
+        let hex_str = hex::encode(bytes);
+        let recovered = hex_to_bytes(&hex_str).unwrap();
+        assert_eq!(bytes, recovered);
+    }
+}

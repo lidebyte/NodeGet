@@ -48,7 +48,7 @@ pub async fn create(
             "key": key,
             "secret": secret
         }))
-        .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
+        .map_err(|e| NodegetError::from(e).into())
     };
 
     // 统一错误转换：anyhow → NodegetError → JSON-RPC ErrorObject

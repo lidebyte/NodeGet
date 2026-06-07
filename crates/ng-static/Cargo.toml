@@ -23,6 +23,7 @@ server = [
     "ng-config/server",
     "ng-infra/server",
     "ng-db/server",
+    "ng-core/for-server",
 ]
 
 [dependencies]

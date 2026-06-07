@@ -49,7 +49,9 @@ pub async fn list_all_tokens(token: String) -> RpcResult<Box<RawValue>> {
             .into());
         }
 
-        let cached_tokens = TokenCache::global().get_all();
+        let cached_tokens = TokenCache::global()
+            .ok_or_else(|| NodegetError::ConfigNotFound("TokenCache not initialized".to_owned()))?
+            .get_all();
 
         let tokens: Vec<Token> = cached_tokens
             .iter()
@@ -67,7 +69,7 @@ pub async fn list_all_tokens(token: String) -> RpcResult<Box<RawValue>> {
 
         debug!(target: "token", token_count = response.tokens.len(), "list_all_tokens completed");
         serde_json::value::to_raw_value(&response)
-            .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
+            .map_err(|e| NodegetError::from(e).into())
     };
 
     // 统一错误转换：anyhow → NodegetError → JSON-RPC ErrorObject

@@ -37,7 +37,9 @@ pub async fn get(token: String) -> RpcResult<Box<RawValue>> {
             .await
             .map_err(|e| NodegetError::PermissionDenied(format!("{e}")))?;
 
-        let cache = CrontabCache::global();
+        let cache = CrontabCache::global().ok_or_else(|| {
+            NodegetError::ConfigNotFound("CrontabCache not initialized".to_owned())
+        })?;
         let entries = cache.get_all_entries();
 
         // Super-token 直接返回全部条目，无需权限过滤

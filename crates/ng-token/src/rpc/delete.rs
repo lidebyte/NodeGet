@@ -149,7 +149,7 @@ pub async fn delete(token: String, target_token: String) -> RpcResult<Box<RawVal
                 "rows_affected": delete_result_by_key.rows_affected,
                 "matched_by": "token_key"
             }))
-                .map_err(|e| NodegetError::SerializationError(e.to_string()))?
+                .map_err(NodegetError::from)?
         } else {
             let delete_result_by_username =
                 delete_token_by_username(target_token_to_delete.clone())
@@ -163,7 +163,7 @@ pub async fn delete(token: String, target_token: String) -> RpcResult<Box<RawVal
                     "rows_affected": delete_result_by_username.rows_affected,
                     "matched_by": "username"
                 }))
-                    .map_err(|e| NodegetError::SerializationError(e.to_string()))?
+                    .map_err(NodegetError::from)?
             } else {
                 return Err(NodegetError::NotFound(format!(
                     "Token not found by key/username: {target_token_to_delete}"

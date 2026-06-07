@@ -41,7 +41,9 @@ pub async fn delete(token: String, name: String) -> RpcResult<Box<RawValue>> {
         model.ok_or_else(|| NodegetError::NotFound(format!("Database '{name}' not found")))?;
 
         // remove_conn 内部处理：移除连接池条目、删除注册表行、清理 .db/-wal/-shm 文件
-        let mgr = DbRegistryManager::global();
+        let mgr = DbRegistryManager::global().ok_or_else(|| {
+            NodegetError::ConfigNotFound("DbRegistryManager not initialized".to_owned())
+        })?;
         mgr.remove_conn(&name)
             .await
             .map_err(|e| NodegetError::DatabaseError(format!("Failed to delete database: {e}")))?;

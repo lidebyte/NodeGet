@@ -668,9 +668,11 @@ pub struct DynamicGpuData {
 mod tests {
     use super::{
         DiskKind, DynamicCPUData, DynamicLoadData, DynamicMonitoringData,
-        DynamicMonitoringSummaryData, DynamicNetworkData, DynamicPerDiskData, DynamicRamData,
-        DynamicSystemData, is_excluded_file_system, is_excluded_mount, is_excluded_summary_disk,
-        scale_cpu_percent_to_i16, scale_load_to_i16,
+        DynamicMonitoringSummaryData, DynamicNetworkData, DynamicPerDiskData,
+        DynamicPerNetworkInterfaceData, DynamicRamData, DynamicSystemData,
+        StaticCPUData, StaticGpuData, StaticMonitoringData, StaticSystemData,
+        is_excluded_file_system, is_excluded_mount, is_excluded_summary_disk,
+        is_virtual_interface, scale_cpu_percent_to_i16, scale_load_to_i16,
     };
 
     fn disk(mount_point: &str, file_system: &str, total_space: u64) -> DynamicPerDiskData {
@@ -911,5 +913,252 @@ mod tests {
 
         assert_eq!(summary.total_space, Some(50));
         assert_eq!(summary.available_space, Some(25));
+    }
+
+    // ── Additional tests ────────────────────────────────────────────────
+
+    #[test]
+    fn is_virtual_interface_common_prefixes() {
+        assert!(is_virtual_interface("br0"));
+        assert!(is_virtual_interface("cni0"));
+        assert!(is_virtual_interface("docker0"));
+        assert!(is_virtual_interface("podman0"));
+        assert!(is_virtual_interface("lo"));
+        assert!(is_virtual_interface("veth12345"));
+        assert!(is_virtual_interface("virbr0"));
+        assert!(is_virtual_interface("vmbr0"));
+        assert!(is_virtual_interface("tap0"));
+        assert!(is_virtual_interface("fwbr0"));
+        assert!(is_virtual_interface("fwpr0"));
+    }
+
+    #[test]
+    fn is_virtual_interface_physical_not_matched() {
+        assert!(!is_virtual_interface("eth0"));
+        assert!(!is_virtual_interface("ens192"));
+        assert!(!is_virtual_interface("en0"));
+        assert!(!is_virtual_interface("wlan0"));
+    }
+
+    #[test]
+    fn is_excluded_mount_exact_and_subpath() {
+        assert!(is_excluded_mount("/dev"));
+        assert!(is_excluded_mount("/dev/sda1"));
+        assert!(is_excluded_mount("/proc"));
+        assert!(is_excluded_mount("/sys"));
+        assert!(is_excluded_mount("/sys/fs/cgroup"));
+        assert!(!is_excluded_mount("/dev-home"));
+    }
+
+    #[test]
+    fn is_excluded_file_system_case_insensitive() {
+        assert!(is_excluded_file_system("TMPFS"));
+        assert!(is_excluded_file_system("Overlay"));
+        assert!(is_excluded_file_system("cgroup2"));
+        assert!(!is_excluded_file_system("btrfs"));
+        assert!(!is_excluded_file_system("ext4"));
+    }
+
+    #[test]
+    fn compute_data_hash_deterministic() {
+        let cpu = StaticCPUData {
+            physical_cores: 4,
+            logical_cores: 8,
+            per_core: vec![],
+        };
+        let system = StaticSystemData {
+            system_name: "Linux".to_owned(),
+            system_kernel: "5.15".to_owned(),
+            system_kernel_version: "5.15.0".to_owned(),
+            system_os_version: "22.04".to_owned(),
+            system_os_long_version: "Ubuntu 22.04 LTS".to_owned(),
+            distribution_id: "ubuntu".to_owned(),
+            system_host_name: "test".to_owned(),
+            arch: "x86_64".to_owned(),
+            virtualization: "kvm".to_owned(),
+        };
+        let gpu: Vec<StaticGpuData> = vec![];
+
+        let hash1 = StaticMonitoringData::compute_data_hash(&cpu, &system, &gpu).unwrap();
+        let hash2 = StaticMonitoringData::compute_data_hash(&cpu, &system, &gpu).unwrap();
+        assert_eq!(hash1, hash2);
+        assert_eq!(hash1.len(), 16);
+    }
+
+    #[test]
+    fn compute_data_hash_differs_on_content_change() {
+        let cpu = StaticCPUData {
+            physical_cores: 4,
+            logical_cores: 8,
+            per_core: vec![],
+        };
+        let system_a = StaticSystemData {
+            system_name: "Linux".to_owned(),
+            system_kernel: "5.15".to_owned(),
+            system_kernel_version: "5.15.0".to_owned(),
+            system_os_version: "22.04".to_owned(),
+            system_os_long_version: "Ubuntu 22.04 LTS".to_owned(),
+            distribution_id: "ubuntu".to_owned(),
+            system_host_name: "host-a".to_owned(),
+            arch: "x86_64".to_owned(),
+            virtualization: "kvm".to_owned(),
+        };
+        let system_b = StaticSystemData {
+            system_host_name: "host-b".to_owned(),
+            ..system_a.clone()
+        };
+
+        let hash_a = StaticMonitoringData::compute_data_hash(&cpu, &system_a, &[]).unwrap();
+        let hash_b = StaticMonitoringData::compute_data_hash(&cpu, &system_b, &[]).unwrap();
+        assert_ne!(hash_a, hash_b);
+    }
+
+    #[test]
+    fn dynamic_monitoring_data_serde_roundtrip() {
+        let data = monitoring_data(vec![]);
+        let json = serde_json::to_string(&data).unwrap();
+        let parsed: DynamicMonitoringData = serde_json::from_str(&json).unwrap();
+        assert_eq!(data.uuid, parsed.uuid);
+        assert_eq!(data.time, parsed.time);
+    }
+
+    #[test]
+    fn dynamic_monitoring_summary_data_serde_roundtrip() {
+        let summary = DynamicMonitoringSummaryData {
+            uuid: uuid::Uuid::nil(),
+            time: 12345,
+            cpu_usage: Some(534),
+            gpu_usage: Some(80),
+            used_swap: Some(0),
+            total_swap: Some(0),
+            used_memory: Some(8_589_934_592),
+            total_memory: Some(17_179_869_184),
+            available_memory: Some(8_589_934_592),
+            load_one: Some(15),
+            load_five: Some(10),
+            load_fifteen: Some(5),
+            uptime: Some(3600),
+            boot_time: Some(1_700_000_000),
+            process_count: Some(200),
+            total_space: Some(500_000_000_000),
+            available_space: Some(250_000_000_000),
+            read_speed: Some(10_000_000),
+            write_speed: Some(5_000_000),
+            tcp_connections: Some(50),
+            udp_connections: Some(10),
+            total_received: Some(1_000_000_000),
+            total_transmitted: Some(500_000_000),
+            transmit_speed: Some(1_000_000),
+            receive_speed: Some(2_000_000),
+        };
+        let json = serde_json::to_string(&summary).unwrap();
+        let parsed: DynamicMonitoringSummaryData = serde_json::from_str(&json).unwrap();
+        assert_eq!(summary.uuid, parsed.uuid);
+        assert_eq!(summary.cpu_usage, parsed.cpu_usage);
+        assert_eq!(summary.used_memory, parsed.used_memory);
+    }
+
+    #[test]
+    fn disk_kind_serde_roundtrip() {
+        let variants = [
+            (DiskKind::Hdd, "Hdd"),
+            (DiskKind::Ssd, "Ssd"),
+            (DiskKind::Unknown, "Unknown"),
+        ];
+        for (kind, name) in variants {
+            let json = serde_json::to_string(&kind).unwrap();
+            assert!(json.contains(name));
+            let parsed: DiskKind = serde_json::from_str(&json).unwrap();
+            let parsed_json = serde_json::to_string(&parsed).unwrap();
+            assert_eq!(json, parsed_json);
+        }
+    }
+
+    #[test]
+    fn from_trait_uses_default_exclusion() {
+        let data = monitoring_data(vec![
+            disk("/", "ext4", 100),
+            disk("/run", "tmpfs", 50),
+        ]);
+        // From trait = from_with_filter(None, None)
+        let summary_from = DynamicMonitoringSummaryData::from(&data);
+        let summary_with_filter = DynamicMonitoringSummaryData::from_with_filter(&data, None, None);
+        assert_eq!(summary_from.total_space, summary_with_filter.total_space);
+        assert_eq!(summary_from.available_space, summary_with_filter.available_space);
+    }
+
+    #[test]
+    fn network_interface_filter_selective() {
+        let mut data = monitoring_data(vec![]);
+        data.network = DynamicNetworkData {
+            interfaces: vec![
+                DynamicPerNetworkInterfaceData {
+                    interface_name: "eth0".to_owned(),
+                    total_received: 1000,
+                    total_transmitted: 500,
+                    receive_speed: 100,
+                    transmit_speed: 50,
+                },
+                DynamicPerNetworkInterfaceData {
+                    interface_name: "lo".to_owned(),
+                    total_received: 200,
+                    total_transmitted: 200,
+                    receive_speed: 0,
+                    transmit_speed: 0,
+                },
+            ],
+            udp_connections: 0,
+            tcp_connections: 0,
+        };
+
+        // Default filter should exclude "lo" (virtual interface)
+        let summary = DynamicMonitoringSummaryData::from_with_filter(&data, None, None);
+        assert_eq!(summary.total_received, Some(1000));
+        assert_eq!(summary.total_transmitted, Some(500));
+
+        // Explicit filter including lo
+        let filter = vec!["lo".to_owned()];
+        let summary = DynamicMonitoringSummaryData::from_with_filter(&data, None, Some(&filter));
+        assert_eq!(summary.total_received, Some(200));
+        assert_eq!(summary.total_transmitted, Some(200));
+
+        // Empty filter falls back to default
+        let empty: Vec<String> = vec![];
+        let summary = DynamicMonitoringSummaryData::from_with_filter(&data, None, Some(&empty));
+        assert_eq!(summary.total_received, Some(1000));
+    }
+
+    #[test]
+    fn scale_cpu_percent_zero_and_max() {
+        assert_eq!(scale_cpu_percent_to_i16(0.0), Some(0));
+        assert_eq!(scale_cpu_percent_to_i16(100.0), Some(1000));
+    }
+
+    #[test]
+    fn scale_load_zero_and_small() {
+        assert_eq!(scale_load_to_i16(0.0), Some(0));
+        assert_eq!(scale_load_to_i16(0.1), Some(1));
+    }
+
+    #[test]
+    fn u64_to_i64_saturating_normal() {
+        assert_eq!(super::u64_to_i64_saturating(0), 0);
+        assert_eq!(super::u64_to_i64_saturating(100), 100);
+    }
+
+    #[test]
+    fn u64_to_i64_saturating_overflow() {
+        assert_eq!(super::u64_to_i64_saturating(u64::MAX), i64::MAX);
+    }
+
+    #[test]
+    fn u64_to_i32_saturating_normal() {
+        assert_eq!(super::u64_to_i32_saturating(0), 0);
+        assert_eq!(super::u64_to_i32_saturating(100), 100);
+    }
+
+    #[test]
+    fn u64_to_i32_saturating_overflow() {
+        assert_eq!(super::u64_to_i32_saturating(u64::MAX), i32::MAX);
     }
 }

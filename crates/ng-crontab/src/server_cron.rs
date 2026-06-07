@@ -118,7 +118,10 @@ async fn process_crontab() {
         return;
     };
 
-    let cache = CrontabCache::global();
+    let Some(cache) = CrontabCache::global() else {
+        error!(target: "crontab", "CrontabCache not initialized");
+        return;
+    };
     let jobs = cache.get_enabled_entries();
 
     let now = Utc::now();

@@ -8,15 +8,15 @@
 //! - `task_query` — 查询任务记录
 //! - `task_delete` — 删除任务记录
 //!
-//! 同时定义 `TaskAuthProvider` 和 `MonitoringUuidProvider` trait，
-//! 由服务器二进制在启动时注入具体实现。
+//! 权限校验委托至全局 `ng_core::permission::permission_checker::PermissionChecker`。
+//! `MonitoringUuidProvider` trait 仍由服务器二进制注入。
 
 use jsonrpsee::PendingSubscriptionSink;
 use jsonrpsee::SubscriptionMessage;
 use jsonrpsee::core::{JsonRawValue, RpcResult, SubscriptionResult};
 use jsonrpsee::proc_macros::rpc;
 use ng_core::error::NodegetError;
-use ng_core::permission::data_structure::{Permission, Scope, Task, Token};
+use ng_core::permission::data_structure::{Permission, Scope, Task};
 use ng_core::permission::token_auth::TokenOrAuth;
 use ng_core::utils::JsonError;
 use ng_db::rpc::{RpcHelper, token_identity};
@@ -33,46 +33,6 @@ mod create_task_blocking;
 mod delete;
 mod query;
 mod upload_task_result;
-
-// ── Auth provider trait ────────────────────────────────────────
-
-/// 任务鉴权 trait，由服务器二进制实现并注入
-///
-/// 提供 Token 权限检查、SuperToken 判断和 Token 元数据获取能力
-pub trait TaskAuthProvider: Send + Sync + 'static {
-    /// 检查 Token/Auth 是否满足给定的 scope 和 permission 约束
-    fn check_token_limit(
-        &self,
-        token_or_auth: &TokenOrAuth,
-        scopes: Vec<Scope>,
-        permissions: Vec<Permission>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<bool>> + Send>>;
-
-    /// 检查 Token/Auth 是否为 SuperToken
-    fn check_super_token(
-        &self,
-        token_or_auth: &TokenOrAuth,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<bool>> + Send>>;
-
-    /// 获取 Token/Auth 的元数据
-    fn get_token(
-        &self,
-        token_or_auth: &TokenOrAuth,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<Token>> + Send>>;
-}
-
-/// 全局 AuthProvider 单例，由服务器启动时通过 `set_auth_provider` 注入
-static AUTH_PROVIDER: OnceLock<Arc<dyn TaskAuthProvider>> = OnceLock::new();
-
-/// 设置全局 AuthProvider，服务器启动时调用一次
-pub fn set_auth_provider(provider: Arc<dyn TaskAuthProvider>) {
-    let _ = AUTH_PROVIDER.set(provider);
-}
-
-/// 获取全局 AuthProvider，未初始化时返回 None
-pub fn auth_provider() -> Option<&'static Arc<dyn TaskAuthProvider>> {
-    AUTH_PROVIDER.get()
-}
 
 // ── Monitoring UUID provider trait ──────────────────────────────
 
@@ -282,10 +242,10 @@ impl RpcServer for TaskRpcImpl {
             return Ok(());
         };
 
-        // 获取 AuthProvider，未初始化则拒绝
-        let provider = auth_provider()
+        // 获取 PermissionChecker，未初始化则拒绝
+        let provider = ng_core::permission::permission_checker::get_permission_checker()
             .ok_or_else(|| {
-                jsonrpsee::types::ErrorObject::borrowed(101, "Auth provider not initialized", None)
+                jsonrpsee::types::ErrorObject::borrowed(101, "PermissionChecker not initialized", None)
             })
             .ok();
 
@@ -293,7 +253,7 @@ impl RpcServer for TaskRpcImpl {
             subscription_sink
                 .reject(jsonrpsee::types::ErrorObject::borrowed(
                     101,
-                    "Auth provider not initialized",
+                    "PermissionChecker not initialized",
                     None,
                 ))
                 .await;

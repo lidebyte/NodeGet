@@ -35,6 +35,9 @@ pub async fn edit(
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
         debug!(target: "crontab", name = %name, "processing crontab edit request");
+        // 0. 校验 name 合法性（低成本操作，最先执行）
+        super::validate_name(&name)?;
+
         // 1. 验证 Token 格式（低成本操作，优先执行）
         let token_or_auth = TokenOrAuth::from_full_token(&token)
             .map_err(|e| NodegetError::ParseError(format!("Failed to parse token: {e}")))?;

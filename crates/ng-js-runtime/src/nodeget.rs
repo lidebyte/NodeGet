@@ -38,7 +38,9 @@ pub async fn js_nodeget(json: String) -> StdResult<String, Error> {
 
         let items_len = items.len();
         let results = spawn_on_server_runtime(async move {
-            let rpc_module = get_js_worker_service().get_rpc_module().await;
+            let service = get_js_worker_service()
+                .ok_or_else(|| "JsWorkerService not initialized".to_string())?;
+            let rpc_module = service.get_rpc_module().await;
             let mut results = Vec::with_capacity(items_len);
             for item in &items {
                 let req_str = item.get();
@@ -66,7 +68,9 @@ pub async fn js_nodeget(json: String) -> StdResult<String, Error> {
         let json = trimmed.to_owned();
 
         let response = spawn_on_server_runtime(async move {
-            let rpc_module = get_js_worker_service().get_rpc_module().await;
+            let service = get_js_worker_service()
+                .ok_or_else(|| "JsWorkerService not initialized".to_string())?;
+            let rpc_module = service.get_rpc_module().await;
             let (resp, _stream) = rpc_module
                 .raw_json_request(&json, RPC_BUF_SIZE)
                 .await

@@ -104,7 +104,7 @@ pub async fn dynamic_data_multi_last_query(
         debug!(target: "monitoring", uuids_count = deduped_uuids.len(), fields_count = fields.len(), "Dynamic multi-last query permission check passed");
 
         let db = AgentRpcImpl::get_db()?;
-        let uuid_cache = MonitoringUuidCache::global();
+        let uuid_cache = MonitoringUuidCache::global().ok_or_else(|| NodegetError::ConfigNotFound("MonitoringUuidCache not initialized".to_owned()))?;
 
         // Resolve UUIDs to uuid_ids
         let mut uuid_id_pairs: Vec<(Uuid, i16)> = Vec::with_capacity(deduped_uuids.len());
@@ -118,7 +118,7 @@ pub async fn dynamic_data_multi_last_query(
         }
 
         // Fast path: in-memory last-cache (partial hit merge)
-        let last_cache = MonitoringLastCache::global();
+        let last_cache = MonitoringLastCache::global().ok_or_else(|| NodegetError::ConfigNotFound("MonitoringLastCache not initialized".to_owned()))?;
         let mut results: Vec<Option<serde_json::Value>> = vec![None; uuid_id_pairs.len()];
         let mut misses: Vec<(usize, i16)> = Vec::new();
         for (idx, (uuid, uuid_id)) in uuid_id_pairs.iter().enumerate() {

@@ -12,7 +12,8 @@
 use ng_config::config::server::MonitoringBufferConfig;
 use ng_db::entity::{dynamic_monitoring, dynamic_monitoring_summary, static_monitoring};
 use sea_orm::EntityTrait;
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::OnceLock;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 use tracing::{debug, error, trace, warn};
@@ -41,15 +42,9 @@ pub struct MonitoringBuffers {
     pub dynamic_summary: BufferSender<dynamic_monitoring_summary::ActiveModel>,
 }
 
-/// 获取全局 buffer 实例，未初始化时 panic。
-///
-/// # Panics
-///
-/// 若全局 `MonitoringBuffers` 未初始化（即未调用 `init()`）则 panic。
-pub fn get() -> &'static MonitoringBuffers {
-    BUFFERS
-        .get()
-        .expect("MonitoringBuffers not initialized — call monitoring_buffer::init() first")
+/// 获取全局 buffer 实例，未初始化时返回 `None`。
+pub fn get() -> Option<&'static MonitoringBuffers> {
+    BUFFERS.get()
 }
 
 /// 初始化全局 buffer 并启动三个后台 flush task。
@@ -74,15 +69,9 @@ pub fn init(config: Option<&MonitoringBufferConfig>) {
     let (summary_tx, summary_rx) = mpsc::channel(DEFAULT_CHANNEL_CAPACITY);
 
     let buffers = MonitoringBuffers {
-        static_mon: BufferSender {
-            tx: Mutex::new(Some(static_tx)),
-        },
-        dynamic_mon: BufferSender {
-            tx: Mutex::new(Some(dynamic_tx)),
-        },
-        dynamic_summary: BufferSender {
-            tx: Mutex::new(Some(summary_tx)),
-        },
+        static_mon: BufferSender::new(static_tx, DEFAULT_CHANNEL_CAPACITY),
+        dynamic_mon: BufferSender::new(dynamic_tx, DEFAULT_CHANNEL_CAPACITY),
+        dynamic_summary: BufferSender::new(summary_tx, DEFAULT_CHANNEL_CAPACITY),
     };
 
     if BUFFERS.set(buffers).is_err() {
@@ -146,36 +135,75 @@ pub async fn flush_and_shutdown() {
 
 // ── BufferSender ────────────────────────────────────────────────────
 
-/// mpsc Sender 的线程安全封装，支持优雅关闭。
+/// mpsc Sender 的线程安全封装，支持优雅关闭与丢弃计数。
 pub struct BufferSender<T> {
-    /// 内部 Sender 用 Mutex 包裹以实现 Sync，Option 用于 close 时 drop
-    tx: Mutex<Option<mpsc::Sender<T>>>,
+    /// 内部 Sender，close 时 take 出来 drop 以关闭 channel
+    tx: std::sync::Mutex<Option<mpsc::Sender<T>>>,
+    /// channel 容量，用于日志
+    cap: usize,
+    /// 累计丢弃数量
+    dropped: AtomicU64,
+    /// 是否已关闭（close 时置 true，send 的 fast-path 无需加锁）
+    closed: AtomicBool,
 }
 
 impl<T> BufferSender<T> {
-    /// 将一条 `ActiveModel` 送入缓冲区。
-    ///
-    /// 非阻塞，channel 满或已关闭时丢弃并告警。
-    pub fn send(&self, item: T) {
-        let guard = self
-            .tx
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(tx) = guard.as_ref()
-            && let Err(_e) = tx.try_send(item)
-        {
-            warn!(target: "monitoring", "Buffer channel full or closed, dropping item");
+    /// 创建新的 `BufferSender`。
+    const fn new(tx: mpsc::Sender<T>, cap: usize) -> Self {
+        Self {
+            tx: std::sync::Mutex::new(Some(tx)),
+            cap,
+            dropped: AtomicU64::new(0),
+            closed: AtomicBool::new(false),
         }
     }
 
+    /// 将一条 `ActiveModel` 送入缓冲区。
+    ///
+    /// 非阻塞，channel 满或已关闭时丢弃并告警（含累计丢弃计数）。
+    pub fn send(&self, item: T) {
+        // Fast-path：已关闭则直接返回，无需加锁
+        if self.closed.load(Ordering::Acquire) {
+            return;
+        }
+        let send_result = {
+            let guard = self
+                .tx
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match guard.as_ref() {
+                Some(tx) => tx.try_send(item),
+                None => return,
+            }
+        };
+        if send_result.is_err() {
+            let count = self.dropped.fetch_add(1, Ordering::Relaxed) + 1;
+            warn!(
+                target: "monitoring",
+                "monitoring data dropped (total: {count}), channel full (cap: {})",
+                self.cap
+            );
+        }
+    }
+
+    /// 返回累计丢弃的数据条数。
+    pub fn dropped_count(&self) -> u64 {
+        self.dropped.load(Ordering::Relaxed)
+    }
+
     /// 关闭 sender（drop 内部的 Sender，使 channel 关闭）。
+    ///
+    /// `flush_loop` 的 `rx.recv()` 将收到 `None`，触发最后一次 flush 后退出。
     fn close(&self) {
+        if self.closed.swap(true, Ordering::AcqRel) {
+            return; // already closed
+        }
+        debug!(target: "monitoring", "Closing buffer sender");
         let mut guard = self
             .tx
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        debug!(target: "monitoring", "Closing buffer sender");
-        guard.take(); // drop Sender，关闭 channel
+        guard.take(); // drop Sender → channel 关闭 → rx.recv() 返回 None
     }
 }
 

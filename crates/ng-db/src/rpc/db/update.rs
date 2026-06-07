@@ -61,7 +61,9 @@ pub async fn update(token: String, name: String, new_name: String) -> RpcResult<
             .into());
         }
 
-        let mgr = DbRegistryManager::global();
+        let mgr = DbRegistryManager::global().ok_or_else(|| {
+            NodegetError::ConfigNotFound("DbRegistryManager not initialized".to_owned())
+        })?;
         let old_file = mgr.get_db_path(&name);
         let new_file = mgr.get_db_path(&new_name);
 
