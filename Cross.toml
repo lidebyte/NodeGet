@@ -1,59 +1,69 @@
-[target.arm-unknown-linux-gnueabi]
-rustflags = ["-C", "link-arg=-latomic"]
+# 需要从源码构建 std 的 target（tier 3 或预编译 std 与 NDK 不兼容）
+# minimal profile 使用 panic="abort"，必须包含 panic_abort
+# Android target：NDK 缺少 libunwind，预编译 std 依赖 unwinding 会导致链接失败
 
-[target.arm-unknown-linux-gnueabihf]
-rustflags = ["-C", "link-arg=-latomic"]
+# Android
+[target.x86_64-linux-android]
+build-std = "std,panic_abort"
 
-[target.armv7-unknown-linux-gnueabi]
-rustflags = ["-C", "link-arg=-latomic"]
+[target.i686-linux-android]
+build-std = "std,panic_abort"
 
-[target.armv7-unknown-linux-gnueabihf]
-rustflags = ["-C", "link-arg=-latomic"]
+[target.aarch64-linux-android]
+build-std = "std,panic_abort"
 
-[target.armv7-unknown-linux-musleabi]
-rustflags = ["-C", "link-arg=-latomic"]
+[target.arm-linux-androideabi]
+build-std = "std,panic_abort"
 
-[target.armv7-unknown-linux-musleabihf]
-rustflags = ["-C", "link-arg=-latomic"]
+[target.armv7-linux-androideabi]
+build-std = "std,panic_abort"
 
+[target.thumbv7neon-linux-androideabi]
+build-std = "std,panic_abort"
+
+# ARM 老款 (tier 3)
 [target.armv5te-unknown-linux-gnueabi]
-build-std = true
+build-std = "std,panic_abort"
 
 [target.armv5te-unknown-linux-musleabi]
-build-std = true
+build-std = "std,panic_abort"
 
+# 大端序 ARM64 (tier 3)
 [target.aarch64_be-unknown-linux-gnu]
-build-std = true
+build-std = "std,panic_abort"
 
+# 极老 x86 (tier 3)
 [target.i586-unknown-linux-gnu]
-build-std = true
+build-std = "std,panic_abort"
 
 [target.i586-unknown-linux-musl]
-build-std = true
+build-std = "std,panic_abort"
 
+# 32 位 PowerPC (tier 3)
 [target.powerpc-unknown-linux-gnu]
-build-std = true
+build-std = "std,panic_abort"
 
+# MIPS 系列 (tier 3)
 [target.mips-unknown-linux-gnu]
-build-std = true
+build-std = "std,panic_abort"
 
 [target.mips-unknown-linux-musl]
-build-std = true
+build-std = "std,panic_abort"
 
 [target.mipsel-unknown-linux-gnu]
-build-std = true
+build-std = "std,panic_abort"
 
 [target.mipsel-unknown-linux-musl]
-build-std = true
+build-std = "std,panic_abort"
 
 [target.mips64-unknown-linux-gnuabi64]
-build-std = true
+build-std = "std,panic_abort"
 
 [target.mips64-unknown-linux-muslabi64]
-build-std = true
+build-std = "std,panic_abort"
 
 [target.mips64el-unknown-linux-gnuabi64]
-build-std = true
+build-std = "std,panic_abort"
 
 [target.mips64el-unknown-linux-muslabi64]
-build-std = true
+build-std = "std,panic_abort"

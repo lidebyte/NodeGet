@@ -140,6 +140,7 @@ jobs:
           - release_for: linux_x86_64_android
             target: x86_64-linux-android
             binary_name: nodeget-agent-linux-x86_64-android
+            build_std: true
           # i686
           - release_for: linux_i686_gnu
             target: i686-unknown-linux-gnu
@@ -150,6 +151,7 @@ jobs:
           - release_for: linux_i686_android
             target: i686-linux-android
             binary_name: nodeget-agent-linux-i686-android
+            build_std: true
           # aarch64
           - release_for: linux_aarch64_gnu
             target: aarch64-unknown-linux-gnu
@@ -160,6 +162,7 @@ jobs:
           - release_for: linux_aarch64_android
             target: aarch64-linux-android
             binary_name: nodeget-agent-linux-aarch64-android
+            build_std: true
           # aarch64_be (tier 3)
           - release_for: linux_aarch64_be_gnu
             target: aarch64_be-unknown-linux-gnu
@@ -181,6 +184,7 @@ jobs:
           - release_for: linux_arm_androideabi
             target: arm-linux-androideabi
             binary_name: nodeget-agent-linux-arm-androideabi
+            build_std: true
           # armv7
           - release_for: linux_armv7_gnueabi
             target: armv7-unknown-linux-gnueabi
@@ -197,13 +201,16 @@ jobs:
           - release_for: linux_armv7_androideabi
             target: armv7-linux-androideabi
             binary_name: nodeget-agent-linux-armv7-androideabi
+            build_std: true
           # armv5te (tier 3)
           - release_for: linux_armv5te_gnueabi
             target: armv5te-unknown-linux-gnueabi
             binary_name: nodeget-agent-linux-armv5te-gnueabi
+            build_std: true
           - release_for: linux_armv5te_musleabi
             target: armv5te-unknown-linux-musleabi
             binary_name: nodeget-agent-linux-armv5te-musleabi
+            build_std: true
           # thumb
           - release_for: linux_thumbv7neon_gnueabihf
             target: thumbv7neon-unknown-linux-gnueabihf
@@ -319,7 +326,7 @@ jobs:
 
       - name: Build binary (nightly, build-std)
         if: ${{ matrix.platform.build_std }}
-        run: cross +nightly build --package nodeget-agent --target ${{ matrix.platform.target }} --profile minimal --jobs 32
+        run: cross +nightly build --package nodeget-agent --target ${{ matrix.platform.target }} --profile minimal --jobs 32 -Z build-std=std,panic_abort
         env:
           CROSS_NO_WARNINGS: 0
 
