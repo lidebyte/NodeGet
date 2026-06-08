@@ -20,6 +20,7 @@ server = [
     "dep:axum",
     "dep:dav-server",
     "dep:ng-config",
+    "dep:arc-swap",
     "ng-config/server",
     "ng-infra/server",
     "ng-db/server",
@@ -43,3 +44,4 @@ base64 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 dav-server = { workspace = true, optional = true }
 ng-config = { workspace = true, optional = true }
+arc-swap = { workspace = true, optional = true }

@@ -66,6 +66,8 @@ pub struct MonitoringBufferConfig {
     pub flush_interval_ms: Option<u64>,
     /// 单次最大批量大小，默认 1000
     pub max_batch_size: Option<usize>,
+    /// Channel 容量，默认 10000
+    pub channel_capacity: Option<usize>,
 }
 
 /// 日志配置。

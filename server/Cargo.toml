@@ -56,6 +56,9 @@ base64 = { workspace = true }
 # 性能分析
 dhat = { workspace = true, optional = true }
 
+# 无锁原子替换（StreamLogManager 替代 RwLock）
+arc-swap = { workspace = true }
+
 [features]
 default = []
 dhat-heap = ["dhat"]

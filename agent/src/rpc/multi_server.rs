@@ -282,6 +282,7 @@ async fn connection_manager(
 
         loop {
             tokio::select! {
+                biased;
                 // Channel -> WebSocket (上行数据)
                 msg_res = uplink_rx.recv() => {
                     match msg_res {
@@ -330,7 +331,7 @@ async fn connection_manager(
                 if let Some(ref mut interval) = task_resubscribe_interval {
                     interval.tick().await;
                 } else {
-                    loop { tokio::time::sleep(Duration::from_hours(1)).await; }
+                    std::future::pending::<()>().await;
                 }
                 } => {
                     let rpc = wrap_json_into_rpc_with_id_1(

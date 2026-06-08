@@ -25,12 +25,14 @@ use tokio_tungstenite::tungstenite::{Message, Utf8Bytes};
 ///
 /// 每次失败短暂 sleep 而不是 panic 退出任务，从而保证上报循环能在 reload/初始化瞬态后继续生效。
 async fn wait_for_agent_config() -> Arc<AgentConfig> {
+    let mut ticker = tokio::time::interval(Duration::from_secs(1));
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
     loop {
         match get_agent_config() {
             Ok(cfg) => return cfg,
             Err(e) => {
                 warn!("Waiting for AGENT_CONFIG to become available: {e}");
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                ticker.tick().await;
             }
         }
     }
@@ -77,6 +79,8 @@ pub async fn handle_static_monitoring_data_report() {
     let mut interval_ms = initial_config.static_report_interval_ms_or_default();
     let mut ticker = interval(Duration::from_millis(interval_ms));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    // 消费首次立即触发，保持启动时有完整间隔延迟的原始行为
+    ticker.tick().await;
 
     loop {
         ticker.tick().await;
@@ -140,6 +144,8 @@ pub async fn handle_dynamic_monitoring_data_report() {
 
     let mut ticker = interval(Duration::from_millis(summary_interval_ms));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    // 消费首次立即触发，保持启动时有完整间隔延迟的原始行为
+    ticker.tick().await;
 
     let mut tick_count: u64 = 0;
 

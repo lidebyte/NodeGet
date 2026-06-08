@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 /// 静态监控数据可查询字段
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum StaticDataQueryField {
     /// CPU 静态信息（型号、核心数等）
@@ -41,7 +41,7 @@ impl StaticDataQueryField {
 }
 
 /// 动态监控数据可查询字段
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum DynamicDataQueryField {
     /// CPU 使用率

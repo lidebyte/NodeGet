@@ -9,13 +9,13 @@
 //! 核心设计：
 //! - 虚拟 target `db` 自动展开为 `sea_orm`/`sea_orm_migration`/`sqlx` 三个真实 target
 //! - 反向映射：`sea_orm*`/`sqlx*` 的日志在输出时统一重映射为 `db`
-//! - `StreamLogManager` 使用 `std::sync::RwLock`（非 tokio），因为 `on_event` 是同步回调
-//! - 写锁期间禁止调用 tracing，避免与读锁死锁（`std::sync::RwLock` 不可重入）
+//! - `StreamLogManager` 使用 `ArcSwap<HashMap>` 替代 `RwLock<HashMap>`，读写均无锁，
+//!   彻底消除 `on_event`（读路径）与 `add/remove_subscriber`（写路径）之间的死锁风险
 
 use std::collections::{HashMap, VecDeque};
 use std::fmt as stdfmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use ng_config::config::server::LoggingConfig;
 use tracing::field::{Field, Visit};
@@ -31,6 +31,7 @@ use tracing_subscriber::{
     registry::LookupSpan,
     util::SubscriberInitExt,
 };
+use arc_swap::ArcSwap;
 use uuid::Uuid;
 
 /// 内存日志环形缓冲区默认容量
@@ -595,20 +596,23 @@ pub fn get_stream_log_manager() -> &'static Arc<StreamLogManager> {
 
 /// 管理所有活跃的流日志订阅者
 ///
-/// 使用 `std::sync::RwLock` 而非 `tokio::sync::RwLock`，
-/// 因为 `on_event` 回调是同步的。
-/// `subscriber_count` 原子计数器提供快速路径：订阅者为零时跳过锁获取。
+/// 使用 `ArcSwap<HashMap>` 替代 `RwLock<HashMap>`：
+/// - 读路径（`on_event`）通过 `load()` 获取 `Arc` 引用，零开销无锁，
+///   不会与写路径产生任何竞争
+/// - 写路径（`add/remove_subscriber`）通过 `rcu()` 原子替换整个 `HashMap`，
+///   无需持有锁，因此可以安全地调用 tracing 而不会死锁
+/// - `subscriber_count` 原子计数器提供快速路径：订阅者为零时跳过 `load()`
 pub struct StreamLogManager {
-    /// 订阅者映射表（UUID → 订阅者）
-    subscribers: RwLock<HashMap<Uuid, StreamLogSubscriber>>,
-    /// 订阅者数量（快速路径优化：为零时避免获取读锁）
+    /// 订阅者映射表（UUID → 订阅者），原子替换
+    subscribers: ArcSwap<HashMap<Uuid, StreamLogSubscriber>>,
+    /// 订阅者数量（快速路径优化：为零时避免 load 开销）
     subscriber_count: AtomicUsize,
 }
 
 impl StreamLogManager {
     fn new() -> Self {
         Self {
-            subscribers: RwLock::new(HashMap::new()),
+            subscribers: ArcSwap::new(Arc::new(HashMap::new())),
             subscriber_count: AtomicUsize::new(0),
         }
     }
@@ -619,9 +623,7 @@ impl StreamLogManager {
     /// - tx：日志条目发送通道
     /// - `filter_str`：`EnvFilter` 格式的过滤器字符串
     ///
-    /// **警告**：调用此方法期间禁止发出任何 tracing 事件——
-    /// 此方法持有写锁，而 `on_event` 获取读锁，
-    /// 在 `std::sync::RwLock`（不可重入）上会死锁。
+    /// 使用 `rcu()` 原子替换 HashMap，无需持锁，可安全调用 tracing。
     pub fn add_subscriber(
         &self,
         id: Uuid,
@@ -631,24 +633,26 @@ impl StreamLogManager {
         let expanded = expand_virtual_targets(filter_str);
         let filter = StreamFilter::parse(&expanded);
         let subscriber = StreamLogSubscriber { tx, filter };
-        let mut guard = self
-            .subscribers
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        guard.insert(id, subscriber);
-        self.subscriber_count.store(guard.len(), Ordering::Release);
+        self.subscribers.rcu(|current| {
+            let mut new_map = (**current).clone();
+            new_map.insert(id, subscriber.clone());
+            new_map
+        });
+        self.subscriber_count
+            .store(self.subscribers.load().len(), Ordering::Release);
     }
 
     /// 按 id 移除订阅者
     ///
-    /// **警告**：同 [`add_subscriber`] 的死锁注意事项。
+    /// 使用 `rcu()` 原子替换 HashMap，无需持锁，可安全调用 tracing。
     pub fn remove_subscriber(&self, id: &Uuid) {
-        let mut guard = self
-            .subscribers
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        guard.remove(id);
-        self.subscriber_count.store(guard.len(), Ordering::Release);
+        self.subscribers.rcu(|current| {
+            let mut new_map = (**current).clone();
+            new_map.remove(id);
+            new_map
+        });
+        self.subscriber_count
+            .store(self.subscribers.load().len(), Ordering::Release);
     }
 
     /// 是否存在至少一个活跃订阅者
@@ -659,6 +663,7 @@ impl StreamLogManager {
 }
 
 /// 单个流日志订阅者，持有独立的过滤器和发送通道
+#[derive(Clone)]
 struct StreamLogSubscriber {
     /// 日志条目发送通道（预序列化 JSON 字符串）
     tx: tokio::sync::mpsc::Sender<String>,
@@ -674,6 +679,7 @@ struct StreamLogSubscriber {
 ///
 /// 支持 `RUST_LOG` / `EnvFilter` 相同的 `target=level` 指令格式，
 /// 但仅处理 target+level 匹配（无 span 过滤）。
+#[derive(Clone)]
 struct StreamFilter {
     /// 无 target 指令匹配时的默认级别
     default_level: tracing::level_filters::LevelFilter,
@@ -796,9 +802,9 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_event(&self, event: &Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
-        // WebSocket 流日志推送：快速路径过滤 → 读锁筛选订阅者 → 序列化 → 广播预序列化 JSON
+        // WebSocket 流日志推送：快速路径过滤 → 无锁快照筛选订阅者 → 序列化 → 广播预序列化 JSON
         // 1. has_subscribers() 快速路径：无订阅者直接返回，避免不必要的字段采集与序列化
-        // 2. 读锁遍历 subscribers，用 filter.is_enabled(meta) 收集感兴趣的通道
+        // 2. ArcSwap::load() 获取 Arc<HashMap> 快照，无锁遍历，filter.is_enabled(meta) 收集感兴趣的通道
         // 3. JsonFieldVisitor 采集字段，遍历 span 链构建上下文，remap_target 映射模块路径
         // 4. serde_json::json! 组装完整条目，to_string 序列化一次
         // 5. try_send 将预序列化 JSON 字符串克隆广播给所有订阅者，避免 per-subscriber 深拷贝
@@ -809,25 +815,21 @@ where
 
         let meta = event.metadata();
 
-        // 获取读锁，筛选感兴趣的订阅者
-        let guard = self
-            .manager
-            .subscribers
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // 获取订阅者映射表快照（Arc 引用，无锁）
+        let subscribers = self.manager.subscribers.load();
 
-        if guard.is_empty() {
+        if subscribers.is_empty() {
             return;
         }
 
         // 预过滤：收集对此事件感兴趣的订阅者通道
-        let interested_tx: Vec<tokio::sync::mpsc::Sender<String>> = guard
+        let interested_tx: Vec<tokio::sync::mpsc::Sender<String>> = subscribers
             .values()
             .filter(|sub| sub.filter.is_enabled(meta))
             .map(|sub| sub.tx.clone())
             .collect();
 
-        drop(guard);
+        drop(subscribers);
 
         if interested_tx.is_empty() {
             return;

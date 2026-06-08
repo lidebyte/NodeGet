@@ -175,6 +175,7 @@ async fn main() -> anyhow::Result<()> {
         handles.push(tokio::spawn(handle_task()));
 
         tokio::select! {
+            biased;
             ctrl_c_result = tokio::signal::ctrl_c() => {
                 ctrl_c_result
                     .map_err(|e| NodegetError::Other(format!("Failed to listen for ctrl_c: {e}")))?;

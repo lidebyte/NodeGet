@@ -445,8 +445,10 @@ pub fn init_global_pool() -> &'static Arc<JsRuntimePool> {
     if !CLEANUP_LOOP_STARTED.swap(true, Ordering::AcqRel) {
         let pool_for_task = Arc::clone(pool);
         tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(std::time::Duration::from_millis(CLEANUP_INTERVAL_MS));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
-                tokio::time::sleep(std::time::Duration::from_millis(CLEANUP_INTERVAL_MS)).await;
+                ticker.tick().await;
                 pool_for_task.cleanup_idle_workers();
             }
         });

@@ -8,6 +8,7 @@
 //! 所有写操作完成后调用 `StaticCache::reload()` 刷新内存缓存。
 
 use anyhow::Context;
+use arc_swap::ArcSwap;
 use base64::Engine as _;
 use ng_core::error::NodegetError;
 use ng_db::entity::static_file as static_entity;
@@ -15,13 +16,25 @@ use ng_db::get_db;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 use std::collections::VecDeque;
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 use tracing::{debug, error, warn};
 
 use crate::FileInfo;
 use crate::cache::StaticCache;
 
-/// 获取配置文件中的 `static_path`，默认 `./static/`
-pub fn get_static_path() -> String {
+/// 缓存已解析的 `static_path`，避免每次请求都获取配置 RwLock 读锁并克隆 `Option<String>`。
+///
+/// 使用 `ArcSwap` 而非 `OnceLock`，支持配置热重载时通过 [`reload_static_path`] 更新值。
+/// 外层 `OnceLock` 用于延迟初始化，避免 `ArcSwap::from` 在 static 中非常量的问题。
+static STATIC_PATH: OnceLock<ArcSwap<String>> = OnceLock::new();
+
+/// 获取 STATIC_PATH 的引用，首次访问时初始化为空字符串
+fn static_path_ref() -> &'static ArcSwap<String> {
+    STATIC_PATH.get_or_init(|| ArcSwap::from(Arc::new(String::new())))
+}
+
+/// 从配置中读取 `static_path` 的实际值，默认 `./static/`
+fn read_static_path_from_config() -> String {
     ng_config::get_server_config()
         .and_then(|lock| lock.read().ok())
         .map_or_else(
@@ -33,6 +46,34 @@ pub fn get_static_path() -> String {
                     .unwrap_or_else(|| "./static/".to_owned())
             },
         )
+}
+
+/// 获取配置文件中的 `static_path`，默认 `./static/`
+///
+/// 首次调用从配置读取并缓存到 `STATIC_PATH`，后续调用直接返回缓存值，
+/// 避免每次静态文件请求都获取 `std::sync::RwLock` 读锁 + 克隆 `String`。
+/// 配置热重载后需调用 [`reload_static_path`] 以更新缓存。
+pub fn get_static_path() -> String {
+    let cached = static_path_ref().load();
+    if cached.is_empty() {
+        // 首次访问：从配置读取并写入缓存
+        let val = read_static_path_from_config();
+        // 可能并发初始化，compare_and_swap 风格：无论谁先写入都行
+        static_path_ref().store(Arc::new(val));
+        static_path_ref().load().to_string()
+    } else {
+        cached.to_string()
+    }
+}
+
+/// 热重载时刷新 `static_path` 缓存
+///
+/// 从当前全局配置重新读取 `static_path` 并更新缓存，
+/// 使后续 [`get_static_path`] 调用返回新值。
+/// 应在配置热重载成功后调用。
+pub fn reload_static_path() {
+    let val = read_static_path_from_config();
+    static_path_ref().store(Arc::new(val));
 }
 
 /// 校验 static name 的合法性

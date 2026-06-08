@@ -15,7 +15,7 @@ use ng_js_runtime::RunType;
 use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, Set};
 use std::time::Duration;
 use tokio::task::JoinSet;
-use tokio::time::sleep;
+use tokio::time::MissedTickBehavior;
 use tracing::{Instrument, debug, error, info, info_span, warn};
 
 /// 按名称删除定时任务，并刷新缓存。
@@ -98,8 +98,12 @@ pub fn init_crontab_worker() {
 
     tokio::spawn(async move {
         info!(target: "crontab", "scheduler started");
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        // 消费 interval 的首次立即触发，保持启动时有 1 秒延迟的原始行为
+        interval.tick().await;
         loop {
-            sleep(Duration::from_secs(1)).await;
+            interval.tick().await;
             process_crontab().await;
         }
     });

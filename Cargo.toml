@@ -20,7 +20,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.5.8"
+version = "0.5.9"
 license = "AGPL-3"
 edition = "2024"
 repository = "https://github.com/NodeSeekDev/NodeGet"
@@ -62,6 +62,7 @@ rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", 
 tower = { version = "0.5.3", default-features = false }
 axum-server = { version = "0.8.0", features = ["tls-rustls"] }
 dhat = { version = "0.3.3"}
+arc-swap = { version = "1.9", default-features = false }
 
 # Internal crates
 ng-core = { path = "crates/ng-core" }

@@ -40,7 +40,6 @@ pub async fn exec_sql_inner(
     })?;
     let db_conn = mgr
         .get_conn(db_name)
-        .await
         .ok_or_else(|| NodegetError::DatabaseError(format!("Database '{db_name}' not found")))?;
 
     let sea_params = match params {

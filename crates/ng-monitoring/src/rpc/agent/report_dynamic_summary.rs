@@ -36,6 +36,7 @@ pub async fn report_dynamic_summary(
     data: DynamicMonitoringSummaryData,
 ) -> RpcResult<Box<RawValue>> {
     let process_logic = async {
+        static CACHED: std::sync::OnceLock<Box<RawValue>> = std::sync::OnceLock::new();
         let agent_uuid = data.uuid;
         debug!(target: "monitoring", agent_uuid = %agent_uuid, "report_dynamic_summary: UUID parsed");
 
@@ -111,8 +112,9 @@ pub async fn report_dynamic_summary(
 
         debug!(target: "monitoring", agent_uuid = %data.uuid, "Dynamic summary data buffered successfully");
 
-        RawValue::from_string(r#"{"status":"buffered"}"#.to_owned())
-            .map_err(|e| NodegetError::SerializationError(e.to_string()).into())
+        Ok(CACHED
+            .get_or_init(|| RawValue::from_string(r#"{"status":"buffered"}"#.to_owned()).unwrap())
+            .clone())
     };
 
     match process_logic.await {

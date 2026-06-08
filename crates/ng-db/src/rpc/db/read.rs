@@ -42,7 +42,7 @@ pub async fn read(token: String, name: String) -> RpcResult<Box<RawValue>> {
         let mgr = DbRegistryManager::global().ok_or_else(|| {
             NodegetError::ConfigNotFound("DbRegistryManager not initialized".to_owned())
         })?;
-        let is_active = mgr.has_conn(&name).await;
+        let is_active = mgr.has_conn(&name);
 
         debug!(target: "db", token_key = tk, username = un, name = %name, "database read");
 

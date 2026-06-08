@@ -125,6 +125,8 @@ async fn async_main() {
                     );
                     continue;
                 }
+                ng_static::reload_static_path();
+                ng_static::clear_dav_handler_cache();
                 config = reloaded_config;
                 info!(target: "server", "Config hot reload applied");
             }

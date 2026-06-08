@@ -44,8 +44,6 @@ struct TokenCacheInner {
     by_key: HashMap<String, Arc<CachedToken>>,
     /// 以 username 为键的索引，用于 `username|password` 认证路径
     by_username: HashMap<String, Arc<CachedToken>>,
-    /// ID 为 1 的超级令牌条目，单独缓存以加速高频鉴权
-    super_token: Option<Arc<CachedToken>>,
 }
 
 /// 基于 DB 的 Token 内存缓存，使用 RwLock 保护内部索引。
@@ -82,6 +80,14 @@ fn recover_write(
 // 提供 init() / global() / reload() 方法，遵循 workspace 统一缓存模式
 make_global_cache!(TokenCache, TOKEN_CACHE_GLOBAL);
 
+/// 超级令牌独立全局存储，从主 RwLock 中拆出以消除锁竞争。
+///
+/// 超级令牌仅在 init/reload 时写入（极低频），但每次认证都会读取（极高频）。
+/// 独立 RwLock 使得高频的超级令牌查询无需获取主 RwLock 读锁，
+/// 避免与 reload 写锁产生竞争。该锁本身几乎无竞争（写操作极低频），
+/// 读锁获取代价极低。
+static SUPER_TOKEN_GLOBAL: RwLock<Option<Arc<CachedToken>>> = RwLock::new(None);
+
 impl DbBackedCache for TokenCache {
     type Model = token::Model;
 
@@ -92,15 +98,23 @@ impl DbBackedCache for TokenCache {
 
     /// 从数据库模型列表构建缓存实例。
     ///
-    /// 1. 调用 `build_maps` 生成 by_key / by_username / super_token 三个索引
-    /// 2. 包装为 RwLock 保护的内层结构
+    /// 1. 调用 `build_maps` 生成 by_key / by_username 索引和 super_token
+    /// 2. 将 super_token 写入独立的 `SUPER_TOKEN_GLOBAL` RwLock
+    /// 3. 包装 by_key / by_username 为 RwLock 保护的内层结构
     fn build_cache(models: Vec<Self::Model>) -> Self {
         let (by_key, by_username, super_token) = Self::build_maps(models);
+        // 超级令牌写入独立全局 RwLock
+        {
+            let mut guard = SUPER_TOKEN_GLOBAL.write().unwrap_or_else(|e| {
+                tracing::warn!(target: "token_cache", "SUPER_TOKEN_GLOBAL lock poisoned during build, recovering");
+                e.into_inner()
+            });
+            *guard = super_token;
+        }
         Self {
             inner: RwLock::new(TokenCacheInner {
                 by_key,
                 by_username,
-                super_token,
             }),
         }
     }
@@ -112,13 +126,26 @@ impl DbBackedCache for TokenCache {
     #[allow(clippy::unused_async)]
     async fn reload_from_models(&self, models: Vec<Self::Model>) {
         let (by_key, by_username, super_token) = Self::build_maps(models);
+        // 先更新主索引（by_key/by_username），再更新 SUPER_TOKEN_GLOBAL。
+        // 顺序至关重要：如果先写 SUPER_TOKEN_GLOBAL，在写入 inner 之前存在一个窗口期，
+        // SUPER_TOKEN_GLOBAL 已是新凭据但 by_key 仍包含旧超级令牌条目（ID=1），
+        // 导致旧超级令牌凭据通过 by_key 认证成功但 is_super=false（权限降级）。
+        // 先写 inner 后写 SUPER_TOKEN_GLOBAL 时，窗口期内 SUPER_TOKEN_GLOBAL 仍是旧凭据，
+        // 旧凭据匹配超级令牌检查返回 is_super=true（正确），而 by_key 已更新不会产生误匹配。
         let mut guard = recover_write(&self.inner);
         let old_by_key = std::mem::replace(&mut guard.by_key, by_key);
         let old_by_username = std::mem::replace(&mut guard.by_username, by_username);
-        guard.super_token = super_token;
         drop(guard); // 显式释放写锁，旧 HashMap 在锁外 drop
         drop(old_by_key);
         drop(old_by_username);
+        // 最后更新超级令牌
+        {
+            let mut st_guard = SUPER_TOKEN_GLOBAL.write().unwrap_or_else(|e| {
+                tracing::warn!(target: "token_cache", "SUPER_TOKEN_GLOBAL lock poisoned during reload, recovering");
+                e.into_inner()
+            });
+            *st_guard = super_token;
+        }
     }
 
     /// 从数据库全量加载所有 Token 记录。
@@ -206,10 +233,17 @@ impl TokenCache {
 
     /// 获取超级令牌缓存条目。
     ///
+    /// 直接从 `SUPER_TOKEN_GLOBAL` 独立 RwLock 读取，无需获取主 RwLock，
+    /// 消除了与 reload 写锁的竞争。独立锁几乎无竞争，读锁获取代价极低。
+    ///
     /// - 返回：ID 为 1 的 CachedToken，若不存在则为 None
-    pub fn get_super_token(&self) -> Option<Arc<CachedToken>> {
-        recover_read(&self.inner)
-            .super_token
+    pub fn get_super_token() -> Option<Arc<CachedToken>> {
+        SUPER_TOKEN_GLOBAL
+            .read()
+            .unwrap_or_else(|e| {
+                tracing::warn!(target: "token_cache", "SUPER_TOKEN_GLOBAL lock poisoned during read, recovering");
+                e.into_inner()
+            })
             .as_ref()
             .map(Arc::clone)
     }
@@ -247,16 +281,14 @@ impl TokenCache {
         &self,
         token_or_auth: &TokenOrAuth,
     ) -> anyhow::Result<(Arc<CachedToken>, bool)> {
-        let inner = recover_read(&self.inner);
-
-        // 确保超级令牌存在（与 check_super_token 行为保持一致）
-        let super_entry = inner.super_token.as_ref().ok_or_else(|| {
+        // 超级令牌从独立 RwLock 读取，无需获取主 RwLock
+        let super_entry = Self::get_super_token().ok_or_else(|| {
             NodegetError::NotFound("Super Token record (ID 1) not found in cache".to_owned())
         })?;
 
         match token_or_auth {
             TokenOrAuth::Token(key, secret) => {
-                // 优先检查超级令牌
+                // 优先检查超级令牌（无需主 RwLock）
                 let key_match: bool = key
                     .as_bytes()
                     .ct_eq(super_entry.model.token_key.as_bytes())
@@ -266,12 +298,13 @@ impl TokenCache {
                     let hash_match: bool = computed.ct_eq(&super_entry.token_hash_bytes).into();
                     debug!(target: "auth", is_super = hash_match, "super token check (token auth)");
                     if hash_match {
-                        return Ok((Arc::clone(super_entry), true));
+                        return Ok((Arc::clone(&super_entry), true));
                     }
                     // key 匹配超级令牌但 secret 不匹配，继续检查普通令牌
                 }
 
-                // 在 by_key 索引中查找普通令牌
+                // 在 by_key 索引中查找普通令牌（需主 RwLock 读锁）
+                let inner = recover_read(&self.inner);
                 if let Some(cached) = inner.by_key.get(key) {
                     let computed = hash_to_bytes(secret);
                     if bool::from(computed.ct_eq(&cached.token_hash_bytes)) {
@@ -288,7 +321,7 @@ impl TokenCache {
                 Err(NodegetError::PermissionDenied(AUTH_FAILED_MESSAGE.to_owned()).into())
             }
             TokenOrAuth::Auth(username, password) => {
-                // 优先检查超级令牌
+                // 优先检查超级令牌（无需主 RwLock）
                 let username_match = super_entry
                     .model
                     .username
@@ -298,13 +331,14 @@ impl TokenCache {
                     let computed = hash_to_bytes(password);
                     if bool::from(computed.ct_eq(stored)) {
                         debug!(target: "auth", is_super = true, "authenticate: super token (basic auth)");
-                        return Ok((Arc::clone(super_entry), true));
+                        return Ok((Arc::clone(&super_entry), true));
                     }
                     debug!(target: "auth", is_super = false, "super token check (basic auth), password mismatch");
                 }
                 // username 匹配超级令牌但 password 不匹配（或未设置密码），继续检查普通令牌
 
-                // 在 by_username 索引中查找普通令牌
+                // 在 by_username 索引中查找普通令牌（需主 RwLock 读锁）
+                let inner = recover_read(&self.inner);
                 if let Some(cached) = inner.by_username.get(username) {
                     let computed = hash_to_bytes(password);
                     let Some(stored) = &cached.password_hash_bytes else {

@@ -35,6 +35,16 @@ fn dav_handler_cache() -> &'static RwLock<HashMap<String, DavHandler>> {
     DAV_HANDLER_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
+/// Clear all cached DavHandler instances.
+///
+/// Should be called when `static_path` changes (e.g. config hot-reload),
+/// since cached handlers embed the old disk path.
+pub fn clear_dav_handler_cache() {
+    if let Some(cache) = DAV_HANDLER_CACHE.get() {
+        cache.write().expect("DAV handler cache lock poisoned").clear();
+    }
+}
+
 /// Retrieve a cached DavHandler for the given bucket, or build and cache one.
 fn get_or_create_dav_handler(bucket_name: &str, disk_path: &std::path::Path) -> DavHandler {
     // Fast path: read lock

@@ -376,6 +376,7 @@ pub async fn run(config: &ServerConfig) {
         tokio::pin!(serve_future);
 
         tokio::select! {
+            biased;
             result = &mut serve_future => {
                 result.unwrap();
                 ng_monitoring::monitoring_buffer::flush_and_shutdown().await;
@@ -427,6 +428,7 @@ pub async fn run(config: &ServerConfig) {
         tokio::pin!(serve_future);
 
         tokio::select! {
+            biased;
             result = &mut serve_future => {
                 result.unwrap();
                 ng_monitoring::monitoring_buffer::flush_and_shutdown().await;
@@ -623,7 +625,14 @@ async fn handle_js_worker_route(
         "access-control-allow-headers",
     ];
 
-    let route_name = route_name.trim().to_owned();
+    let route_name = {
+        let trimmed = route_name.trim();
+        if trimmed.len() == route_name.len() {
+            route_name
+        } else {
+            trimmed.to_owned()
+        }
+    };
     if route_name.is_empty() {
         warn!(target: "js_worker", "route request with empty route_name");
         return build_http_error(StatusCode::BAD_REQUEST, "route_name cannot be empty");
@@ -728,15 +737,8 @@ async fn handle_js_worker_route(
         }
     };
 
-    // Base64 编码请求体（在 spawn_blocking 中执行以避免阻塞异步运行时）
-    let body_base64 = tokio::task::spawn_blocking(move || {
-        base64::engine::general_purpose::STANDARD.encode(&body_bytes)
-    })
-        .await
-        .unwrap_or_else(|e| {
-            error!(target: "js_worker", route_name = %route_name, error = %e, "base64 encoding task panicked");
-            String::new()
-        });
+    // Base64 编码请求体（CPU 操作耗时微秒级，spawn_blocking 开销反而更大）
+    let body_base64 = base64::engine::general_purpose::STANDARD.encode(&body_bytes);
     let js_input = JsRouteInput {
         method,
         url,

@@ -12,9 +12,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 use tokio::{
-    sync::{RwLock, mpsc},
+    sync::mpsc,
     task,
 };
 use tokio_tungstenite::tungstenite::Bytes;
@@ -37,8 +37,8 @@ static TERMINAL_CONNECTION_POOL: LazyLock<TerminalConnectionPool> =
 /// - `terminal_id` - 终端连接 ID
 ///
 /// 返回 `Ok(())`；ID 已存在时返回错误。
-async fn reserve_terminal_id(terminal_id: &str) -> Result<()> {
-    let mut guard = TERMINAL_CONNECTION_POOL.write().await;
+fn reserve_terminal_id(terminal_id: &str) -> Result<()> {
+    let mut guard = TERMINAL_CONNECTION_POOL.write().unwrap_or_else(std::sync::PoisonError::into_inner);
     if guard.contains(terminal_id) {
         return Err(NodegetError::InvalidInput(format!(
             "Terminal ID '{terminal_id}' is already connected"
@@ -51,8 +51,8 @@ async fn reserve_terminal_id(terminal_id: &str) -> Result<()> {
 /// 释放 `terminal_id`，从连接池中移除。
 ///
 /// - `terminal_id` - 终端连接 ID
-async fn release_terminal_id(terminal_id: &str) {
-    let mut guard = TERMINAL_CONNECTION_POOL.write().await;
+fn release_terminal_id(terminal_id: &str) {
+    let mut guard = TERMINAL_CONNECTION_POOL.write().unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.remove(terminal_id);
 }
 
@@ -64,8 +64,8 @@ struct TerminalIdGuard {
 
 impl TerminalIdGuard {
     /// 创建守卫并预留 `terminal_id`。
-    async fn reserve(terminal_id: String) -> Result<Self> {
-        reserve_terminal_id(&terminal_id).await?;
+    fn reserve(terminal_id: String) -> Result<Self> {
+        reserve_terminal_id(&terminal_id)?;
         Ok(Self {
             id: terminal_id,
             released: false,
@@ -73,21 +73,17 @@ impl TerminalIdGuard {
     }
 
     /// 提前释放（正常退出路径），避免等待 Drop 时再获取写锁。
-    async fn release(mut self) {
+    fn release(mut self) {
         self.released = true;
-        release_terminal_id(&self.id).await;
+        release_terminal_id(&self.id);
     }
 }
 
 impl Drop for TerminalIdGuard {
     fn drop(&mut self) {
         if !self.released {
-            // Drop 中无法 await，用 block_on 同步释放；仅在 abort 等异常路径触发
-            let id = self.id.clone();
-            // 仅在未释放时执行，且通过新 tokio runtime 避免嵌套 panic
-            if let Ok(rt) = tokio::runtime::Handle::try_current() {
-                rt.block_on(async { release_terminal_id(&id).await });
-            }
+            // Drop 中直接同步释放；std::sync::RwLock 不需要 await
+            release_terminal_id(&self.id);
         }
     }
 }
@@ -117,7 +113,7 @@ pub async fn handle_pty_url(
         }
     };
 
-    let guard = TerminalIdGuard::reserve(terminal_id).await?;
+    let guard = TerminalIdGuard::reserve(terminal_id)?;
 
     let connect_result = async {
         // 限制 connect_async 最多 10s 握手，避免恶意/异常 server 让任务挂死，
@@ -152,7 +148,7 @@ pub async fn handle_pty_url(
     }
     .await;
 
-    guard.release().await;
+    guard.release();
 
     connect_result
 }
@@ -340,6 +336,7 @@ where
     });
 
     tokio::select! {
+        biased;
         _ = &mut pty_to_ws_task => {
             info!("PTY -> WebSocket task finished.");
             // 另一边可能仍在 `ws_receiver.next()` 里等待，主动 abort 防止 session 结束后

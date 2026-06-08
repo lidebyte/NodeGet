@@ -65,7 +65,8 @@ pub async fn js_nodeget(json: String) -> StdResult<String, Error> {
     } else {
         // 单条请求
         trace!(target: "js_runtime", "processing raw JSON-RPC request from JS");
-        let json = trimmed.to_owned();
+        // 若 trim 未改变内容，直接复用原始 String，避免分配
+        let json = if trimmed.len() == json.len() { json } else { trimmed.to_owned() };
 
         let response = spawn_on_server_runtime(async move {
             let service = get_js_worker_service()
