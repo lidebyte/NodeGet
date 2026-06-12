@@ -64,7 +64,7 @@ pub async fn dry_run() {
     info!("CPU:");
     info!("  Total Usage: {:.2}%", dynamic_info.cpu.total_cpu_usage);
     info!("  Per Core Usage:");
-    for core in dynamic_info.cpu.per_core {
+    for core in &*dynamic_info.cpu.per_core {
         info!(
             "    ID: {}, Usage: {:.2}%, Frequency: {} mHz",
             core.id, core.cpu_usage, core.frequency_mhz
@@ -104,7 +104,7 @@ pub async fn dry_run() {
     info!("  Load Average (15 min): {:.2}", dynamic_info.load.fifteen);
 
     info!("Disk:");
-    for disk in &dynamic_info.disk {
+    for disk in &*dynamic_info.disk {
         info!(
             "  Name: {}, File System: {}, Mount Point: {}, Available Space: {} GB ({} Bytes), Total Space: {} GB ({} Bytes)",
             disk.name,
@@ -127,7 +127,7 @@ pub async fn dry_run() {
         dynamic_info.network.udp_connections
     );
     info!("  Interfaces:");
-    for interface in &dynamic_info.network.interfaces {
+    for interface in &*dynamic_info.network.interfaces {
         info!(
             "  Name: {}, Total Received: {} MB, Total Transmitted: {} MB",
             interface.interface_name,
@@ -137,7 +137,7 @@ pub async fn dry_run() {
     }
 
     info!("GPU:");
-    for gpu in dynamic_info.gpu {
+    for gpu in &*dynamic_info.gpu {
         info!(
             "  ID: {}, Used Memory: {} MB ({} Bytes), Total Memory: {} MB ({} Bytes), Graphics Clock: {} MHz, SM Clock: {} MHz, Memory Clock: {} MHz, Video Clock: {} MHz, GPU Utilization: {}%, Memory Utilization: {}%, Temperature: {} °C",
             gpu.id,

@@ -5,6 +5,13 @@
 //! 任务权限由 Server 配置的 `allow_*` 或 `allow_task_type` 列表控制。
 //!
 //! 核心循环 [`handle_task`] 订阅各 Server 的下行消息通道，过滤出任务 RPC 并派发执行。
+//!
+//! ## 网络 I/O 任务池
+//!
+//! ICMP/TCP/HTTP Ping、HTTP Request、IP 查询、DNS 查询等网络任务共用一个
+//! 全局 [`TaskPool`]（信号量 + 硬超时），限制并发不超过 [`TASK_POOL_MAX_CONCURRENCY`]，
+//! 单个任务执行不超过 [`TASK_POOL_PER_TASK_TIMEOUT`]，避免多 server 同时下发时
+//! 打爆文件描述符或耗尽连接池。
 
 use crate::config_access::get_agent_config;
 use crate::rpc::multi_server::{send_to, subscribe_to};
@@ -16,6 +23,7 @@ use ng_core::error::NodegetError;
 use ng_core::utils::get_local_timestamp_ms;
 use ng_task::{TaskEventResponse, TaskEventResult, TaskEventType};
 use std::time::Duration;
+use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tokio::{fs, time};
 use tokio_tungstenite::tungstenite::{Message, Utf8Bytes};
@@ -30,6 +38,83 @@ pub type Result<T> = anyhow::Result<T>;
 /// ICMP/TCP/HTTP ping 与 execute / `http_request` 的预期上限，又不
 /// 会让真正卡住的任务在 agent 进程里无限堆积。
 const TASK_MAX_TIMEOUT: Duration = Duration::from_mins(10);
+
+/// 网络 I/O 任务池最大并发数。
+const TASK_POOL_MAX_CONCURRENCY: usize = 10;
+
+/// 网络 I/O 任务池中单个任务的硬性执行超时。
+///
+/// 覆盖各子任务自有的超时（ICMP 2s、TCP 1s、HTTP Ping 10s、
+/// HTTP Request 30s、IP 5s、DNS 视服务器而定），作为兜底上限：
+/// 正常任务在各自超时内完成；若子任务超时失效（如 reqwest Client
+/// 构建异常），此硬超时确保不会无限占用池中插槽。
+const TASK_POOL_PER_TASK_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// 全局网络 I/O 任务池。
+///
+/// 使用 [`Semaphore`] 限制同时运行的网络任务数量，避免多 server
+/// 同时下发大量 ping / http_request / dns 任务时打爆 FD 或耗尽连接池。
+/// 超过并发上限的任务会在 `acquire()` 处等待；等待期间不占用执行资源。
+struct TaskPool {
+    semaphore: Semaphore,
+}
+
+impl TaskPool {
+    /// 创建指定并发上限的任务池。
+    fn new(max_concurrency: usize) -> Self {
+        Self {
+            semaphore: Semaphore::new(max_concurrency),
+        }
+    }
+
+    /// 在池中执行一个异步任务。
+    ///
+    /// 1. 等待获取信号量许可（排队）
+    /// 2. 获取许可后，以 [`TASK_POOL_PER_TASK_TIMEOUT`] 硬超时执行 `fut`
+    /// 3. 超时则返回错误，许可自动释放
+    ///
+    /// 计时只覆盖实际执行阶段；排队等待时间不计入超时。
+    async fn run<F, T>(&self, fut: F) -> std::result::Result<T, NodegetError>
+    where
+        F: std::future::Future<Output = Result<T>>,
+    {
+        let _permit = self
+            .semaphore
+            .acquire()
+            .await
+            .map_err(|_| NodegetError::Other("Task pool closed".to_owned()))?;
+        time::timeout(TASK_POOL_PER_TASK_TIMEOUT, fut)
+            .await
+            .map_err(|_| {
+                NodegetError::Other(format!(
+                    "Network task timed out after {}s (pool limit)",
+                    TASK_POOL_PER_TASK_TIMEOUT.as_secs()
+                ))
+            })?
+            .map_err(|e| NodegetError::Other(format!("{e}")))
+    }
+}
+
+/// 全局任务池单例。
+static TASK_POOL: std::sync::LazyLock<TaskPool> =
+    std::sync::LazyLock::new(|| TaskPool::new(TASK_POOL_MAX_CONCURRENCY));
+
+/// 判断任务类型是否应纳入网络 I/O 任务池。
+///
+/// 仅对涉及网络 I/O 的短任务限流；长驻会话（WebShell）、本地操作
+///（ReadConfig/EditConfig/Version）、有独立进程管理的 Execute/SelfUpdate
+/// 不纳入池。
+fn is_pool_managed(task_type: &TaskEventType) -> bool {
+    matches!(
+        task_type,
+        TaskEventType::Ping(_)
+            | TaskEventType::TcpPing(_)
+            | TaskEventType::HttpPing(_)
+            | TaskEventType::HttpRequest(_)
+            | TaskEventType::Ip
+            | TaskEventType::Dns(_)
+    )
+}
 
 /// DNS 查询模块
 mod dns;
@@ -83,6 +168,10 @@ fn is_task_allowed(server: &ng_config::config::agent::Server, task_type: &TaskEv
 
 /// 执行具体任务，根据任务类型派发到对应的处理函数。
 ///
+/// 网络 I/O 类任务（ICMP/TCP/HTTP Ping、HTTP Request、IP、DNS）通过
+/// [`TASK_POOL`] 限流执行，最多 [`TASK_POOL_MAX_CONCURRENCY`] 个并发，
+/// 单个硬超时 [`TASK_POOL_PER_TASK_TIMEOUT`]；其余任务直接执行。
+///
 /// - `task_type` - 任务类型枚举
 /// - `task_id` - 任务 ID
 /// - `task_token` - 任务令牌
@@ -90,6 +179,37 @@ fn is_task_allowed(server: &ng_config::config::agent::Server, task_type: &TaskEv
 ///
 /// 返回任务执行结果；执行失败时返回错误。
 async fn execute_task(
+    task_type: &TaskEventType,
+    task_id: u64,
+    task_token: &str,
+    ignore_cert: bool,
+) -> Result<TaskEventResult> {
+    if is_pool_managed(task_type) {
+        return execute_task_via_pool(task_type, task_id, task_token, ignore_cert).await;
+    }
+
+    execute_task_direct(task_type, task_id, task_token, ignore_cert).await
+}
+
+/// 通过全局任务池执行网络 I/O 任务（限流 + 硬超时）。
+async fn execute_task_via_pool(
+    task_type: &TaskEventType,
+    task_id: u64,
+    task_token: &str,
+    ignore_cert: bool,
+) -> Result<TaskEventResult> {
+    // 在 move 闭包中需要 owned 的 task_type 副本；caller 传入的是引用，
+    // 但到此处 task_type 一定是 pool-managed 类型，clone 开销可忽略
+    // （String 内含 Arc，大多数 variant 只有一个 String 或两个）。
+    let task_type_owned = task_type.clone();
+    let fut = async move {
+        execute_task_direct(&task_type_owned, task_id, task_token, ignore_cert).await
+    };
+    Box::pin(TASK_POOL.run(fut)).await.map_err(Into::into)
+}
+
+/// 直接执行任务（不限流），按任务类型派发到对应处理函数。
+async fn execute_task_direct(
     task_type: &TaskEventType,
     task_id: u64,
     task_token: &str,
@@ -298,12 +418,12 @@ pub async fn handle_task() {
                             // 绕过统一超时；其余任务一律包一层硬上限，
                             // 防止某个被劫持 / 卡死的任务让对应 server
                             // 的 per_task 处理流程永久占用一个 future。
-                            let fut = execute_task(
+                            let fut = Box::pin(execute_task(
                                 task_type,
                                 json_rpc.params.result.task_id,
                                 &json_rpc.params.result.task_token,
                                 server_config.ignore_cert.unwrap_or(false),
-                            );
+                            ));
                             if matches!(task_type, TaskEventType::WebShell(_)) {
                                 fut.await
                             } else {

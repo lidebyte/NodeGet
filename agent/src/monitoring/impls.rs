@@ -14,6 +14,7 @@ use ng_monitoring::data_structure::{
     DynamicMonitoringData, DynamicNetworkData, DynamicPerDiskData, DynamicPerNetworkInterfaceData,
     StaticMonitoringData,
 };
+use std::sync::Arc;
 use sysinfo::DiskKind;
 
 /// 监控数据获取 trait，定义了刷新并获取监控数据的异步接口。
@@ -127,7 +128,7 @@ impl Monitor for DynamicMonitoringData {
 
 /// 从磁盘获取的数据结构，包含所有磁盘的动态数据。
 #[derive(Debug)]
-pub struct DataFromDisk(pub Vec<DynamicPerDiskData>);
+pub struct DataFromDisk(pub Arc<Vec<DynamicPerDiskData>>);
 
 impl DataFromDisk {
     /// 异步刷新并获取磁盘数据。
@@ -171,7 +172,7 @@ impl DataFromDisk {
                 .collect::<Vec<_>>()
         };
 
-        Self(per_disk_vec)
+        Self(Arc::new(per_disk_vec))
     }
 }
 
@@ -209,7 +210,7 @@ impl DataFromNetwork {
         let (udp_connections, tcp_connections) = calc_connections();
 
         Self(DynamicNetworkData {
-            interfaces: network_vec,
+            interfaces: Arc::new(network_vec),
             udp_connections,
             tcp_connections,
         })
