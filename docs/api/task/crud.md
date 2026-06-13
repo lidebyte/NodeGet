@@ -340,7 +340,13 @@ SelfUpdate 任务触发 Agent 从 `https://install.nodeget.com/` 下载对应架
 
 ### 权限要求
 
-需要 Token 具备对应 Agent UUID Scope（或 Global Scope）下的 Task 查询权限。
+需要 Token 具备目标 Agent UUID Scope（或 Global Scope）下的 Task 查询权限。
+具体地，`task_query` 会按任务类型逐一鉴权：
+
+- 如果 `condition` 包含 `type` 条件，则必须对该类型拥有 `Task::Read` 权限；
+- 如果未指定 `type`，则必须对全部已知的任务类型均拥有 `Task::Read` 权限。
+
+以上权限均需在对应 Agent UUID Scope 或 Global Scope 下生效。
 
 ### 返回值
 

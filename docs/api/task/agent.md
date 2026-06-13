@@ -14,6 +14,11 @@ Http、或主动取消订阅 均不会再接收到来自 Server 的任务
 涉及到的方法名称为 `task_register_task`，这是一个 subscription 方法。对应的取消订阅方法为 `task_unregister_task`
 ，由框架自动生成，调用后将停止接收任务
 
+### 权限要求
+
+- Token 必须对目标 `uuid` 对应的 `AgentUuid` Scope（或 `Global` Scope）拥有 `Task::Listen` 权限。
+- 只有具备该监听权限的 Agent 才能在对应 UUID 上注册任务订阅。
+
 需要构建如下的结构体以注册:
 
 ```json

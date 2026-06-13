@@ -21,7 +21,7 @@
   "js_worker_id": 10, // 关联的 JsWorker ID
   "js_worker_name": "demo_worker", // 关联的 JsWorker 名称
   "run_type": "call", // 执行类型
-  "start_time": 1775000000000, // 毫秒时间戳，开始时间
+  "start_time": 1775000000000, // 毫秒时间戳，开始时间，运行前为 null
   "finish_time": 1775000000123, // 毫秒时间戳，结束时间，运行中为 null
   "param": { // 执行参数，可为 null
     "hello": "world"
@@ -36,7 +36,7 @@
 ### 注意事项
 
 - `result` 与 `error_message` 至少有一个会被回填。
-- 运行中状态定义为：`finish_time == null && result == null && error_message == null`。
+- 运行中状态定义为：`result == null && error_message == null`。
 
 ## 查询条件
 

@@ -2,43 +2,64 @@
 
 WebShell 是 Task 任务系统下的一个特殊功能，也叫「网页 SSH」/ `Terminal`。
 
-与 Monitoring 等基于 JSON-RPC 的模块不同，Terminal 使用 WebSocket 连接进行双向通信。
+> ## Terminal 不是 JSON-RPC 命名空间
+>
+> Terminal 没有对应的 JSON-RPC 方法，也不属于任何 JSON-RPC 命名空间。它通过 **HTTP WebSocket 路由**
+> 工作，Server  exposes 且仅 exposes 一个端点：
+>
+> ```
+> /terminal
+> ```
+>
+> 客户端需直接使用 WebSocket 协议连接 `/terminal?...`，而不是通过 JSON-RPC `method` 字段调用。
 
 ## 通信流程
 
 Terminal 的通信流程如下:
 
-1. 通过 `task_create_task` 创建一个 `web_shell` 类型的 Task，其中包含 `terminal_id` 字段
-2. Agent 接收到任务后，主动通过 WebSocket 连接到 Server 提供的 Terminal Url
-3. 用户（网页端）通过 WebSocket 连接到 Server 提供的用户 Terminal Url
-4. Server 在 Agent 与用户之间中继 Binary Message，实现双向通信
+1. 通过 `task_create_task` 创建一个 `web_shell` 类型的 Task，其中包含 `terminal_id`、`url` 等字段
+2. Agent 接收到任务后，主动通过 WebSocket 连接到 Server 提供的 `/terminal`
+3. 用户（网页端）通过 WebSocket 连接到 Server 提供的 `/terminal`
+4. Server 在 Agent 与用户之间中继 Binary / Text WebSocket Message，实现双向通信
 
 ## 连接 URL
 
 ### Agent URL
 
-由 NodeGet Server 提供的，Agent 连接的 Terminal Url 格式如下:
+由 NodeGet Server 提供，Agent 连接的 `/terminal` URL 格式如下:
 
 ```
 ws(s)://HOST(:PORT)/terminal?agent_uuid={agent_uuid}&task_id={task_id}&task_token={task_token}&terminal_id={terminal_id}
 ```
 
-参数用于校验对应的 Task
+参数用于校验对应的 Task。携带 `task_id` 与 `task_token` 的连接会被 Server 识别为 Agent 端。
 
-该 Url 有以下两种生成方式:
+#### /auto_gen 说明
 
-- 以 `ws(s)://HOST(:PORT)/auto_gen` 为格式的 Url，将自动格式化成上述格式
-- 用户指定 Url，可以是任意外部链接，包括但不限于其他监控 Server 提供的
+Agent 支持以 `ws(s)://HOST(:PORT)/auto_gen` 作为 `web_shell` Task 的 `url` 字段值，但这不是 Server 的 URL。
+
+- `/auto_gen` 由 **Agent 端**（`agent/src/tasks/pty.rs`）在本地解析，并根据当前 Agent 配置自动生成 `/terminal` 的完整连接 URL。
+- Server 真实接收并处理的终端端点只有 `/terminal`。
+
+因此：
+
+```
+ws(s)://HOST(:PORT)/auto_gen      # Agent 会把它重写为 /terminal?...
+ws(s)://HOST(:PORT)/terminal?...  # Server 实际暴露的端点
+```
+
+用户也可以显式指定任意其他 WebSocket URL（如第三方监控 Server 提供的地址），此时 Server 仅做 Task 透传，不会强制使用
+`/terminal`。
 
 ### 用户 URL
 
-由 NodeGet Server 提供的，用户连接的 Terminal Url 格式如下:
+由 NodeGet Server 提供的，用户连接的 `/terminal` URL 格式如下:
 
 ```
 ws(s)://HOST(:PORT)/terminal?agent_uuid={agent_uuid}&terminal_id={terminal_id}&token=demo_token
 ```
 
-用户在 Agent 连接后，可以与 Agent 进行双向 WebSocket 通信
+未携带 `task_id` / `task_token` 的连接会被 Server 识别为用户端，此时需要 `token` 用于鉴权。
 
 ## terminal_id 说明
 

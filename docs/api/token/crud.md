@@ -162,7 +162,7 @@
     "password": "ILoveRust1",         // 可选，密码
     "timestamp_from": null,           // 可选，有效期起始，毫秒时间戳
     "timestamp_to": null,             // 可选，有效期结束，毫秒时间戳
-    "version": 1,                     // 可选，版本号，暂时固定为 1
+    "version": 1,                     // 可选，版本号；服务端固定存储为 1，客户端传入的值会被忽略
     "token_limit": [                  // 权限列表
       // Limit 结构体，参考 Token 总览
       // 该字段为 Vec<_>，可指定多个
@@ -179,7 +179,7 @@ pub struct TokenCreationRequest {
     pub password: Option<String>,      // 可选，密码
     pub timestamp_from: Option<i64>,   // 可选，有效期起始，毫秒时间戳
     pub timestamp_to: Option<i64>,     // 可选，有效期结束，毫秒时间戳
-    pub version: Option<i32>,           // 可选，版本号，暂时固定为 1
+    pub version: Option<i32>,           // 可选，版本号；服务端固定存储为 1，客户端传入的值会被忽略
     pub token_limit: Vec<Limit>,       // 权限列表
 }
 ```
@@ -187,7 +187,7 @@ pub struct TokenCreationRequest {
 注意事项:
 
 - 虽然 Username+Password 是可选字段，但必须同时存在或同时不存在
-- Version 固定为 1（暂时）
+- Version 固定为 1，`token_create` 会忽略客户端传入的 `version` 并始终存储为 1
 
 ### 权限要求
 

@@ -5,6 +5,8 @@
 调用者可以通过 `crontab-result_query` 查询执行结果记录。
 
 > **默认 LIMIT**：若 `condition` 中未指定 `limit` 或 `last`，查询默认限制返回 1,000 条记录。显式指定 `limit` 可覆盖此默认值。
+>
+> **最大 LIMIT**：显式指定的 `limit` 不能超过 `10,000`（`MAX_LIMIT`），超过会被截断为 `10,000`。
 
 ### 方法
 

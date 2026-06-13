@@ -5,6 +5,8 @@
 调用者可以通过 `js-result_query` 查询 JsResult 执行结果。
 
 > **默认 LIMIT**：若 `condition` 中未指定 `limit` 或 `last`，查询默认限制返回 1,000 条记录。显式指定 `limit` 可覆盖此默认值。
+>
+> **最大 LIMIT**：显式指定的 `limit` 不能超过 `10,000`（`MAX_LIMIT`），超过会被截断为 `10,000`。
 
 ### 方法
 
@@ -36,7 +38,7 @@
     "js_worker_id": 10,                   // 关联的 JsWorker ID
     "js_worker_name": "demo_worker",      // 关联的 JsWorker 名称
     "run_type": "call",                   // 执行类型
-    "start_time": 1775000000000,          // 毫秒时间戳，开始时间
+    "start_time": 1775000000000,          // 毫秒时间戳，开始时间；记录创建后、脚本实际启动前可能为 null
     "finish_time": 1775000000123,         // 毫秒时间戳，结束时间，运行中为 null
     "param": { "hello": "world" },        // 执行参数，可为 null
     "result": { "ok": true },             // 执行结果，运行中或失败时为 null

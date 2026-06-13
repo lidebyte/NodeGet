@@ -366,6 +366,8 @@ Server 任务类型 — 触发已注册的 JsWorker 脚本:
 
 读取成功后返回 Crontab 列表，每个元素结构如下:
 
+> **注意**：`crontab_get` 直接从 `CrontabCache` 读取已解析好的任务数据，不会在此方法内解析 Cron 表达式或 `cron_type`。如果存在损坏数据，解析错误会在缓存加载/调度器初始化阶段抛出，而不是在调用 `crontab_get` 时返回。
+
 ```json
 [
   {
@@ -389,9 +391,6 @@ Server 任务类型 — 触发已注册的 JsWorker 脚本:
   }
 ]
 ```
-
-若数据库中存在损坏的 `cron_type` 数据，接口会直接返回解析错误（包含对应 Crontab 的 `id` 和 `name`），不会再静默回退为默认
-`Server` 任务类型。
 
 ### 完整示例
 

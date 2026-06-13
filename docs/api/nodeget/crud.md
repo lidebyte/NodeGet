@@ -1,5 +1,8 @@
 # NodeGet CRUD
 
+> 本页所有方法均位于 **`nodeget-server`** JSON-RPC 命名空间下，完整方法名格式为 `nodeget-server_<method>`。
+> 例如：`nodeget-server_hello`、`nodeget-server_version`、`nodeget-server_exec_sql`。
+
 ## Hello
 
 测试服务是否正常运行，返回固定字符串。
@@ -169,13 +172,24 @@
 ## List All Agent UUID ⛔ 已废弃
 
 > **注意**: 该功能已被 `agent-uuid_list_all` 完全替代。请使用 [agent-uuid 命名空间](../agent_uuid/crud.md)。
+> 实际 RPC 命名空间为 `nodeget-server`，因此完整方法名为 `nodeget-server_list_all_agent_uuid`。
 >
 > 以下文档保留仅作历史参考，不再推荐调用此方法。
 
 ### 权限要求
 
-原 `nodeget-server_list_all_agent_uuid` 需要 `NodeGet::ListAllAgentUuid` 权限，
-已迁移至 `agent-uuid_list_all`（需要 `MonitoringUuid::List` 权限）。
+原 `nodeget-server_list_all_agent_uuid` 需要以下任一权限：
+
+- `NodeGet::ListAllAgentUuid`
+- `MonitoringUuid::List`（推荐）
+
+权限检查遵循 Scope 限制：
+
+- 在 `Global` Scope 下拥有上述任意 List 权限：可见所有 UUID。
+- 在 `AgentUuid` Scope 下拥有 List 权限时，必须同时对该 UUID 拥有至少一种 **非 List 操作权限** 才能看到该 UUID。
+- 仅有 List 权限而无任何操作权限的 `AgentUuid` Scope：不可见对应 UUID。
+
+Super Token 不受限制，可见所有 UUID。
 
 ## Read Config
 
@@ -732,13 +746,18 @@ curl -X POST http://127.0.0.1:2211/jsonrpc \
 {
   "success": true,
   "data": [],
-  "row_count": 0
+  "row_count": 0,
+  "truncated": false
 }
 ```
 
 - `success` (boolean): 是否执行成功
 - `data` (array): SELECT 查询返回结果行的 JSON 数组；INSERT/UPDATE/DELETE/DDL 返回空数组 `[]`
-- `row_count` (number): SELECT 返回的行数，或 DML 语句的影响行数
+- `row_count` (number): SELECT 返回的实际行数，或 DML 语句的影响行数
+- `truncated` (boolean): 当 SELECT 返回行数超过 10,000 时，`data` 会被截断至 10,000 条，且此字段为 `true`；其他情况为
+  `false`
+
+对于 SELECT 查询，建议客户端在 `truncated: true` 时缩小查询范围或分页读取，避免单次返回过大。
 
 完整示例请参照上方格式构造 JSON-RPC 请求。如需对本地 SQLite 数据库实例执行 SQL 操作，请使用 [Db 命名空间](../db/index.md)。
 
