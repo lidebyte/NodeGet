@@ -3,8 +3,8 @@
 官方脚本安装的 `nodeget-agent` 的配置路径位于 `/etc/nodeget-agent.conf`
 
 ```toml
-# 日志等级，必填，可选 trace / debug / info / warn / error
-# 未设置时 Agent 启动会报错退出
+# 日志等级，可选，可选 trace / debug / info / warn / error
+# 未设置时 Agent 不会因此报错退出，默认值取决于日志初始化逻辑
 # 如果你正在测试或遇到问题，请至少选择 debug
 log_level = "info"
 
@@ -72,8 +72,8 @@ server_uuid = "00000000-0000-0000-0000-000000000000"
 # 具有一定权限的 Token，可以为 TokenKey:TokenSecret 或 Username|Password
 token = "test_server1_token"
 
-# Server 的 WebSocket 地址，必须携带协议头
-ws_url = "ws://127.0.0.1:2211/"
+# Server 的 WebSocket 地址，必须携带协议头和 RPC 路径
+ws_url = "ws://127.0.0.1:2211/nodeget/rpc"
 
 # 是否允许执行任务
 allow_task = true
@@ -122,11 +122,11 @@ allow_version = true
 allow_self_update = false
 
 # 允许执行的任务类型白名单（可选）
-# 若指定此列表且非空，则单独的任务开关（如 allow_ping / allow_execute 等）全部失效
+# 若指定此列表且非空，则单独的任务开关（如 allow_icmp_ping / allow_tcp_ping / allow_http_ping / allow_execute 等）全部失效
 # 以本列表为准，未列出的任务类型一律拒绝
 # 值为 task_name，可选值包括：ping / tcp_ping / http_ping / dns / execute / http_request
 # / web_shell / read_config / edit_config / ip / version / self_update
-# allow_task_type = ["ping", "dns", "ip"]
+# allow_task_type = ["ping", "tcp_ping", "dns", "ip"]
 
 # 是否忽略服务端 TLS 证书校验，默认关闭
 # 仅在 Server 使用自签名证书或测试环境时开启
@@ -139,7 +139,7 @@ ignore_cert = false
 name = "test_server2"
 server_uuid = "00000000-0000-0000-0000-000000000000"
 token = "test_server2_token"
-ws_url = "ws://nodeget-secondary.example.com:2211/"
+ws_url = "ws://nodeget-secondary.example.com:2211/nodeget/rpc"
 ```
 
 ## `dynamic_summary_select_disk` 与 `dynamic_summary_select_network_interface`

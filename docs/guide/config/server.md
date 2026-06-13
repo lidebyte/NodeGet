@@ -37,6 +37,10 @@ server_uuid = "auto_gen"
 # 所有 Bucket 的磁盘路径都基于此目录拼接
 # static_path = "./static/"
 
+# 本地 SQLite 数据库存放目录，默认 `./db/`
+# 仅用于 db 命名空间管理的 SQLite 实例，不影响主数据库
+# db_path = "./db/"
+
 # 日志配置（可选，整个 [logging] 段不填则使用默认值）
 [logging]
 
@@ -70,8 +74,9 @@ log_filter = "info"
 # 流式日志订阅（nodeget-server_stream_log）的过滤器不在此处配置，
 # 而是由客户端在订阅时通过 log_filter 参数指定，详见 API 文档
 
-# 监控数据缓冲写入配置（可选，整个 [monitoring_buffer] 段不填则使用默认值）
-# 启用后，Agent 上报的监控数据会先缓存在内存中，按间隔批量写入数据库，减少 DB 压力
+# 监控数据缓冲写入配置
+# Agent 上报的监控数据会先缓存在内存中，按间隔批量写入数据库，减少 DB 压力
+# 即使省略 [monitoring_buffer] 段，Server 也会使用以下默认值初始化缓冲
 [monitoring_buffer]
 
 # 刷新间隔，单位毫秒，默认 500
@@ -80,9 +85,8 @@ log_filter = "info"
 # 单次最大批量大小，默认 1000
 # max_batch_size = 1000
 
-# 数据库文件存储路径，默认 "./db/"
-# 仅用于 db 命名空间管理的 SQLite 实例，不影响主数据库
-# db_path = "./db/"
+# 写入 Channel 容量，默认 10000
+# channel_capacity = 10000
 
 # 数据库配置
 [database]

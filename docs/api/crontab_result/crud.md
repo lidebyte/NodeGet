@@ -5,6 +5,8 @@
 调用者可以通过 `crontab-result_query` 查询执行结果记录。
 
 > **默认 LIMIT**：若 `condition` 中未指定 `limit` 或 `last`，查询默认限制返回 1,000 条记录。显式指定 `limit` 可覆盖此默认值。
+>
+> **最大 LIMIT**：显式指定的 `limit` 不能超过 `10,000`（`MAX_LIMIT`），超过会被截断为 `10,000`。
 
 ### 方法
 
@@ -34,13 +36,20 @@
 ```json
 [
   {
-    "id": 1,                             // 记录 ID
-    "cron_id": 5,                        // 关联的 Crontab ID
-    "cron_name": "cleanup_database",     // Crontab 名称
-    "relative_id": null,                  // 关联的 task_id 或 js_result_id（可空）
-    "run_time": 1769341269012,           // 执行时间（毫秒时间戳，可空）
-    "success": true,                     // 是否执行成功（可空）
-    "message": "Cleaned 100 records"     // 执行结果消息（可空）
+    "id": 1,
+    // 记录 ID
+    "cron_id": 5,
+    // 关联的 Crontab ID
+    "cron_name": "cleanup_database",
+    // Crontab 名称
+    "relative_id": null,
+    // 关联的 task_id 或 js_result_id（可空）
+    "run_time": 1769341269012,
+    // 执行时间（毫秒时间戳，可空）
+    "success": true,
+    // 是否执行成功（可空）
+    "message": "Cleaned 100 records"
+    // 执行结果消息（可空）
   }
   // 该字段为 Vec<_>，可返回多条
 ]
@@ -84,7 +93,10 @@
           "cron_name": "cleanup_database"
         },
         {
-          "run_time_from_to": [1700000000000, 1800000000000]
+          "run_time_from_to": [
+            1700000000000,
+            1800000000000
+          ]
         },
         "is_success"
       ]
@@ -173,17 +185,20 @@
   "permissions": [
     {
       "crontab_result": {
-        "delete": "cleanup_database" // 删除指定 cron_name
+        "delete": "cleanup_database"
+        // 删除指定 cron_name
       }
     },
     {
       "crontab_result": {
-        "delete": "backup_*" // 删除匹配通配符的 cron_name
+        "delete": "backup_*"
+        // 删除匹配通配符的 cron_name
       }
     },
     {
       "crontab_result": {
-        "delete": "*" // 删除所有（全局权限）
+        "delete": "*"
+        // 删除所有（全局权限）
       }
     }
   ]
@@ -198,9 +213,12 @@
 
 ```json
 {
-  "success": true,         // 是否成功
-  "deleted": 100,          // 删除的记录数量
-  "condition_count": 3     // 条件数量
+  "success": true,
+  // 是否成功
+  "deleted": 100,
+  // 删除的记录数量
+  "condition_count": 3
+  // 条件数量
 }
 ```
 

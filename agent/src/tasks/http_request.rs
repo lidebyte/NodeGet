@@ -10,6 +10,7 @@ use ng_core::error::NodegetError;
 use ng_task::{HttpRequestTask, HttpRequestTaskResult};
 use reqwest::{Client, Method};
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -21,6 +22,13 @@ pub type Result<T> = anyhow::Result<T>;
 static RUSTLS_PROVIDER_INIT: OnceLock<()> = OnceLock::new();
 /// 默认 reqwest Client 缓存（无 IP 绑定），避免每次请求重建连接池/TLS/DNS 缓存。
 static DEFAULT_CLIENT: OnceLock<Client> = OnceLock::new();
+/// 按 `local_address` 缓存的 reqwest Client 池，避免自定义 IP 时每次重建。
+static IP_BOUND_CLIENTS: std::sync::LazyLock<std::sync::Mutex<HashMap<IpAddr, Client>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+/// IP-bound Client 缓存最大条目数。
+/// 正常场景只有 2~3 个（IPv4/IPv6 UNSPECIFIED + 偶尔一个字面 IP）；
+/// 超过上限时清空整个缓存重建，防止异常场景下无限增长。
+const IP_BOUND_CLIENTS_MAX_CAPACITY: usize = 32;
 /// HTTP 请求超时时间，30 秒。
 const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -74,14 +82,29 @@ pub async fn execute_http_request(task: HttpRequestTask) -> Result<HttpRequestTa
                 NodegetError::InvalidInput(format!("Invalid http_request.ip '{ip_raw}': {e}"))
             })?,
         };
-        Client::builder()
-            .timeout(HTTP_REQUEST_TIMEOUT)
-            .local_address(ip)
-            .build()
-            .map_err(|e| {
-                warn!(target: "task", "HTTP 客户端构建失败: error={e}");
-                NodegetError::Other(format!("Failed to build HTTP client: {e}"))
-            })?
+        // 按 IP 缓存 Client：首次构建后复用，避免每次请求重建连接池/TLS/DNS 缓存。
+        let mut cache = IP_BOUND_CLIENTS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(cached) = cache.get(&ip) {
+            cached.clone()
+        } else {
+            // 缓存条目超过上限时清空，防止异常场景下无限增长。
+            // 正常场景只有 2~3 个 IP，上限 32 远超正常用量。
+            if cache.len() >= IP_BOUND_CLIENTS_MAX_CAPACITY {
+                cache.clear();
+            }
+            let client = Client::builder()
+                .timeout(HTTP_REQUEST_TIMEOUT)
+                .local_address(ip)
+                .build()
+                .map_err(|e| {
+                    warn!(target: "task", "HTTP 客户端构建失败: error={e}");
+                    NodegetError::Other(format!("Failed to build HTTP client: {e}"))
+                })?;
+            cache.insert(ip, client.clone());
+            client
+        }
     } else {
         get_default_client()
     };

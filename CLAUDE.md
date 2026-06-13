@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documentation
+
+| File / Directory  | Purpose                                                                   |
+|-------------------|---------------------------------------------------------------------------|
+| `README.md`       | Project overview and entry point                                          |
+| `CLAUDE.md`       | Architecture, conventions, and workflow guide for Claude Code (this file) |
+| `CONTRIBUTING.md` | Contribution guidelines, code style, and module conventions               |
+| `docs/`           | VitePress user and developer documentation                                |
+| `rp.md`           | 技术全解：comprehensive technical reference for Rust developers                |
+
 ## Build & Run
 
 ```bash
@@ -39,12 +49,11 @@ cargo test --workspace
 ```
 NodeGet/
 ├── server/                # Thin server binary (main, logging, subcommands, rpc_nodeget, rpc_timing)
-│   └── generate_entity.sh  # SeaORM entity generator (NOTE: output path needs update to crates/ng-db/src/entity)
 ├── agent/                 # Monitoring agent binary (monitoring, tasks, multi-server RPC)
 ├── crates/
 │   ├── ng-core/           # Errors, version, utils, NameValidator, Token/Scope/Permission/Limit/TokenOrAuth, PermissionChecker
 │   ├── ng-db/             # Entities (13 tables), DB connection global, DbRegistry, db RPC
-│   │   └── migration/     #   SeaORM migrations (17 steps)
+│   │   └── migration/     #   SeaORM migrations (18 steps)
 │   ├── ng-infra/          # DbBackedCache + make_global_cache!, rpc_exec!, RpcHelper, token_identity
 │   ├── ng-config/         # ServerConfig, AgentConfig, CLI args, global config, read/edit_config RPC
 │   ├── ng-monitoring/     # Monitoring data structures, caches (UUID/Last/StaticHash), buffer, agent/agent-uuid RPC
@@ -56,7 +65,6 @@ NodeGet/
 │   ├── ng-js-worker/      # Worker CRUD, execution service, js-worker/js-result RPC
 │   ├── ng-static/         # Static file cache, upload/download/WebDAV, static-bucket/static-bucket-file RPC
 │   └── ng-terminal/       # WebSocket terminal proxy, session management
-└── refactor-modular-crates.md  # Refactoring plan document (partially outdated — see docs-vs-code-report.md)
 ```
 
 ## Architecture
@@ -114,12 +122,12 @@ methods. Used by: TokenCache, CrontabCache, StaticCache, MonitoringUuidCache, Mo
 Business crates use OnceLock-based trait injection to break circular dependencies. Server binary registers concrete
 implementations at startup in `serve.rs`:
 
-| Injected Trait           | Defining Crate                              | Methods                                                          | Server Implementation                   |
-|--------------------------|---------------------------------------------|------------------------------------------------------------------|-----------------------------------------|
-| `PermissionChecker`      | ng-core                                     | `check_token_limit`, `check_super_token`, `get_token`            | `ServerPermissionChecker`               |
-| `JsWorkerService`        | ng-js-runtime                               | `run_inline_call_and_record_result`, `get_rpc_module`            | `JsWorkerServiceImpl`                   |
-| `JsWorkerScheduler`      | ng-crontab                                  | `enqueue_run`                                                    | `CronJsWorkerScheduler`                 |
-| `MonitoringUuidProvider` | ng-task                                     | `get_or_insert`, `reload`                                        | `TaskMonitoringUuidProvider`            |
+| Injected Trait           | Defining Crate | Methods                                               | Server Implementation        |
+|--------------------------|----------------|-------------------------------------------------------|------------------------------|
+| `PermissionChecker`      | ng-core        | `check_token_limit`, `check_super_token`, `get_token` | `ServerPermissionChecker`    |
+| `JsWorkerService`        | ng-js-runtime  | `run_inline_call_and_record_result`, `get_rpc_module` | `JsWorkerServiceImpl`        |
+| `JsWorkerScheduler`      | ng-crontab     | `enqueue_run`                                         | `CronJsWorkerScheduler`      |
+| `MonitoringUuidProvider` | ng-task        | `get_or_insert`, `reload`                             | `TaskMonitoringUuidProvider` |
 
 All implementations ultimately delegate to `ng_token` functions.
 
@@ -167,8 +175,14 @@ uses SHA256 with "NODEGET" salt.
 - **Custom jsonrpsee fork** — `infinitefield/jsonrpsee`, namespace separator is `_` not `.`
 - **`#[rpc]` proc macro only** — never use manual `register_method`/`register_async_method`; always use
   `#[rpc(server, namespace = "...")]` + `#[method(name = "...")]`
-- **Entity generation** — run `server/generate_entity.sh` after migration changes (NOTE: output path `-o` should point
-  to `../crates/ng-db/src/entity`)
+- **Entity generation** — after migration changes, generate entities to `crates/ng-db/src/entity`:
+  ```bash
+  sea-orm-cli generate entity \
+      -u "sqlite://test.db?mode=rwc" \
+      -o crates/ng-db/src/entity \
+      --with-serde both
+  ```
+  Adjust `-u` for your database (PostgreSQL or SQLite).
 - **Config format** — TOML; agent config uses `[[server]]` array-of-tables for multi-server; server config uses
   `[database]`, `[logging]`, `[monitoring_buffer]` sections
 - **Soft delete** — `monitoring_uuid` table uses `soft_delete` flag instead of actual deletion; UUID cache

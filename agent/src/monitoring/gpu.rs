@@ -6,6 +6,7 @@
 use crate::monitoring::get_global_gpu;
 use ng_monitoring::data_structure::{DynamicGpuData, StaticGpuData};
 use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor};
+use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard, OnceCell};
 
 /// 从 GPU 获取的静态数据结构，包含所有 GPU 的基本信息。
@@ -74,7 +75,7 @@ impl StaticDataFromGpu {
 
 /// 从 GPU 获取的动态数据结构，包含所有 GPU 的实时性能数据。
 #[derive(Debug)]
-pub struct DynamicDataFromGpu(pub Vec<DynamicGpuData>);
+pub struct DynamicDataFromGpu(pub Arc<Vec<DynamicGpuData>>);
 
 /// 全局动态 GPU 数据实例，用于缓存 GPU 动态信息。
 static GLOBAL_DYNAMIC_DATA_FROM_GPU: OnceCell<Mutex<DynamicDataFromGpu>> = OnceCell::const_new();
@@ -92,7 +93,7 @@ impl DynamicDataFromGpu {
             let nvml_guard = nvml_mutex.lock().await;
 
             let Some(nvml) = &*nvml_guard else {
-                return Self(vec![]);
+                return Self(Arc::new(vec![]));
             };
 
             tokio::task::block_in_place(|| {
@@ -125,7 +126,7 @@ impl DynamicDataFromGpu {
             })
         };
 
-        Self(data)
+        Self(Arc::new(data))
     }
 
     /// 更新动态 GPU 数据。
@@ -142,38 +143,30 @@ impl DynamicDataFromGpu {
 
         tokio::task::block_in_place(|| {
             let gpu_count = nvml.device_count().unwrap_or(0);
-
-            // 先扩容：若检测到新增 GPU，为其追加一个零值条目（具体字段在后续循环中填充）。
-            let existing = self.0.len();
             let target = gpu_count as usize;
-            if target > existing {
-                for id in existing..target {
-                    self.0.push(DynamicGpuData {
-                        id: (id + 1) as u32,
-                        used_memory: 0,
-                        total_memory: 0,
-                        graphics_clock_mhz: 0,
-                        sm_clock_mhz: 0,
-                        memory_clock_mhz: 0,
-                        video_clock_mhz: 0,
-                        utilization_gpu: 0,
-                        utilization_memory: 0,
-                        temperature: 0,
-                    });
-                }
-            } else if target < existing {
-                // GPU 热移除（vGPU unbind / MIG 重配）：丢弃尾部陈旧条目，避免继续上报
-                // 不存在设备的旧缓存值。扩容侧已覆盖热增，这里补上对称的收缩路径。
-                self.0.truncate(target);
-            }
 
-            for gpu_data in &mut self.0 {
-                let index = gpu_data.id.saturating_sub(1);
-                if index >= gpu_count {
-                    continue;
-                }
+            // 从头构建 Vec，不依赖旧 Arc 数据。
+            // 这避免了 Arc::unwrap_or_clone 在引用计数 > 1 时深拷贝整个 Vec
+            // （上一次 tick 的 gpu_guard.0.clone() 可能延长 Arc 寿命）。
+            // 与 CPU per_core 的重建策略一致；GPU 数据量极小（通常 1~8 张卡），
+            // 每秒重建的开销可忽略。
+            let mut data = Vec::with_capacity(target);
 
-                if let Ok(device) = nvml.device_by_index(index) {
+            for id in 0..target {
+                let mut gpu_data = DynamicGpuData {
+                    id: (id + 1) as u32,
+                    used_memory: 0,
+                    total_memory: 0,
+                    graphics_clock_mhz: 0,
+                    sm_clock_mhz: 0,
+                    memory_clock_mhz: 0,
+                    video_clock_mhz: 0,
+                    utilization_gpu: 0,
+                    utilization_memory: 0,
+                    temperature: 0,
+                };
+
+                if let Ok(device) = nvml.device_by_index(id as u32) {
                     if let Ok(memory_usage) = device.memory_info() {
                         gpu_data.used_memory = memory_usage.used;
                         gpu_data.total_memory = memory_usage.total;
@@ -201,7 +194,11 @@ impl DynamicDataFromGpu {
                         gpu_data.video_clock_mhz = clock.into();
                     }
                 }
+
+                data.push(gpu_data);
             }
+
+            self.0 = Arc::new(data);
         });
     }
 

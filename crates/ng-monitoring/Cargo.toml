@@ -26,7 +26,7 @@ server = [
 
 [dependencies]
 ng-core = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true }
 uuid = { workspace = true, default-features = false, features = ["std", "serde", "v4", "v5", "fast-rng"] }
 sha2 = { workspace = true }

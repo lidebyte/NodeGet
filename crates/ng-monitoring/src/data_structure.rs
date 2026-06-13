@@ -5,6 +5,7 @@
 //! 若数据量字段中未注明单位，则以字节（Bytes）为单位。
 
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
 
 /// 静态监控数据，包含不会随时间变化的硬件信息。
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -158,12 +159,12 @@ pub struct DynamicMonitoringData {
     pub load: DynamicLoadData,
     /// 系统动态信息
     pub system: DynamicSystemData,
-    /// 磁盘动态信息列表
-    pub disk: Vec<DynamicPerDiskData>,
+    /// 磁盘动态信息列表（Arc 包裹，克隆 O(1)）
+    pub disk: Arc<Vec<DynamicPerDiskData>>,
     /// 网络动态信息
     pub network: DynamicNetworkData,
-    /// GPU 动态信息列表
-    pub gpu: Vec<DynamicGpuData>,
+    /// GPU 动态信息列表（Arc 包裹，克隆 O(1)）
+    pub gpu: Arc<Vec<DynamicGpuData>>,
 }
 
 /// 动态监控摘要数据，包含扁平化的系统状态摘要信息。
@@ -474,8 +475,8 @@ pub struct StaticCPUData {
 /// CPU 动态信息。
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicCPUData {
-    /// 每个 CPU 核心的动态信息列表
-    pub per_core: Vec<DynamicPerCpuCoreData>,
+    /// 每个 CPU 核心的动态信息列表（Arc 包裹，克隆 O(1)）
+    pub per_core: Arc<Vec<DynamicPerCpuCoreData>>,
     /// CPU 总使用率（0-100）
     pub total_cpu_usage: f64,
 }
@@ -603,8 +604,8 @@ pub struct DynamicPerDiskData {
 /// 网络动态信息。
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DynamicNetworkData {
-    /// 网络接口列表
-    pub interfaces: Vec<DynamicPerNetworkInterfaceData>,
+    /// 网络接口列表（Arc 包裹，克隆 O(1)）
+    pub interfaces: Arc<Vec<DynamicPerNetworkInterfaceData>>,
     /// UDP 连接数
     pub udp_connections: u64,
     /// TCP 连接数
@@ -669,11 +670,12 @@ mod tests {
     use super::{
         DiskKind, DynamicCPUData, DynamicLoadData, DynamicMonitoringData,
         DynamicMonitoringSummaryData, DynamicNetworkData, DynamicPerDiskData,
-        DynamicPerNetworkInterfaceData, DynamicRamData, DynamicSystemData,
-        StaticCPUData, StaticGpuData, StaticMonitoringData, StaticSystemData,
-        is_excluded_file_system, is_excluded_mount, is_excluded_summary_disk,
-        is_virtual_interface, scale_cpu_percent_to_i16, scale_load_to_i16,
+        DynamicPerNetworkInterfaceData, DynamicRamData, DynamicSystemData, StaticCPUData,
+        StaticGpuData, StaticMonitoringData, StaticSystemData, is_excluded_file_system,
+        is_excluded_mount, is_excluded_summary_disk, is_virtual_interface,
+        scale_cpu_percent_to_i16, scale_load_to_i16,
     };
+    use std::sync::Arc;
 
     fn disk(mount_point: &str, file_system: &str, total_space: u64) -> DynamicPerDiskData {
         DynamicPerDiskData {
@@ -695,7 +697,7 @@ mod tests {
             uuid: uuid::Uuid::nil(),
             time: 0,
             cpu: DynamicCPUData {
-                per_core: Vec::new(),
+                per_core: Arc::new(Vec::new()),
                 total_cpu_usage: 0.0,
             },
             ram: DynamicRamData {
@@ -715,13 +717,13 @@ mod tests {
                 uptime: 0,
                 process_count: 0,
             },
-            disk: disks,
+            disk: Arc::new(disks),
             network: DynamicNetworkData {
-                interfaces: Vec::new(),
+                interfaces: Arc::new(Vec::new()),
                 udp_connections: 0,
                 tcp_connections: 0,
             },
-            gpu: Vec::new(),
+            gpu: Arc::new(Vec::new()),
         }
     }
 
@@ -1076,22 +1078,22 @@ mod tests {
 
     #[test]
     fn from_trait_uses_default_exclusion() {
-        let data = monitoring_data(vec![
-            disk("/", "ext4", 100),
-            disk("/run", "tmpfs", 50),
-        ]);
+        let data = monitoring_data(vec![disk("/", "ext4", 100), disk("/run", "tmpfs", 50)]);
         // From trait = from_with_filter(None, None)
         let summary_from = DynamicMonitoringSummaryData::from(&data);
         let summary_with_filter = DynamicMonitoringSummaryData::from_with_filter(&data, None, None);
         assert_eq!(summary_from.total_space, summary_with_filter.total_space);
-        assert_eq!(summary_from.available_space, summary_with_filter.available_space);
+        assert_eq!(
+            summary_from.available_space,
+            summary_with_filter.available_space
+        );
     }
 
     #[test]
     fn network_interface_filter_selective() {
         let mut data = monitoring_data(vec![]);
         data.network = DynamicNetworkData {
-            interfaces: vec![
+            interfaces: Arc::new(vec![
                 DynamicPerNetworkInterfaceData {
                     interface_name: "eth0".to_owned(),
                     total_received: 1000,
@@ -1106,7 +1108,7 @@ mod tests {
                     receive_speed: 0,
                     transmit_speed: 0,
                 },
-            ],
+            ]),
             udp_connections: 0,
             tcp_connections: 0,
         };

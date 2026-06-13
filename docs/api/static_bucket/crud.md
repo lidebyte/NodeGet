@@ -74,7 +74,7 @@
 }
 ```
 
-> 注：`enable` 字段创建时默认为 `null`（未启用），需通过 [`update`](#update) 显式设置为 `true`。
+> 注：`enable` 字段创建时默认为 `null`。Bucket 默认处于启用状态，只有当 `enable` 显式设置为 `false` 时才会停止 HTTP 服务。
 
 ## Read
 
@@ -245,7 +245,8 @@
 
 ```json
 {
-  "token": "demo_super_token" // Super Token
+  "token": "demo_super_token"
+  // Super Token
 }
 ```
 
@@ -260,7 +261,11 @@
 返回所有静态服务 `name` 字段组成的数组，**按字典序排序**：
 
 ```json
-["api-docs", "blog", "my-site"]
+[
+  "api-docs",
+  "blog",
+  "my-site"
+]
 ```
 
 ### 完整示例
@@ -284,6 +289,10 @@
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "result": ["api-docs", "blog", "my-site"]
+  "result": [
+    "api-docs",
+    "blog",
+    "my-site"
+  ]
 }
 ```

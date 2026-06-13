@@ -10,6 +10,7 @@ use ng_monitoring::data_structure::{
     StaticCPUData, StaticPerCpuCoreData, StaticSystemData,
 };
 use process::count_processes;
+use std::sync::Arc;
 use sysinfo::System;
 use tokio::sync::{Mutex, MutexGuard, OnceCell};
 use virtualization_detect::detect_virtualization;
@@ -196,7 +197,7 @@ impl DynamicDataFromSystem {
 
         Self(
             DynamicCPUData {
-                per_core,
+                per_core: Arc::new(per_core),
                 total_cpu_usage: f64::from(system.global_cpu_usage()),
             },
             DynamicRamData {
@@ -231,10 +232,18 @@ impl DynamicDataFromSystem {
         let system_mutex = crate::monitoring::get_global_system().await;
         let system = system_mutex.lock().await;
 
-        for (data, cpu) in self.0.per_core.iter_mut().zip(system.cpus()) {
-            data.cpu_usage = f64::from(cpu.cpu_usage());
-            data.frequency_mhz = cpu.frequency();
-        }
+        // 构建新的 per_core Vec，避免通过 Arc 修改共享数据
+        let new_per_core: Vec<DynamicPerCpuCoreData> = system
+            .cpus()
+            .iter()
+            .enumerate()
+            .map(|(id, cpu)| DynamicPerCpuCoreData {
+                id: (id + 1) as u32,
+                cpu_usage: f64::from(cpu.cpu_usage()),
+                frequency_mhz: cpu.frequency(),
+            })
+            .collect();
+        self.0.per_core = Arc::new(new_per_core);
         self.0.total_cpu_usage = f64::from(system.global_cpu_usage());
 
         self.1.available_memory = system.available_memory();

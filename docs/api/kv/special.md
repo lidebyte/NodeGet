@@ -46,8 +46,9 @@
     - `metadata_price`: 前端展示的机器价格
     - `metadata_price_unit`: 前端展示的机器单位
     - `metadata_price_cycle`: 前端展示的续费周期，单位天
+    - `metadata_expire_time`: 续费到期时间，单位毫秒时间戳（常用于续费提醒相关扩展 / 主题）
     - `metadata_region`: 前端展示的地区代码，遵循 ISO 3166-1 二位字母代码（仅作为展示，不代表 IP 地址所在地区）
-    - ` metadata_longitude` `metadata_latitude`: 经纬度
+    - `metadata_longitude` `metadata_latitude`: 经纬度
     - `metadata_hidden`: 前端中隐藏，不代表没有权限访问
 
 ### Server Namespace
