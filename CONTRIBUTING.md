@@ -383,7 +383,13 @@ src/rpc/
 - JSON 列标注 `#[sea_orm(column_type = "JsonBinary")]`
 - 主键统一 `id: i64` + `#[sea_orm(primary_key)]`
 - ActiveModel 构造使用 `Set()` + `..Default::default()`
-- 修改 Entity 前先运行 migration，再执行 `server/generate_entity.sh`（注意输出路径需指向 `crates/ng-db/src/entity`）
+- 修改 Entity 前先运行 migration，再执行 sea-orm-cli 生成实体（输出路径需指向 `crates/ng-db/src/entity`）：
+  ```bash
+  sea-orm-cli generate entity \
+      -u "sqlite://test.db?mode=rwc" \
+      -o crates/ng-db/src/entity \
+      --with-serde both
+  ```
 
 ### 测试约定
 
