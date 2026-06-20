@@ -93,9 +93,7 @@ enum KvTokenState {
 /// 解析 Token 并做超级令牌 / 时间有效性判断。
 ///
 /// 错误：认证失败（如 token 不存在）。
-async fn resolve_token_for_kv_check(
-    token_or_auth: &TokenOrAuth,
-) -> anyhow::Result<KvTokenState> {
+async fn resolve_token_for_kv_check(token_or_auth: &TokenOrAuth) -> anyhow::Result<KvTokenState> {
     // 超级令牌直接放行
     let is_super_token = ng_token::check_super_token(token_or_auth)
         .await

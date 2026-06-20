@@ -173,8 +173,14 @@ pub async fn run(config: &ServerConfig) {
                                     .headers()
                                     .get(axum::http::header::IF_NONE_MATCH)
                                     .and_then(|v| v.to_str().ok());
-                                return serve_static_file(&model.path, &path, model.cors, &method, inm)
-                                    .await;
+                                return serve_static_file(
+                                    &model.path,
+                                    &path,
+                                    model.cors,
+                                    &method,
+                                    inm,
+                                )
+                                .await;
                             }
                             return axum::response::Response::builder()
                                 .status(StatusCode::OK)
@@ -226,8 +232,14 @@ pub async fn run(config: &ServerConfig) {
                                     .headers()
                                     .get(axum::http::header::IF_NONE_MATCH)
                                     .and_then(|v| v.to_str().ok());
-                                return serve_static_file(&model.path, &path, model.cors, &method, inm)
-                                    .await;
+                                return serve_static_file(
+                                    &model.path,
+                                    &path,
+                                    model.cors,
+                                    &method,
+                                    inm,
+                                )
+                                .await;
                             }
                             return axum::response::Response::builder()
                                 .status(StatusCode::OK)
@@ -326,7 +338,8 @@ pub async fn run(config: &ServerConfig) {
                             .headers()
                             .get(axum::http::header::IF_NONE_MATCH)
                             .and_then(|v| v.to_str().ok());
-                        return serve_static_file(&model.path, &path, model.cors, &method, inm).await;
+                        return serve_static_file(&model.path, &path, model.cors, &method, inm)
+                            .await;
                     }
                     rpc_service.call(req).await.unwrap_or_else(|e| {
                         tracing::error!(target: "server", error = %e, "RPC call failed");
@@ -1078,16 +1091,22 @@ impl ng_core::permission::permission_checker::PermissionChecker for ServerPermis
         token_or_auth: &'a TokenOrAuth,
         scopes: &'a [Scope],
         permissions: &'a [Permission],
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<bool>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<bool>> + Send + 'a>>
+    {
         // 直接借用参数（future 为 `+ 'a`），无需 clone 成 owned Vec，
         // 避免每请求分配两个 Vec。`ng_token::check_token_limit` 接收 `&[T]`。
-        Box::pin(ng_token::check_token_limit(token_or_auth, scopes, permissions))
+        Box::pin(ng_token::check_token_limit(
+            token_or_auth,
+            scopes,
+            permissions,
+        ))
     }
 
     fn check_super_token<'a>(
         &'a self,
         token_or_auth: &'a TokenOrAuth,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<bool>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<bool>> + Send + 'a>>
+    {
         Box::pin(ng_token::check_super_token(token_or_auth))
     }
 
@@ -1098,7 +1117,8 @@ impl ng_core::permission::permission_checker::PermissionChecker for ServerPermis
         Box<
             dyn std::future::Future<
                     Output = anyhow::Result<ng_core::permission::data_structure::Token>,
-                > + Send + 'a,
+                > + Send
+                + 'a,
         >,
     > {
         Box::pin(ng_token::get_token(token_or_auth))

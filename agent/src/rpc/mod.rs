@@ -169,9 +169,7 @@ pub async fn handle_error_message() {
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or("<unknown>");
 
-                    warn!(
-                        "[{server_name}] Received Error Message: {error_id}: {error_message}"
-                    );
+                    warn!("[{server_name}] Received Error Message: {error_id}: {error_message}");
                 });
             }
 

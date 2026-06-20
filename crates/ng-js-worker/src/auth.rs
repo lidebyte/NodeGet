@@ -149,8 +149,11 @@ pub async fn filter_workers_by_list_permission(
     // 纯内存匹配，收集允许的子集
     let mut allowed = Vec::new();
     for worker_name in worker_names {
-        let is_allowed =
-            ng_token::get::check_limits_cover(limits, &Scope::JsWorker(worker_name.clone()), &required_perm);
+        let is_allowed = ng_token::get::check_limits_cover(
+            limits,
+            &Scope::JsWorker(worker_name.clone()),
+            &required_perm,
+        );
 
         if is_allowed {
             allowed.push(worker_name);

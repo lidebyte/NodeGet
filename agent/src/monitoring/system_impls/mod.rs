@@ -10,8 +10,8 @@ use ng_monitoring::data_structure::{
     StaticCPUData, StaticPerCpuCoreData, StaticSystemData,
 };
 use process::count_processes;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use sysinfo::System;
 use tokio::sync::{Mutex, MutexGuard, OnceCell};
 use virtualization_detect::detect_virtualization;

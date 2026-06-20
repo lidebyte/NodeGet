@@ -307,7 +307,9 @@ fn build_etag(metadata: &std::fs::Metadata) -> String {
 ///
 /// 支持 `*`（匹配任意）、单个 ETag、以及逗号分隔的多个 ETag；忽略弱验证器前缀 `W/`。
 fn if_none_match_is_match(if_none_match: Option<&str>, etag: &str) -> bool {
-    let Some(header) = if_none_match else { return false };
+    let Some(header) = if_none_match else {
+        return false;
+    };
     if header.trim() == "*" {
         return true;
     }

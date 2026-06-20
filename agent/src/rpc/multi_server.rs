@@ -597,7 +597,9 @@ pub async fn send_to(server_name: &str, msg: Message) -> Result<()> {
 /// - `server_name` - 服务器名称
 ///
 /// 成功时返回消息接收器；连接池未初始化或服务器不存在时返回错误。
-pub async fn subscribe_to(server_name: &str) -> Result<broadcast::Receiver<Arc<serde_json::Value>>> {
+pub async fn subscribe_to(
+    server_name: &str,
+) -> Result<broadcast::Receiver<Arc<serde_json::Value>>> {
     let pool = CONNECTION_POOL
         .get()
         .ok_or_else(|| NodegetError::Other("Connection pool not initialized".to_owned()))?;

@@ -1,6 +1,7 @@
 # Worker 开发
 
-NodeGet 使用 [QuickJS](https://bellard.org/quickjs/) 作为 JS Worker 的运行时。每个 Worker 本质上是一个 ES 模块，通过 `export default` 导出一个包含事件处理函数的对象。
+NodeGet 使用 [QuickJS](https://bellard.org/quickjs/) 作为 JS Worker 的运行时。每个 Worker 本质上是一个 ES 模块，通过
+`export default` 导出一个包含事件处理函数的对象。
 
 ## 事件处理函数
 

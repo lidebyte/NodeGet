@@ -979,7 +979,10 @@ pub fn js_runner(
             // 正常完成但 JS 执行报错：无法确认 fetch，保守按已使用处理
             Ok(Err(e)) => (Err(e), true),
             // 外层 timeout：无法确认 fetch，保守按已使用处理
-            Err(_) => (Err(js_error("js_runner", "JavaScript execution timed out")), true),
+            Err(_) => (
+                Err(js_error("js_runner", "JavaScript execution timed out")),
+                true,
+            ),
         };
 
         // 执行完成或超时后，取消看门狗监控（常驻线程自动清理，无需 join）
@@ -1109,7 +1112,10 @@ pub fn js_runner_source_mode(
             // 正常完成但 JS 执行报错：无法确认 fetch，保守按已使用处理
             Ok(Err(e)) => (Err(e), true),
             // 外层 timeout：无法确认 fetch，保守按已使用处理
-            Err(_) => (Err(js_error("js_runner", "JavaScript execution timed out")), true),
+            Err(_) => (
+                Err(js_error("js_runner", "JavaScript execution timed out")),
+                true,
+            ),
         };
         let _ = cancel_tx.send(());
 
