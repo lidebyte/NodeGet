@@ -36,7 +36,8 @@ fn page_size() -> usize {
 
 /// 线程本地 Netlink 接收缓冲区，复用避免每次调用重新分配页大小 Vec。
 ///
-/// `calc_connections` 在 `spawn_blocking` 线程池执行，同一线程的多次调用
+/// `calc_connections` 经 `tokio::task::spawn_blocking` 在 blocking 池执行
+/// （调用点 `impls.rs` DataFromNetwork::refresh_and_get），同一线程的多次调用
 /// （tcp4/tcp6/udp4/udp6）共享同一缓冲区，消除每秒 4 次页大小堆分配。
 thread_local! {
     static RECV_BUF: RefCell<Vec<u8>> = RefCell::new(Vec::new());
